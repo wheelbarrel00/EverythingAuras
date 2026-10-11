@@ -12,11 +12,11 @@ end
 
 -- These sections are embedded in large files with unrelated initialization.
 -- Load their unchanged source in an isolated environment for each flavor.
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local start = assert(prototypes:find("table.sort(M33kAuras.classes_sorted)", 1, true))
-local finish = assert(prototypes:find("function M33kAuras.CheckPvpTalentBySpellId", start, true))
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local start = assert(prototypes:find("table.sort(EverythingAuras.classes_sorted)", 1, true))
+local finish = assert(prototypes:find("function EverythingAuras.CheckPvpTalentBySpellId", start, true))
 local talentSource = prototypes:sub(start, finish - 1)
-local generic = readSource("M33kAuras/GenericTrigger.lua")
+local generic = readSource("EverythingAuras/GenericTrigger.lua")
 local handleEventSource = assert(generic:match("(function HandleEvent%(.-)\n%-%- WORKAROUND"))
 
 local function setup(flavor)
@@ -70,7 +70,7 @@ local function setup(flavor)
     private.talentInfo[specID] = "new metadata"
   end
   local env = setmetatable({
-    M33kAuras = wa,
+    EverythingAuras = wa,
     Private = private,
     MAX_NUM_TALENTS = 20,
     ceil = math.ceil,
@@ -107,7 +107,7 @@ end
 for _, flavor in ipairs({ "Midnight", "Forever" }) do
   T.section(flavor .. ": selected talent cache")
   local wa, private, state, env = setup(flavor)
-  local frame = private.frames["M33kAuras talentCheckFrame"]
+  local frame = private.frames["EverythingAuras talentCheckFrame"]
   if T.expect(frame ~= nil, "registers the modern talent watcher") then
     frame:Fire("PLAYER_LOGIN")
     T.expect(wa.CheckTalentId(101) and not wa.CheckTalentId(102), "only the chosen entry of a choice node is selected")
@@ -155,9 +155,10 @@ end
 for _, flavor in ipairs({ "Classic", "Wrath", "Cata", "Mists" }) do
   T.section(flavor .. ": legacy talent handling")
   local wa, private = setup(flavor)
-  T.expect(private.frames["M33kAuras talentCheckFrame"] == nil, "does not register the modern watcher")
+  T.expect(private.frames["EverythingAuras talentCheckFrame"] == nil, "does not register the modern watcher")
   T.expect(wa.CheckTalentByIndex(1, 4) == true and wa.CheckTalentByIndex(1, 5) == false,
     "retains the legacy talent and inverse checks")
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

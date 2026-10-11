@@ -26,10 +26,10 @@ f:flush()
 paused,resumed=0,0
 root.callbacks.OnDuplicateClick()
 f:flush()
-local copy=M33kAuras.GetData("Root 2")
+local copy=EverythingAuras.GetData("Root 2")
 T.expect(copy and table.concat(copy.controlledChildren,",")=="A 2,Nested 2,B 2",
   "duplicating a mixed group preserves leaf and nested-group order")
-T.expect(M33kAuras.GetData("C 2").parent=="Nested 2" and copy.uid~=root.uid and M33kAuras.GetData("C 2").uid~=M33kAuras.GetData("C").uid,
+T.expect(EverythingAuras.GetData("C 2").parent=="Nested 2" and copy.uid~=root.uid and EverythingAuras.GetData("C 2").uid~=EverythingAuras.GetData("C").uid,
   "nested duplicates receive independent identities and parent links")
 T.expect(paused>0 and paused==resumed,"successful group duplication resumes dynamic groups")
 
@@ -42,11 +42,11 @@ local inserted
 _G.GetCurrentKeyBoardFocus=function() return {Insert=function(_,text) inserted=text end} end
 a.data.url="https://example.test/aura"
 a.callbacks.OnClickNormal(nil,"LeftButton")
-T.expect(inserted=="[M33kAuras: Player-Realm - A] https://example.test/aura" and private.linked.A==123,
+T.expect(inserted=="[EverythingAuras: Player-Realm - A] https://example.test/aura" and private.linked.A==123,
   "shift-click builds the chat link and records the linked aura")
 _G.GetCurrentRegion=function() return 5 end
 a.callbacks.OnClickNormal(nil,"LeftButton")
-T.expect(inserted=="[M33kAuras: Player-Realm - A]","restricted-region chat links omit the URL")
+T.expect(inserted=="[EverythingAuras: Player-Realm - A]","restricted-region chat links omit the URL")
 _G.IsShiftKeyDown=function() return false end
 _G.IsControlKeyDown=function() return true end
 f.frame:ClearPicks()
@@ -67,14 +67,14 @@ a.data.triggers.marker.value=99
 options.RevealDisplay("Root")
 options.OpenDisplayButtonMenu(root)
 menuItem(f.menu,"Paste Trigger Settings").func()
-T.expect(M33kAuras.GetData("B").triggers.marker.value==42 and M33kAuras.GetData("C").triggers.marker.value==42,
+T.expect(EverythingAuras.GetData("B").triggers.marker.value==42 and EverythingAuras.GetData("C").triggers.marker.value==42,
   "clipboard captures a snapshot and pastes triggers into nested leaf auras")
-M33kAuras.GetData("B").triggers.marker.value=10
-T.expect(M33kAuras.GetData("C").triggers.marker.value==42 and not root.data.triggers.marker,
+EverythingAuras.GetData("B").triggers.marker.value=10
+T.expect(EverythingAuras.GetData("C").triggers.marker.value==42 and not root.data.triggers.marker,
   "pasted settings are independent per leaf and leave group triggers unchanged")
 
 -- Install actual header handlers without constructing unrelated options panels.
-local file=assert(io.open(T.repoRoot.."/M33kAurasOptions/OptionsFrames/OptionsFrame.lua"))
+local file=assert(io.open(T.repoRoot.."/EverythingAurasOptions/OptionsFrames/OptionsFrame.lua"))
 local source=file:read("*a");file:close()
 for _,key in ipairs({"loadedButton","unloadedButton"}) do
   local first=assert(source:find("  "..key..":SetViewClick(function()",1,true))
@@ -100,3 +100,4 @@ for _,case in ipairs({{"loadedButton","Loaded"},{"unloadedButton","Unloaded"}}) 
 end
 T.expect(#f.errors==0,"action checks report no unexpected UI callback errors")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

@@ -11,15 +11,15 @@ options.RefreshAuraList("")
 fixture:loadMain()
 local entry=options.GetDisplayEntry("A")
 a.id="Renamed"
-M33kAurasSaved.displays.A=nil;M33kAurasSaved.displays.Renamed=a
-M33kAurasSaved.displays.Group.controlledChildren[1]="Renamed"
+EverythingAurasSaved.displays.A=nil;EverythingAurasSaved.displays.Renamed=a
+EverythingAurasSaved.displays.Group.controlledChildren[1]="Renamed"
 options.GetDisplayEntry("Renamed")
 T.expect(not model.byID.A and model.byID.Renamed==entry,"in-place rename removes its previous index before rebuilding the tree")
 local function upvalue(fn,key)
   for i=1,100 do local name,value=debug.getupvalue(fn,i);if not name then break end;if name==key then return value end end
   error("missing upvalue "..key)
 end
-local rename=upvalue(M33kAuras.ToggleOptions,"OnRename")
+local rename=upvalue(EverythingAuras.ToggleOptions,"OnRename")
 local ok=pcall(rename,"Rename",a.uid,"A","Renamed")
 T.expect(ok and model.byUID[a.uid]==entry,"rename notification tolerates a lookup that already updated the ID index")
 fixture:flush()
@@ -53,22 +53,22 @@ fixture.private.CompanionData.stash={bad={encoded="invalid",name="Invalid"}}
 options.SortDisplayButtons("")
 fixture.view:Render(1)
 local invalid
-for _,row in ipairs(fixture.view.containers) do if row.widget.type=="M33kAurasPendingInstallButton" then invalid=row.widget end end
+for _,row in ipairs(fixture.view.containers) do if row.widget.type=="EverythingAurasPendingInstallButton" then invalid=row.widget end end
 T.expect(invalid and not invalid.update:IsEnabled(),"invalid Companion rows cannot invoke their import button")
 fixture.private.CompanionData.stash={}
 options.SortDisplayButtons()
 T.section("Deferred navigation during mutations")
 local importing=false
-M33kAuras.IsImporting=function() return importing end
+EverythingAuras.IsImporting=function() return importing end
 options.SortDisplayButtons("Renamed")
 local oldProvider,oldScrolls=fixture.view.provider,fixture.scrolls
 importing=true
 options.RevealDisplay("B")
 T.expect(fixture.view.provider==oldProvider and fixture.scrolls==oldScrolls,
   "navigation cannot publish a partially imported tree")
-local b=M33kAurasSaved.displays.B
-b.id="B after import";M33kAurasSaved.displays.B=nil;M33kAurasSaved.displays[b.id]=b
-local children=M33kAurasSaved.displays.Group.controlledChildren
+local b=EverythingAurasSaved.displays.B
+b.id="B after import";EverythingAurasSaved.displays.B=nil;EverythingAurasSaved.displays[b.id]=b
+local children=EverythingAurasSaved.displays.Group.controlledChildren
 children[assert(tIndexOf(children,"B"))]=b.id
 rename("Rename",b.uid,"B",b.id)
 importing=false
@@ -96,8 +96,8 @@ GameTooltip:Hide()
 
 T.section("Context menu failure isolation")
 options.RevealDisplay("Renamed")
-local failedHook=Menu.ModifyMenu("M33KAURAS_DISPLAY_BUTTON_MENU",function() error("injected menu failure") end)
-local goodHook=Menu.ModifyMenu("M33KAURAS_DISPLAY_BUTTON_MENU",function(_,root) root:Insert(MenuUtil.CreateButton("Survivor"),#root) end)
+local failedHook=Menu.ModifyMenu("EVERYTHINGAURAS_DISPLAY_BUTTON_MENU",function() error("injected menu failure") end)
+local goodHook=Menu.ModifyMenu("EVERYTHINGAURAS_DISPLAY_BUTTON_MENU",function(_,root) root:Insert(MenuUtil.CreateButton("Survivor"),#root) end)
 GameTooltip:SetOwner(entry.row.frame);GameTooltip:Show()
 entry.row.frame:GetScript("OnClick")(entry.row.frame,"RightButton")
 T.expect(not GameTooltip:IsShown(),"right-click dispatch hides the tooltip before opening the context menu")
@@ -108,3 +108,4 @@ goodHook:Unregister()
 T.expect(#fixture.errors==1 and fixture.errors[1]:find("injected menu failure",1,true),"only the intentionally failing extension reports an error")
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

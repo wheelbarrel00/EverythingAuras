@@ -1,5 +1,5 @@
--- Custom aura code runs through M33kAuras.LoadFunction and must not reach the
--- real global table, the blocked WoW functions, or the data-changing M33kAuras
+-- Custom aura code runs through EverythingAuras.LoadFunction and must not reach the
+-- real global table, the blocked WoW functions, or the data-changing EverythingAuras
 -- API. Each check probes the boundary the way an aura author would.
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
@@ -8,12 +8,12 @@ local stubs = require("wow_stubs")
 
 stubs.install()
 local realG = _G
-_G.M33kAuras = stubs.newM33kAuras()
-local M33kAuras = _G.M33kAuras
+_G.EverythingAuras = stubs.newEverythingAuras()
+local EverythingAuras = _G.EverythingAuras
 local Private, warnings = stubs.newPrivate()
 
 local auraData = { id = "test", uid = "test-uid", config = {}, information = {}, actions = {} }
-M33kAuras.GetData = function(id)
+EverythingAuras.GetData = function(id)
   if id == "test" then
     return auraData
   end
@@ -24,11 +24,11 @@ Private.UIDtoID = function(uid)
   end
 end
 
-T.loadAddonFile("M33kAuras/AuraEnvironment.lua", "M33kAuras", Private)
+T.loadAddonFile("EverythingAuras/AuraEnvironment.lua", "EverythingAuras", Private)
 
 --- Runs code the way a custom trigger runs it.
 local function runCustom(body)
-  local fn, err = M33kAuras.LoadFunction("return function()\n" .. body .. "\nend", "test")
+  local fn, err = EverythingAuras.LoadFunction("return function()\n" .. body .. "\nend", "test")
   assert(fn, err)
   return fn()
 end
@@ -63,7 +63,7 @@ for _, name in ipairs({ "loadstring", "getfenv", "setfenv", "pcall", "xpcall",
   T.expect(type(got) == "function" and got ~= realG[name], name .. " is replaced by a stub")
   T.expect(warned("SandboxForbidden"), name .. " raises a SandboxForbidden warning")
 end
-for _, name in ipairs({ "SlashCmdList", "M33kAurasSaved", "M33kAurasOptions" }) do
+for _, name in ipairs({ "SlashCmdList", "EverythingAurasSaved", "EverythingAurasOptions" }) do
   clearWarnings()
   local got = runCustom("return " .. name)
   T.expect(type(got) == "table" and got ~= realG[name], name .. " is replaced by an empty table")
@@ -84,12 +84,12 @@ local probes = {
   { '_G["_G.loadstring"]', loadstring },
   { 'getglobal("_G.pcall")', pcall },
   { '_G["_G.EnumerateFrames"]', realG.EnumerateFrames },
-  { '_G["M33kAuras.Add"]', M33kAuras.Add },
-  { '_G["WeakAuras.Add"]', M33kAuras.Add },
-  { 'getglobal("_G.WeakAuras.Delete")', M33kAuras.Delete },
-  { 'getglobal("M33kAuras.PreAdd")', M33kAuras.PreAdd },
-  { '_G["_G.M33kAuras.HideOptions"]', M33kAuras.HideOptions },
-  { '_G["_G.M33kAurasSaved"]', realG.M33kAurasSaved },
+  { '_G["EverythingAuras.Add"]', EverythingAuras.Add },
+  { '_G["WeakAuras.Add"]', EverythingAuras.Add },
+  { 'getglobal("_G.WeakAuras.Delete")', EverythingAuras.Delete },
+  { 'getglobal("EverythingAuras.PreAdd")', EverythingAuras.PreAdd },
+  { '_G["_G.EverythingAuras.HideOptions"]', EverythingAuras.HideOptions },
+  { '_G["_G.EverythingAurasSaved"]', realG.EverythingAurasSaved },
   { '_G["_G._G._G.loadstring"]', loadstring },
 }
 for _, probe in ipairs(probes) do
@@ -113,19 +113,19 @@ local leaked = runCustom([[
 ]])
 T.expect(leaked ~= realG, "no candidate loader compiles code against the real global table")
 
-T.section("the M33kAuras table is a guarded proxy")
-T.expect(runCustom("return M33kAuras") ~= M33kAuras, "custom code sees a proxy, not the real M33kAuras table")
+T.section("the EverythingAuras table is a guarded proxy")
+T.expect(runCustom("return EverythingAuras") ~= EverythingAuras, "custom code sees a proxy, not the real EverythingAuras table")
 for _, name in ipairs({ "Add", "PreAdd", "Import", "Delete", "HideOptions" }) do
   clearWarnings()
-  local got = runCustom("return M33kAuras." .. name)
-  T.expect(got ~= M33kAuras[name], "M33kAuras." .. name .. " is blocked")
-  T.expect(warned("SandboxForbidden"), "M33kAuras." .. name .. " raises a SandboxForbidden warning")
+  local got = runCustom("return EverythingAuras." .. name)
+  T.expect(got ~= EverythingAuras[name], "EverythingAuras." .. name .. " is blocked")
+  T.expect(warned("SandboxForbidden"), "EverythingAuras." .. name .. " raises a SandboxForbidden warning")
 end
 clearWarnings()
-runCustom("M33kAuras.Injected = true")
-T.expect(M33kAuras.Injected == nil, "writing to M33kAuras does not change the real table")
-T.expect(warned("FakeM33kAurasSet"), "writing to M33kAuras raises a warning")
-T.expect(runCustom("return M33kAuras.IsLibsOK") == M33kAuras.IsLibsOK, "allowed M33kAuras functions pass through")
+runCustom("EverythingAuras.Injected = true")
+T.expect(EverythingAuras.Injected == nil, "writing to EverythingAuras does not change the real table")
+T.expect(warned("FakeEverythingAurasSet"), "writing to EverythingAuras raises a warning")
+T.expect(runCustom("return EverythingAuras.IsLibsOK") == EverythingAuras.IsLibsOK, "allowed EverythingAuras functions pass through")
 
 T.section("global writes from custom code stay inside the sandbox")
 clearWarnings()
@@ -143,8 +143,8 @@ T.section("aura code gets a copy of aura data")
 Private.ActivateAuraEnvironment("test", nil, {}, {})
 local env = runCustom("return aura_env")
 T.expect(type(env) == "table" and env.id == "test", "aura_env is the environment of the active aura")
-local seen = runCustom("local d = M33kAuras.GetData('test'); d.actions.tampered = true; return d")
-T.expect(seen ~= auraData, "M33kAuras.GetData returns a copy")
+local seen = runCustom("local d = EverythingAuras.GetData('test'); d.actions.tampered = true; return d")
+T.expect(seen ~= auraData, "EverythingAuras.GetData returns a copy")
 T.expect(auraData.actions.tampered == nil, "writes to the copy do not reach the stored data")
 Private.ActivateAuraEnvironment()
 
@@ -154,7 +154,7 @@ T.expect(Private.GetSanitizedGlobal("PlayerFrame.healthbar") == realG.PlayerFram
          "a child frame without a name resolves through its parent")
 T.expect(Private.GetSanitizedGlobal("PlayerFrame.missing") == nil, "an unknown child resolves to nil")
 T.expect(runCustom("return UnitExists") == realG.UnitExists, "allowed API functions pass through")
-T.expect(runCustom("return WA_Utf8Sub") == M33kAuras.WA_Utf8Sub, "M33kAuras helper functions are available")
+T.expect(runCustom("return WA_Utf8Sub") == EverythingAuras.WA_Utf8Sub, "EverythingAuras helper functions are available")
 
 T.section("the builtin environment has the same boundary")
 for _, name in ipairs({ "loadstring", "getfenv", "setfenv", "EnumerateFrames" }) do
@@ -166,3 +166,4 @@ T.expect(type(builtinPrivate) == "table" and builtinPrivate.ExecEnv == Private.E
          and builtinPrivate.LoadFunction == nil, "builtin: Private exposes only ExecEnv")
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

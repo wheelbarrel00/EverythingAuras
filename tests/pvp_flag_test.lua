@@ -25,22 +25,22 @@ local function contains(list, value)
   return false
 end
 
-local core = readSource("M33kAuras/M33kAuras.lua")
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local init = readSource("M33kAuras/Init.lua")
+local core = readSource("EverythingAuras/EverythingAuras.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local init = readSource("EverythingAuras/Init.lua")
 local loadArgs = "return { args = {" .. section(prototypes,
   '    {\n      name = "combat",', '    {\n      name = "addonRestrictionsActive",') .. "} }"
 local conditions = section(prototypes, '  ["Conditions"] = {', '  ["Spell Known"] = {')
 local triggerArgs = "return { args = {" .. section(conditions,
   '      {\n        name = "pvpflagged",', '      {\n        name = "alive",') .. "} }"
 local eventSource = "return {" .. section(conditions, "    events = function", "    force_events =") .. "}"
-local loadCompiler = section(core, "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions")
+local loadCompiler = section(core, "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions")
   .. "\nreturn ConstructFunction"
-local triggerCompiler = section(readSource("M33kAuras/GenericTrigger.lua"),
+local triggerCompiler = section(readSource("EverythingAuras/GenericTrigger.lua"),
   "function TestForTriState", "function Private.EndEvent") .. "\nreturn ConstructFunction"
 local querySource = "return function()\n" .. section(core, "  local pvp = false", "  local addonRestrictionsActive")
   .. "\nreturn pvp end"
-local callSource = section(core, "      if M33kAuras.IsForever() then\n        shouldBeLoaded", "      -- end")
+local callSource = section(core, "      if EverythingAuras.IsForever() then\n        shouldBeLoaded", "      -- end")
 local registrationSource = section(core, 'unitLoadFrame:RegisterUnitEvent("UNIT_FLAGS"', "function Private.RegisterLoadEvents()")
 
 for _, flavor in ipairs({
@@ -51,7 +51,7 @@ for _, flavor in ipairs({
   local forever, wrath, retail = flavor[1] == "Forever", flavor[1] == "Wrath", flavor[1] == "Midnight"
   local values, registrations, apiCalls = {}, {}, 0
   local env = setmetatable({
-    M33kAuras = {BuildInfo = flavor[3]}, Private = {},
+    EverythingAuras = {BuildInfo = flavor[3]}, Private = {},
     L = setmetatable({}, {__index = function(_, key) return key end}),
     tinsert = table.insert, tconcat = table.concat,
     issecretvalue = function() return false end,
@@ -63,7 +63,7 @@ for _, flavor in ipairs({
     UnitIsPVPFreeForAll = function(unit) assert(unit == "player"); apiCalls = apiCalls + 1; return values.ffa end,
   }, {__index = _G})
   load("local flavor = " .. flavor[2] .. "\n"
-    .. section(init, "function M33kAuras.IsClassicEra()", "---@param ... string"), env)
+    .. section(init, "function EverythingAuras.IsClassicEra()", "---@param ... string"), env)
   load(registrationSource, env)
   local query = load(querySource, env)
   local loadPrototype, triggerPrototype = load(loadArgs, env), load(triggerArgs, env)
@@ -132,3 +132,4 @@ for _, flavor in ipairs({
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

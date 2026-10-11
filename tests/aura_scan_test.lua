@@ -2,7 +2,7 @@
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
-local file = assert(io.open(T.repoRoot .. "/M33kAuras/BuffTrigger2.lua"))
+local file = assert(io.open(T.repoRoot .. "/EverythingAuras/BuffTrigger2.lua"))
 local source = file:read("*a"):gsub("\r\n", "\n")
 file:close()
 local getSubTable = assert(source:match("(local function GetSubTable.-)\nlocal function IsGroupTrigger"))
@@ -103,3 +103,4 @@ T.expect(result == "enumerated" and calls[1] == "target" and calls[2] == "HARMFU
   and calls[3] == 5 and calls[4] == collect and calls[5] == false,
   "normal enumeration retains its arguments and return value")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

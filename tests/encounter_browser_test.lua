@@ -4,7 +4,7 @@ package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
 -- Use AceGUI's real open handler by default so unsupported header items cannot
 -- silently pass through an oversimplified dropdown stub.
-local dropdownFile = assert(io.open(T.repoRoot .. "/M33kAurasOptions/Libs/AceGUI-3.0/widgets/AceGUIWidget-DropDown.lua"))
+local dropdownFile = assert(io.open(T.repoRoot .. "/EverythingAurasOptions/Libs/AceGUI-3.0/widgets/AceGUIWidget-DropDown.lua"))
 local dropdownSource = dropdownFile:read("*a")
 dropdownFile:close()
 local openStart = assert(dropdownSource:find("local function OnPulloutOpen", 1, true))
@@ -135,7 +135,7 @@ end
 local core, options = {}, {}
 options.Private = core
 local env = setmetatable({
-  M33kAuras = {
+  EverythingAuras = {
     IsLibsOK = function() return true end, IsForever = function() return true end,
     L = setmetatable({}, {__index = function(_, key) return key end}),
   },
@@ -158,10 +158,10 @@ local env = setmetatable({
     IsOwned = function(self, owner) return self.owner == owner end,
   },
 }, {__index = _G})
-setfenv(assert(loadfile(T.repoRoot .. "/M33kAuras/Encounters_Forever.lua")), env)("M33kAuras", core)
+setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/Encounters_Forever.lua")), env)("EverythingAuras", core)
 local catalog = core.BuildForeverEncounterLists()
 core.GetForeverEncounters = function() return catalog end
-setfenv(assert(loadfile(T.repoRoot .. "/M33kAurasOptions/OptionsFrames/EncounterBrowser.lua")), env)("Options", options)
+setfenv(assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/OptionsFrames/EncounterBrowser.lua")), env)("Options", options)
 
 T.section("Search and filtering")
 local all = options.GetEncounterBrowserEntries()
@@ -183,8 +183,8 @@ local search, filter, copy = window.children[1], window.children[2], window.chil
 local scroll = f.scrollBox
 T.expect(#scroll.provider == #all and #scroll.pool == 10, "all data is loaded with only visible rows created")
 T.expect(filter.order[1] == 0 and filter.values[2959], "instance selector includes All and Forever's new dungeons")
-T.expect(filter.order[2] == "raid" and filter.itemTypes.raid == "Dropdown-Item-M33kAurasEncounterHeader"
-  and filter.itemTypes.party == "Dropdown-Item-M33kAurasEncounterHeader", "dropdown distinguishes raids and dungeons with dedicated nonselectable headers")
+T.expect(filter.order[2] == "raid" and filter.itemTypes.raid == "Dropdown-Item-EverythingAurasEncounterHeader"
+  and filter.itemTypes.party == "Dropdown-Item-EverythingAurasEncounterHeader", "dropdown distinguishes raids and dungeons with dedicated nonselectable headers")
 local reachedDungeons, raidCount, dungeonCount = false, 0, 0
 for _, mapId in ipairs(filter.order) do
   if mapId == "party" then reachedDungeons = true end
@@ -256,3 +256,4 @@ options.OpenEncounterBrowser()
 T.expect(previous.released and not f.window.released, "opening again replaces the popup without duplicate windows")
 f.window.callbacks.OnClose()
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

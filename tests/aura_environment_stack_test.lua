@@ -3,7 +3,7 @@ package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
 local stubs = require("wow_stubs")
 stubs.install()
-M33kAuras = stubs.newM33kAuras()
+EverythingAuras = stubs.newEverythingAuras()
 local Private = stubs.newPrivate()
 local data = {}
 for _, id in ipairs({ "parent", "child", "no-uid", "group", "fresh-child" }) do
@@ -11,8 +11,8 @@ for _, id in ipairs({ "parent", "child", "no-uid", "group", "fresh-child" }) do
 end
 data["no-uid"].uid = nil
 data.group.controlledChildren = { "fresh-child" }
-M33kAuras.GetData = function(id) return data[id] end
-T.loadAddonFile("M33kAuras/AuraEnvironment.lua", "M33kAuras", Private)
+EverythingAuras.GetData = function(id) return data[id] end
+T.loadAddonFile("EverythingAuras/AuraEnvironment.lua", "EverythingAuras", Private)
 
 local function context(id, message)
   local env = Private.GetSanitizedGlobal("aura_env")
@@ -103,3 +103,4 @@ T.expect(initCalls == 1 and lifecycleCalls == 1, "reactivation does not repeat i
 Private.ActivateAuraEnvironment()
 context(nil, "callbacks leave the stack balanced")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

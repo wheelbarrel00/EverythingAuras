@@ -20,17 +20,17 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local generic = readSource("M33kAuras/GenericTrigger.lua")
-local init = readSource("M33kAuras/Init.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local generic = readSource("EverythingAuras/GenericTrigger.lua")
+local init = readSource("EverythingAuras/Init.lua")
 local prototypeSource = "return {" .. section(prototypes,
   '  ["Character Stats"] = {', '  ["Conditions"] = {') .. "}"
 local compilerSource = section(generic, "function TestForTriState", "function Private.EndEvent")
   .. "\nreturn ConstructFunction"
-local conditionSource = section(readSource("M33kAuras/Conditions.lua"),
+local conditionSource = section(readSource("EverythingAuras/Conditions.lua"),
   "local function CreateTestForCondition", "local function CreateCheckCondition") .. "\nreturn CreateTestForCondition"
-local helperSource = section(prototypes, "function M33kAuras.GetEffectiveAttackPower()", "local function talentSpecIdForTrigger")
-  .. section(generic, "M33kAuras.GetCritChance = function()", "---@type fun(trigger: triggerData)")
+local helperSource = section(prototypes, "function EverythingAuras.GetEffectiveAttackPower()", "local function talentSpecIdForTrigger")
+  .. section(generic, "EverythingAuras.GetCritChance = function()", "---@type fun(trigger: triggerData)")
 
 local expected = {
   stamina = 40, criticalrating = 8, hitrating = 8, versatilitypercent = 7,
@@ -74,7 +74,7 @@ for _, flavor in ipairs({
     getmetatable(secret)[name] = forbidden
   end
   local env = setmetatable({
-    M33kAuras = {BuildInfo = flavor[3]}, Private = {ExecEnv = {
+    EverythingAuras = {BuildInfo = flavor[3]}, Private = {ExecEnv = {
       GetSpecialization = function() return 1 end,
       GetSpecializationInfo = function() return nil, nil, nil, nil, nil, 1 end,
     }},
@@ -115,7 +115,7 @@ for _, flavor in ipairs({
     return restricted and secret or zero and 0 or school == 3 and 10 or school * 10
   end
   load("local flavor = " .. flavor[2] .. "\n"
-    .. section(init, "function M33kAuras.IsClassicEra()", "---@param ... string"), env)
+    .. section(init, "function EverythingAuras.IsClassicEra()", "---@param ... string"), env)
   load(helperSource, env)
   local prototype = load(prototypeSource, env)["Character Stats"]
   local construct, condition = load(compilerSource, env), load(conditionSource, env)
@@ -179,22 +179,22 @@ for _, flavor in ipairs({
       GetEffectiveSpellPower = forever and 10 or 70, GetHaste = 17, GetDefense = 105,
     }) do
       restricted, zero = false, false
-      T.expect(env.M33kAuras[name]() == value, name .. ": preserves the unrestricted result")
+      T.expect(env.EverythingAuras[name]() == value, name .. ": preserves the unrestricted result")
       restricted = true
-      T.expect(env.M33kAuras[name]() == nil, name .. ": returns unavailable without secret arithmetic")
+      T.expect(env.EverythingAuras[name]() == nil, name .. ": returns unavailable without secret arithmetic")
     end
   end
   if forever then
     restricted, zero = false, false
     env.UnitDefenseSkill = function() return 10, -30 end
-    T.expect(env.M33kAuras.GetDefense() == 0, "clamps negative effective defense like the character panel")
+    T.expect(env.EverythingAuras.GetDefense() == 0, "clamps negative effective defense like the character panel")
   end
   if forever or flavor[1] == "Midnight" then
     restricted, zero = false, false
     local frame, queued, signals = {}, {}, 0
     local state = {}
     local track = load(construct({args = {seen.criticalpercent}, init = prototype.init, statesParameter = "one"}, {}), env)
-    env.M33kAuras.IsLibsOK = function() return true end
+    env.EverythingAuras.IsLibsOK = function() return true end
     env.CreateFrame = function() return frame end
     frame.SetScript = function(_, _, handler) frame.OnEvent = handler end
     frame.RegisterEvent = function() end
@@ -209,7 +209,7 @@ for _, flavor in ipairs({
         track(state, event)
       end
     end
-    setfenv(assert(loadstring(readSource("M33kAuras/Secrets.lua"))), env)("M33kAuras", env.Private)
+    setfenv(assert(loadstring(readSource("EverythingAuras/Secrets.lua"))), env)("EverythingAuras", env.Private)
     frame.OnEvent(frame, "PLAYER_ENTERING_WORLD")
     T.expect(signals == 1 and state.criticalpercent == 15, "initializes the stat secrecy state")
     frame.OnEvent(frame, "ADDON_RESTRICTION_STATE_CHANGED", 0, 1)
@@ -226,3 +226,4 @@ for _, flavor in ipairs({
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

@@ -7,7 +7,7 @@ f:add("A");f:add("B")
 f:add("Group",nil,{"Child"});f:add("Child","Group")
 f:add("Dynamic",nil,{"D1","D2"}).regionType="dynamicgroup";f:add("D1","Dynamic");f:add("D2","Dynamic")
 options.RefreshAuraList("");f:loadMain()
-local tag="M33KAURAS_DISPLAY_BUTTON_MENU"
+local tag="EVERYTHINGAURAS_DISPLAY_BUTTON_MENU"
 local function item(root,text)
   for _,entry in root:EnumerateElementDescriptions() do if entry.text==text then return entry end end
 end
@@ -21,7 +21,7 @@ local function open(id)
 end
 local function build(ids)
   local uids={}
-  for _,id in ipairs(ids) do uids[#uids+1]=M33kAuras.GetData(id).uid end
+  for _,id in ipairs(ids) do uids[#uids+1]=EverythingAuras.GetData(id).uid end
   local root=f.menuDescription()
   options.BuildDisplayButtonMenu(root,{auraId=ids[1],auraUID=uids[1],selectedIds=ids,selectedUIDs=uids})
   return root
@@ -29,7 +29,7 @@ end
 local seen
 local hook=Menu.ModifyMenu(tag,function(owner,root,context)
   seen=context
-  local _,index=tagged(root,"M33KAURAS_DISPLAY_BUTTON_DELETE_SECTION")
+  local _,index=tagged(root,"EVERYTHINGAURAS_DISPLAY_BUTTON_DELETE_SECTION")
   root:Insert(MenuUtil.CreateButton("WASync Send"),index)
   root:Insert(MenuUtil.CreateButton("WASync Version"),index+1)
 end)
@@ -38,12 +38,12 @@ T.expect(root:GetTag()==tag and f.menuOwner==options.ScrollBox and f.menuOwner~=
   "native display button menu exposes a stable owner and tagged context")
 T.expect(seen.auraId=="A" and seen.auraUID=="uid-A" and seen.selectedIds[1]=="A" and seen.selectedUIDs[1]=="uid-A",
   "single display button context contains matching ID/UID snapshots")
-local _,index=tagged(root,"M33KAURAS_DISPLAY_BUTTON_DELETE_SECTION")
+local _,index=tagged(root,"EVERYTHINGAURAS_DISPLAY_BUTTON_DELETE_SECTION")
 T.expect(root[index-2].text=="WASync Send" and root[index-1].text=="WASync Version" and root[index].divider,
   "extensions insert an ordered block before the deletion divider")
-T.expect(tagged(root,"M33KAURAS_DISPLAY_BUTTON_DELETE").text=="Delete"
-  and root[#root]:GetTag()=="M33KAURAS_DISPLAY_BUTTON_CLOSE","destructive and close tags are stable")
-T.expect(not M33kAuras.RegisterDisplayButtonMenuHook and not M33kAuras.UnregisterDisplayButtonMenuHook,
+T.expect(tagged(root,"EVERYTHINGAURAS_DISPLAY_BUTTON_DELETE").text=="Delete"
+  and root[#root]:GetTag()=="EVERYTHINGAURAS_DISPLAY_BUTTON_CLOSE","destructive and close tags are stable")
+T.expect(not EverythingAuras.RegisterDisplayButtonMenuHook and not EverythingAuras.UnregisterDisplayButtonMenuHook,
   "the obsolete custom registration API is absent")
 hook:Unregister()
 root=open("A")
@@ -71,12 +71,12 @@ f.view:Render(1000)
 export:Pick()
 T.expect(exported=="A","an action still targets the original aura after its display button is recycled")
 root=open("A");export=item(root,"Export...")
-local data=M33kAuras.GetData("A")
-M33kAurasSaved.displays.A=nil;data.id="Renamed A";M33kAurasSaved.displays[data.id]=data
+local data=EverythingAuras.GetData("A")
+EverythingAurasSaved.displays.A=nil;data.id="Renamed A";EverythingAurasSaved.displays[data.id]=data
 export:Pick()
 T.expect(exported=="Renamed A","actions resolve renamed auras by UID")
 root=open("B");export=item(root,"Export...")
-M33kAurasSaved.displays.B=nil
+EverythingAurasSaved.displays.B=nil
 exported=nil;export:Pick()
 T.expect(exported==nil,"a stale action cannot target a deleted aura or its replacement")
 f:add("B")
@@ -110,11 +110,11 @@ item(root,"Duplicate All"):Pick()
 T.expect(table.concat(targets,",")=="Renamed A,B","batch actions use the menu-open selection rather than live selection")
 root=build({"Renamed A","B"})
 targets=nil
-local originalB=M33kAurasSaved.displays.B
-M33kAurasSaved.displays.B={id="B",uid="replacement-B",regionType="icon"}
+local originalB=EverythingAurasSaved.displays.B
+EverythingAurasSaved.displays.B={id="B",uid="replacement-B",regionType="icon"}
 item(root,"Duplicate All"):Pick()
 T.expect(targets==nil,"batch actions abort if a selected UID was deleted, even when its name is reused")
-M33kAurasSaved.displays.B=originalB
+EverythingAurasSaved.displays.B=originalB
 
 options.ClearPicks()
 root=open("Group")
@@ -157,7 +157,7 @@ contextHook:Unregister()
 -- Exercise WASync menu integration with spies for its external actions.
 local requests={}
 local sent,checked,filter,quickCopy
-_G.AddonDB={WeakAuras=M33kAuras,RGAPI={IsCustomSender=function() return true end,
+_G.AddonDB={WeakAuras=EverythingAuras,RGAPI={IsCustomSender=function() return true end,
   ClassColorName=function(_,unit) return unit end},GetFullName=function(_,unit) return unit.."-Realm" end,
   IterateGroupMembers=function() local i=0;return function() i=i+1;return ({"Player1","Player2"})[i] end end}
 _G.MRT={Options={Open=function() end,OpenByModuleName=function() end}}
@@ -192,7 +192,7 @@ T.expect(requests[3][1]=="SendSetLoadNever" and requests[3][4]==false
   and requests[5][1]=="RequestDisplayTable" and requests[5][3]=="Player2-Realm"
   and requests[6][1]=="RequestDebugLog" and requests[6][3]=="Player1-Realm",
   "all WASync player actions dispatch the correct method, recipient and load flag")
-local _,deleteIndex=tagged(root,"M33KAURAS_DISPLAY_BUTTON_DELETE_SECTION")
+local _,deleteIndex=tagged(root,"EVERYTHINGAURAS_DISPLAY_BUTTON_DELETE_SECTION")
 T.expect(root[deleteIndex-1]==custom and #custom[1]==6 and #custom[2]==6,
   "the complete WASync block precedes Delete with all six per-player actions")
 local sendIndex
@@ -206,3 +206,4 @@ T.expect(item(root,"|cFF8855FFWASync|r Send...") and item(root,"|cFF8855FFWASync
   "WASync restricts custom sender actions while keeping Send and Check Version")
 T.expect(#f.errors==0,"display button menu actions complete without callback errors")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

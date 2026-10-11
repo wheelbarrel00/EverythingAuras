@@ -34,16 +34,16 @@ fi
 git shortlog --no-merges --reverse "$previous..$current" | sed -e  '/^\w/G' -e 's/^      /- /' >> "CHANGELOG.md"
 
 # Changelog.lua
-echo -ne "if not M33kAuras.IsLibsOK() then return end\n---@type string\nlocal AddonName = ...\n---@class OptionsPrivate\nlocal OptionsPrivate = select(2, ...)\n" >> "M33kAurasOptions/Changelog.lua"
-echo -ne "OptionsPrivate.changelog = {\n" >> "M33kAurasOptions/Changelog.lua"
-echo -ne "  versionString = '$version',\n" >> "M33kAurasOptions/Changelog.lua"
-echo -ne "  dateString = '$date',\n" >> "M33kAurasOptions/Changelog.lua"
-echo -ne "  fullChangeLogUrl = '${url}/compare/${previous}...${current}',\n" >> "M33kAurasOptions/Changelog.lua"
+echo -ne "if not EverythingAuras.IsLibsOK() then return end\n---@type string\nlocal AddonName = ...\n---@class OptionsPrivate\nlocal OptionsPrivate = select(2, ...)\n" >> "EverythingAurasOptions/Changelog.lua"
+echo -ne "OptionsPrivate.changelog = {\n" >> "EverythingAurasOptions/Changelog.lua"
+echo -ne "  versionString = '$version',\n" >> "EverythingAurasOptions/Changelog.lua"
+echo -ne "  dateString = '$date',\n" >> "EverythingAurasOptions/Changelog.lua"
+echo -ne "  fullChangeLogUrl = '${url}/compare/${previous}...${current}',\n" >> "EverythingAurasOptions/Changelog.lua"
 if [ "$version" = "$tag" ]; then # on a tag
-  echo -ne "  highlightText = [==[\n" >> "M33kAurasOptions/Changelog.lua"
-  echo -ne "$highlights" >> "M33kAurasOptions/Changelog.lua"
-  echo -ne "]==]," >> "M33kAurasOptions/Changelog.lua"
+  echo -ne "  highlightText = [==[\n" >> "EverythingAurasOptions/Changelog.lua"
+  echo -ne "$highlights" >> "EverythingAurasOptions/Changelog.lua"
+  echo -ne "]==]," >> "EverythingAurasOptions/Changelog.lua"
 fi
-echo -ne "  commitText = [==[" >> "M33kAurasOptions/Changelog.lua"
-git shortlog --no-merges --reverse "$previous..$current" | sed -e  '/^\w/G' -e 's/^      /- /' >> "M33kAurasOptions/Changelog.lua"
-echo -ne "]==]\n}" >> "M33kAurasOptions/Changelog.lua"
+echo -ne "  commitText = [==[" >> "EverythingAurasOptions/Changelog.lua"
+git shortlog --no-merges --reverse "$previous..$current" | sed -e  '/^\w/G' -e 's/^      /- /' >> "EverythingAurasOptions/Changelog.lua"
+echo -ne "]==]\n}" >> "EverythingAurasOptions/Changelog.lua"

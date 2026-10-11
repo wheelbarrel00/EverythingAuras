@@ -16,13 +16,13 @@ local function section(source, first, last)
   return source:sub(from, to - 1)
 end
 
-local source = readSource("M33kAuras/Prototypes.lua")
+local source = readSource("EverythingAuras/Prototypes.lua")
 local helperSource = source:find("local function talentSpecIdForTrigger", 1, true)
   and section(source, "local function talentSpecIdForTrigger", "local function talentSpecIdForLoad") or ""
 local prototypeSource = helperSource .. "\nreturn {" .. section(source,
   '  ["Talent Known"] = {', '  ["PvP Talent Selected"] = {') .. "}"
-local cacheSource = section(source, "table.sort(M33kAuras.classes_sorted)", "function M33kAuras.CheckPvpTalentBySpellId")
-local compilerSource = section(readSource("M33kAuras/GenericTrigger.lua"),
+local cacheSource = section(source, "table.sort(EverythingAuras.classes_sorted)", "function EverythingAuras.CheckPvpTalentBySpellId")
+local compilerSource = section(readSource("EverythingAuras/GenericTrigger.lua"),
   "function TestForTriState", "function Private.EndEvent") .. "\nreturn ConstructFunction"
 
 local function load(code, env)
@@ -71,7 +71,7 @@ local function setup(flavor)
     end
   end
   local env = setmetatable({
-    M33kAuras = wa, Private = private, ceil = math.ceil, MAX_NUM_TALENTS = 20,
+    EverythingAuras = wa, Private = private, ceil = math.ceil, MAX_NUM_TALENTS = 20,
     L = setmetatable({}, { __index = function(_, key) return key end }),
     tinsert = table.insert, tconcat = table.concat,
     issecretvalue = function() return false end, hasanysecretvalues = function() return false end,
@@ -110,7 +110,7 @@ local function setup(flavor)
     state.evaluate = load(construct(prototype, trigger), env)
     return function() return state.evaluate(state.triggerState, "STATUS") end
   end
-  return prototype, args, state, compile, private.frames["M33kAuras talentCheckFrame"]
+  return prototype, args, state, compile, private.frames["EverythingAuras talentCheckFrame"]
 end
 
 for _, flavor in ipairs({ "Forever", "Midnight" }) do
@@ -122,7 +122,7 @@ for _, flavor in ipairs({ "Forever", "Midnight" }) do
   T.expect(not args.spec.enable(trigger) == (flavor == "Forever"), "Forever needs only a class; Midnight still requires a spec")
   T.expect(args.herotalent.enable(trigger) == (flavor == "Midnight"), "hero talents remain Midnight-only")
   T.expect(args.inverse.enable == false and args.inverse.hidden, "uses per-talent exclusions instead of the legacy inverse toggle")
-  T.expect(args.talent.control == "M33kAurasMiniTalent" and args.talent.multiNoSingle and args.talent.multiTristate,
+  T.expect(args.talent.control == "EverythingAurasMiniTalent" and args.talent.multiNoSingle and args.talent.multiTristate,
     "uses the modern multiselect picker")
   T.expect(args.talent.values(trigger)[1][1] == 1001 and args.talent.multiConvertKey(trigger, 2) == 1002,
     "maps picker positions to talent entry IDs")
@@ -204,3 +204,4 @@ for _, flavor in ipairs({ "Classic", "Wrath", "Cata", "Mists" }) do
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

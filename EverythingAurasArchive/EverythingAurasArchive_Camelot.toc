@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Everything Auras Archive
+## Author: m33shoq
+## Version: @project-version@
+## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## LoadOnDemand: 1
+## SavedVariables: EverythingAurasArchive
+## Dependencies: EverythingAuras

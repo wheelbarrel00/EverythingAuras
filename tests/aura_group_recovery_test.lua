@@ -5,7 +5,7 @@ local T = require("helpers")
 local function noop() end
 local function yes() return true end
 local function no() return false end
-local file = assert(io.open(T.repoRoot .. "/M33kAuras/Prototypes.lua"))
+local file = assert(io.open(T.repoRoot .. "/EverythingAuras/Prototypes.lua"))
 local prototypes = file:read("*a")
 file:close()
 local strings = assert(prototypes:match("Private.function_strings = (%b{})"))
@@ -64,7 +64,7 @@ local function newFixture(raid)
     end
   end
   local env = setmetatable({
-    M33kAuras = addon,
+    EverythingAuras = addon,
     GetTime = function() return 100 end,
     IsInRaid = function() return raid end,
     GetNumGroupMembers = function() return 2 end,
@@ -104,9 +104,9 @@ local function newFixture(raid)
   }, { __index = _G })
   local triggerSystem
   addon.RegisterTriggerSystem = function(_, system) triggerSystem = system end
-  local chunk = assert(loadfile(T.repoRoot .. "/M33kAuras/BuffTrigger2.lua"))
-  setfenv(chunk, env)("M33kAuras", private)
-  local frame = private.frames["M33kAuras Buff2 Frame"]
+  local chunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/BuffTrigger2.lua"))
+  setfenv(chunk, env)("EverythingAuras", private)
+  local frame = private.frames["EverythingAuras Buff2 Frame"]
   local function update() frame.scripts.OnUpdate() end
   local function event(name, ...)
     if frame.events[name] then frame.scripts.OnEvent(frame, name, ...) end
@@ -265,3 +265,4 @@ for _, raid in ipairs({ false, true }) do
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

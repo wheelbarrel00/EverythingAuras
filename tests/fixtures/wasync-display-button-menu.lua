@@ -1,10 +1,10 @@
 -- WASync integration fixture; AddonDB, module and MRT are supplied by the test.
 local WA = AddonDB.WeakAuras
-local displayButtonMenuHandle = Menu.ModifyMenu("M33KAURAS_DISPLAY_BUTTON_MENU", function(_, root, context)
+local displayButtonMenuHandle = Menu.ModifyMenu("EVERYTHINGAURAS_DISPLAY_BUTTON_MENU", function(_, root, context)
   if #context.selectedUIDs ~= 1 then return end
   local insertionIndex
   for index, entry in root:EnumerateElementDescriptions() do
-    if entry:GetTag() == "M33KAURAS_DISPLAY_BUTTON_DELETE_SECTION" then
+    if entry:GetTag() == "EVERYTHINGAURAS_DISPLAY_BUTTON_DELETE_SECTION" then
       insertionIndex = index
       break
     end
@@ -63,3 +63,4 @@ local displayButtonMenuHandle = Menu.ModifyMenu("M33KAURAS_DISPLAY_BUTTON_MENU",
 end)
 
 return displayButtonMenuHandle
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

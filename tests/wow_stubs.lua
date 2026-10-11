@@ -57,13 +57,13 @@ function M.install()
   _G.SendMail = function() return "REAL_SendMail" end
   _G.securecall = function() return "REAL_securecall" end
   _G.SlashCmdList = {}
-  _G.M33kAurasSaved = { displays = {} }
-  _G.M33kAurasOptions = {}
+  _G.EverythingAurasSaved = { displays = {} }
+  _G.EverythingAurasOptions = {}
 
   local libs = {
     LibSerialize = {},
     LibDeflate = {},
-    ["LibCustomGlow-1.0-m33kauras"] = { ButtonGlow_Start = function() end, ButtonGlow_Stop = function() end },
+    ["LibCustomGlow-1.0-everythingauras"] = { ButtonGlow_Start = function() end, ButtonGlow_Stop = function() end },
     ["LibGetFrame-1.0"] = { GetUnitFrame = function() end, GetUnitNameplate = function() end },
   }
   _G.LibStub = setmetatable({ GetLibrary = function(_, name) return libs[name] end }, {
@@ -78,7 +78,7 @@ function M.permissive(table)
   })
 end
 
-function M.newM33kAuras()
+function M.newEverythingAuras()
   return {
     IsLibsOK = function() return true end,
     L = setmetatable({}, { __index = function(_, key) return key end }),
@@ -124,3 +124,4 @@ function M.newPrivate()
 end
 
 return M
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

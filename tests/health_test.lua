@@ -44,7 +44,7 @@ local env = setmetatable({
   constants = {nameRealmFilterDesc = ""},
   tinsert = table.insert, tconcat = table.concat,
   CurveConstants = {ScaleTo100 = {}},
-  M33kAuras = {
+  EverythingAuras = {
     newFeatureString = "",
     IsRetail = function() return true end,
     IsForever = function() return true end,
@@ -94,8 +94,8 @@ local env = setmetatable({
     return xpcall(function() return callback(unpack(args)) end, handler)
   end,
 }, {__index = _G})
-local prototypes = read("M33kAuras/Prototypes.lua")
-local generic = read("M33kAuras/GenericTrigger.lua")
+local prototypes = read("EverythingAuras/Prototypes.lua")
+local generic = read("EverythingAuras/GenericTrigger.lua")
 local selected = load(section(prototypes, "local function AddUnitChangeInternalEvents", "Private.event_categories = {")
   .. "\nreturn {" .. section(prototypes, '  ["Health"] = {', '  ["Alternate Power"] = {') .. "}", env)
 local prototype = selected.Health
@@ -272,3 +272,4 @@ T.expect(watched.partypet1 and not watched.player and not watched.party1, "pet-o
 forced = prototype.force_events(options)
 T.expect(#forced == 1 and forced[1][2] == "partypet1", "pet-only groups seed only pet units")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

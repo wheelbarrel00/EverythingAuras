@@ -133,7 +133,7 @@ function M.install(T)
   end
   _G.UIParent=frame()
   _G.GameTooltip=frame()
-  _G.M33kAuras_DropDownMenu=frame()
+  _G.EverythingAuras_DropDownMenu=frame()
   _G.C_Texture={GetAtlasInfo=function() return false end}
   _G.StaticPopupDialogs={}
   _G.C_Timer={After=function(_,callback) fixture.timers[#fixture.timers+1]=callback end}
@@ -255,24 +255,24 @@ function M.install(T)
       end
     end
   end}
-  _G.M33kAuras=stubs.newM33kAuras()
-  M33kAuras.spellCache={Load=noop}
-  M33kAuras.IsOptionsOpen=function() return true end
-  M33kAuras.IsImporting=function() return false end
-  M33kAuras.GetData=function(id) return M33kAurasSaved.displays[id] end
+  _G.EverythingAuras=stubs.newEverythingAuras()
+  EverythingAuras.spellCache={Load=noop}
+  EverythingAuras.IsOptionsOpen=function() return true end
+  EverythingAuras.IsImporting=function() return false end
+  EverythingAuras.GetData=function(id) return EverythingAurasSaved.displays[id] end
   local nextUID=0
-  M33kAuras.GenerateUniqueID=function() nextUID=nextUID+1;return "generated-"..nextUID end
-  M33kAuras.Add=function(data) M33kAurasSaved.displays[data.id]=data end
-  M33kAuras.ClearAndUpdateOptions=noop
-  M33kAuras.SetMoverSizer=noop
-  M33kAuras.FillOptions=noop
+  EverythingAuras.GenerateUniqueID=function() nextUID=nextUID+1;return "generated-"..nextUID end
+  EverythingAuras.Add=function(data) EverythingAurasSaved.displays[data.id]=data end
+  EverythingAuras.ClearAndUpdateOptions=noop
+  EverythingAuras.SetMoverSizer=noop
+  EverythingAuras.FillOptions=noop
   local function traversal(data,include,leafs)
     local result={}
     local function visit(d)
       if not leafs or not d.controlledChildren then result[#result+1]=d end
-      for _,id in ipairs(d.controlledChildren or {}) do visit(assert(M33kAuras.GetData(id))) end
+      for _,id in ipairs(d.controlledChildren or {}) do visit(assert(EverythingAuras.GetData(id))) end
     end
-    if include then visit(data) else for _,id in ipairs(data.controlledChildren or {}) do visit(assert(M33kAuras.GetData(id))) end end
+    if include then visit(data) else for _,id in ipairs(data.controlledChildren or {}) do visit(assert(EverythingAuras.GetData(id))) end end
     local index=0
     return function() index=index+1; return result[index] end
   end
@@ -282,11 +282,11 @@ function M.install(T)
     EnsureRegion=function() return {} end,FakeStatesFor=function(id,visible) fixture.previews[id]=visible end,
     PauseAllDynamicGroups=function() return {} end,ResumeAllDynamicGroups=noop,CollapseAllClones=noop,
     GetTriggerDescription=noop,Pause=noop,Resume=noop,
-    GetDataByUID=function(uid) for _,data in pairs(M33kAurasSaved.displays) do if data.uid==uid then return data end end end,
+    GetDataByUID=function(uid) for _,data in pairs(EverythingAurasSaved.displays) do if data.uid==uid then return data end end end,
     TraverseAll=function(d) return traversal(d,true,false) end,
     TraverseAllChildren=function(d) return traversal(d,false,false) end,
     TraverseLeafs=function(d) return traversal(d,false,true) end,
-    TraverseParents=function(d) return function() d=d.parent and M33kAuras.GetData(d.parent);return d end end,
+    TraverseParents=function(d) return function() d=d.parent and EverythingAuras.GetData(d.parent);return d end end,
     splitAtOr=function(text)
       local terms={}
       for term in text:gsub(" or ","|"):gmatch("[^|]+") do terms[#terms+1]=term end
@@ -307,21 +307,21 @@ function M.install(T)
   options.IsPickedMultiple=function() return false end
   options.IsDisplayPicked=function(id) return options.displayEntries[id] and options.displayEntries[id].picked end
   require("display_button_menu_stubs").install(fixture)
-  T.loadAddonFile("M33kAurasOptions/AuraListModel.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/AuraList.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/AuraListThumbnail.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/DisplayEntryActions.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/DisplayButtonMenu.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/AceGUI-Widgets/AceGUIWidget-M33kAurasDisplayButton.lua","M33kAurasOptions",options)
-  T.loadAddonFile("M33kAurasOptions/AceGUI-Widgets/AceGUIWidget-M33kAurasLoadedHeaderButton.lua","M33kAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/AuraListModel.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/AuraList.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/AuraListThumbnail.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/DisplayEntryActions.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/DisplayButtonMenu.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/AceGUI-Widgets/AceGUIWidget-EverythingAurasDisplayButton.lua","EverythingAurasOptions",options)
+  T.loadAddonFile("EverythingAurasOptions/AceGUI-Widgets/AceGUIWidget-EverythingAurasLoadedHeaderButton.lua","EverythingAurasOptions",options)
   for _,kind in ipairs({"Install","Update"}) do
-    T.loadAddonFile("M33kAurasOptions/AceGUI-Widgets/AceGUIWidget-M33kAurasPending"..kind.."Button.lua","M33kAurasOptions",options)
+    T.loadAddonFile("EverythingAurasOptions/AceGUI-Widgets/AceGUIWidget-EverythingAurasPending"..kind.."Button.lua","EverythingAurasOptions",options)
   end
   local root=frame()
   root.filterInput=frame();root.container=frame();root.moversizer=frame()
   root.ClearOptions=noop;root.ClearAndUpdateOptions=noop;root.FillOptions=noop;root.SetLoadProgressVisible=noop;root.loadProgress=frame()
   for _,key in ipairs({"loadedButton","unloadedButton","pendingInstallButton","pendingUpdateButton"}) do
-    local header=ace:Create("M33kAurasLoadedHeaderButton")
+    local header=ace:Create("EverythingAurasLoadedHeaderButton")
     header:SetText(key);header.childButtons={};header.RecheckVisibility=noop;header:Expand()
     root[key]=header
   end
@@ -338,23 +338,23 @@ function M.install(T)
   end
   function fixture:add(id,parent,children)
     local data={id=id,uid="uid-"..id,parent=parent,controlledChildren=children,regionType=children and "group" or "icon",load={},desc="",triggers={}}
-    M33kAuras.Add(data)
+    EverythingAuras.Add(data)
     return data
   end
   function fixture:loadMain()
-    T.loadAddonFile("M33kAurasOptions/M33kAurasOptions.lua","M33kAurasOptions",options)
-    M33kAuras.SetMoverSizer=noop
+    T.loadAddonFile("EverythingAurasOptions/EverythingAurasOptions.lua","EverythingAurasOptions",options)
+    EverythingAuras.SetMoverSizer=noop
     options.ResetMoverSizer=noop
     -- Inject the options frame without constructing unrelated options panels.
     for i=1,30 do
-      local name=debug.getupvalue(M33kAuras.ShowOptions,i)
+      local name=debug.getupvalue(EverythingAuras.ShowOptions,i)
       if not name then break end
-      if name=="frame" then debug.setupvalue(M33kAuras.ShowOptions,i,root) end
+      if name=="frame" then debug.setupvalue(EverythingAuras.ShowOptions,i,root) end
     end
     for _,f in ipairs(self.frames) do
-      if f.events.ADDON_LOADED then f.scripts.OnEvent(f,"ADDON_LOADED","M33kAurasOptions") end
+      if f.events.ADDON_LOADED then f.scripts.OnEvent(f,"ADDON_LOADED","EverythingAurasOptions") end
     end
-    local file=assert(io.open(T.repoRoot.."/M33kAurasOptions/OptionsFrames/OptionsFrame.lua"));local source=file:read("*a");file:close()
+    local file=assert(io.open(T.repoRoot.."/EverythingAurasOptions/OptionsFrames/OptionsFrame.lua"));local source=file:read("*a");file:close()
     local a=assert(source:find("  frame.ClearPick =",1,true));local b=assert(source:find("  frame.GetTargetAura =",a,true))
     local c=assert(source:find("  frame.PickDisplay =",1,true));local d=assert(source:find("  frame.GetPickedDisplay =",c,true))
     local chunk=assert(loadstring("local frame, OptionsPrivate = ...; local displayEntries = OptionsPrivate.displayEntries; local tempGroup = OptionsPrivate.tempGroup; local container = frame.container; local loadedButton, unloadedButton = frame.loadedButton, frame.unloadedButton; "..source:sub(a,b-1)..source:sub(c,d-1)))
@@ -367,3 +367,4 @@ function M.install(T)
   return fixture
 end
 return M
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

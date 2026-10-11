@@ -127,7 +127,7 @@ local function setup(testBuild, forever)
     Threads = { Add = function(_, _, co) f.threads[#f.threads + 1] = co end },
   } }
   local env = setmetatable({
-    M33kAuras = wa,
+    EverythingAuras = wa,
     C_Secrets = api,
     Enum = { SecrecyLevel = { NeverSecret = 0 } },
     IsTestBuild = function() return testBuild end,
@@ -159,7 +159,7 @@ local function setup(testBuild, forever)
       return timer
     end },
   }, { __index = _G })
-  setfenv(assert(loadfile(T.repoRoot .. "/M33kAurasOptions/Cache.lua")), env)("M33kAurasOptions", private)
+  setfenv(assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/Cache.lua")), env)("EverythingAurasOptions", private)
   f.cache, f.options, f.data, f.env, f.wa = wa.spellCache, private, { spellCache = {} }, env, wa
   f.cache.Load(f.data)
   function f:finish()
@@ -339,7 +339,7 @@ f.options.ConstructOptions = function(prototype)
   local name = prototype.cast and "description_secretFiltersDescription" or "description_secretValuesDescription"
   return { [name] = { order = 12 }, unrelated = { order = 13 } }
 end
-setfenv(assert(loadfile(T.repoRoot .. "/M33kAurasOptions/GenericTrigger.lua")), f.env)("M33kAurasOptions", f.options)
+setfenv(assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/GenericTrigger.lua")), f.env)("EverythingAurasOptions", f.options)
 for _, event in ipairs({ "Cast", "Cooldown Progress (Spell)", "Cooldown Ready (Spell)", "Charges Changed", "Action Usable", "Power" }) do
   f.options.Private.event_prototypes[event] = { cast = event == "Cast" }
   local options = builder({ id = "test", triggers = { { trigger = { type = "spell", event = event } } } }, 1)
@@ -359,3 +359,4 @@ f = setup(true, false)
 f.cache.Build()
 T.expect(#f.threads == 0 and not f.data.rebuilding, "existing Retail test-build scan restriction remains intact")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

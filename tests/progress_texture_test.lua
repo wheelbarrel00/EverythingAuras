@@ -263,7 +263,7 @@ local Private = {
 }
 local env = setmetatable({
   CreateFrame = frame,
-  M33kAuras = {
+  EverythingAuras = {
     IsLibsOK = function() return true end,
     IsDurationObject = function(value) return type(value) == "table" and value.durationObject == true end,
     L = setmetatable({}, {__index = function(_, key) return key end}),
@@ -297,7 +297,7 @@ for _, path in ipairs({
   "BaseRegions/CircularProgressTexture.lua", "RegionTypes/SmoothStatusBarMixin.lua",
   "RegionTypes/ProgressTexture.lua",
 }) do
-  setfenv(assert(loadfile(T.repoRoot .. "/M33kAuras/" .. path)), env)("M33kAuras", Private)
+  setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/" .. path)), env)("EverythingAuras", Private)
 end
 local function newRegion(options)
   local data = copy(registration.default)
@@ -1227,3 +1227,4 @@ for _, options in ipairs({
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

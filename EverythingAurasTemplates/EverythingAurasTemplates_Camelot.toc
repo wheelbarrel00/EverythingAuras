@@ -1,0 +1,20 @@
+## Interface: 16001
+## Title: Everything Auras Templates
+## Author: m33shoq
+## Version: @project-version@
+## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## Notes: Templates for EverythingAuras
+## Notes-esES: Plantillas para EverythingAuras
+## Notes-esMX: Plantillas para EverythingAuras
+## X-Category: Interface Enhancements
+## Globe-Main: EverythingAuras
+## DefaultState: Enabled
+## LoadOnDemand: 1
+## Dependencies: EverythingAuras, EverythingAurasOptions
+
+locales.xml
+
+TriggerTemplates.lua
+TriggerTemplatesData.lua
+
+AceGUI-Widgets\AceGUIContainer-EverythingAurasTemplateGroup.lua

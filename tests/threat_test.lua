@@ -20,10 +20,10 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local compiler = section(readSource("M33kAuras/GenericTrigger.lua"),
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local compiler = section(readSource("EverythingAuras/GenericTrigger.lua"),
   "function TestForTriState", "function Private.EndEvent") .. "\nreturn ConstructFunction"
-local conditionCompiler = section(readSource("M33kAuras/Conditions.lua"),
+local conditionCompiler = section(readSource("EverythingAuras/Conditions.lua"),
   "local function CreateTestForCondition", "local function CreateCheckCondition") .. "\nreturn CreateTestForCondition"
 local prototypeSource = section(prototypes, "local unitHelperFunctions = {", "Private.event_categories = {")
   .. "\nreturn {" .. section(prototypes, '  ["Threat Situation"] = {', '  ["Crowd Controlled"] = {') .. "}"
@@ -42,7 +42,7 @@ local function reset()
 end
 reset()
 local env = setmetatable({
-  M33kAuras = {UnitExistsFixed = function() return true end},
+  EverythingAuras = {UnitExistsFixed = function() return true end},
   Private = {ExecEnv = {UnitName = function() return "Target" end,
     ParseStringCheck = function() return {Check = function() return true end} end}},
   L = setmetatable({}, {__index = function(_, key) return key end}),
@@ -62,7 +62,7 @@ local env = setmetatable({
   end,
 }, {__index = _G})
 load("local UnitDetailedThreatSituation = UnitDetailedThreatSituation\n" .. section(prototypes,
-  "function M33kAuras.UnitDetailedThreatSituation", "M33kAuras.UnitCastingInfo ="), env)
+  "function EverythingAuras.UnitDetailedThreatSituation", "EverythingAuras.UnitCastingInfo ="), env)
 local prototype = load(prototypeSource, env)["Threat Situation"]
 local construct = load(compiler, env)
 local function trigger(options)
@@ -146,3 +146,4 @@ T.expect(not trigger({use_specific_unit = true})(), "secret unit comparison cann
 T.expect(track(), "unfiltered unit still works when a unit comparison would be secret")
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

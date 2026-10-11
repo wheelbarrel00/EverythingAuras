@@ -20,19 +20,19 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local core = readSource("M33kAuras/M33kAuras.lua")
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local types = readSource("M33kAuras/Types.lua")
-local init = readSource("M33kAuras/Init.lua")
+local core = readSource("EverythingAuras/EverythingAuras.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local types = readSource("EverythingAuras/Types.lua")
+local init = readSource("EverythingAuras/Init.lua")
 local loadSource = "return {args = {" .. section(prototypes,
   '    {\n      name = "size",', '    {\n      name = "affixes",') .. "}}"
 local locationSource = "return {statesParameter = 'one', args = {" .. section(prototypes,
   '      {\n        name = "instanceSize",', '    },\n    automaticrequired = true,\n    progressType = "none"') .. "}}"
 local encounterSource = "return {" .. section(prototypes,
   '  ["Encounter Events"] = {', '  ["Evoker Essence"] = {') .. "}"
-local loadCompiler = section(core, "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions")
+local loadCompiler = section(core, "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions")
   .. "\nreturn ConstructFunction"
-local triggerCompiler = section(readSource("M33kAuras/GenericTrigger.lua"),
+local triggerCompiler = section(readSource("EverythingAuras/GenericTrigger.lua"),
   "function TestForTriState", "function Private.EndEvent") .. "\nreturn ConstructFunction"
 
 for _, flavor in ipairs({
@@ -44,7 +44,7 @@ for _, flavor in ipairs({
   local hidden = forever or flavor[1] == "Classic"
   local instance, catalogCalls = {}, 0
   local env = setmetatable({
-    M33kAuras = {BuildInfo = flavor[3]}, Private = {},
+    EverythingAuras = {BuildInfo = flavor[3]}, Private = {},
     L = setmetatable({}, {__index = function(_, key) return key end}),
     tinsert = table.insert, tconcat = table.concat,
     issecretvalue = function() return false end,
@@ -60,7 +60,7 @@ for _, flavor in ipairs({
     C_PvP = {IsRatedArena = function() return false end, IsRatedBattleground = function() return false end},
   }, {__index = _G})
   load("local flavor = " .. flavor[2] .. "\n"
-    .. section(init, "function M33kAuras.IsClassicEra()", "---@param ... string"), env)
+    .. section(init, "function EverythingAuras.IsClassicEra()", "---@param ... string"), env)
   load(section(types, "Private.difficulty_info = {", "Private.glow_types"), env)
   load(section(types, "Private.instance_difficulty_types = {}", "Private.TocToExpansion"), env)
   T.expect((catalogCalls == 0) == hidden, "skips the difficulty catalog only where both selectors are hidden")
@@ -137,3 +137,4 @@ for _, flavor in ipairs({
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

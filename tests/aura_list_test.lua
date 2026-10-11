@@ -33,8 +33,8 @@ options.RefreshAuraList("b")
 T.expect(model:Includes(model.byID.Beta) and not model:Includes(entry),"one-character search filters the list")
 options.RefreshAuraList("alpha or other")
 T.expect(model:Includes(entry) and model:Includes(model.byID.Other),"existing OR search syntax is preserved")
-M33kAurasSaved.displays.Alpha=nil;alpha.id="Renamed";M33kAurasSaved.displays.Renamed=alpha
-M33kAurasSaved.displays.Group.controlledChildren[1]="Renamed"
+EverythingAurasSaved.displays.Alpha=nil;alpha.id="Renamed";EverythingAurasSaved.displays.Renamed=alpha
+EverythingAurasSaved.displays.Group.controlledChildren[1]="Renamed"
 options.RefreshAuraList("renamed")
 T.expect(model.byID.Renamed==entry and model.byID.Alpha==nil and entry.picked and entry:GetVisibility()==2,"renaming preserves stable UID state and updates indexes and filtering")
 fixture.private.loaded.Renamed=nil;fixture.private.loaded.Beta=nil
@@ -42,18 +42,18 @@ options.RefreshAuraList("renamed")
 T.expect(model.byID.Group.section=="unloaded","load transitions update filtered projections too")
 fixture:loadMain()
 options.RefreshAuraList("")
-M33kAuras.PickDisplay("Renamed")
+EverythingAuras.PickDisplay("Renamed")
 T.expect(fixture.frame.pickedDisplay=="Renamed" and entry.picked,"real options selection selects a formerly offscreen aura")
 options.PickDisplayMultiple("Beta")
 T.expect(entry.picked and model.byID.Beta.picked and options.IsPickedMultiple(),"multiple selection is independent of rows")
 options.ClearPicks()
 T.expect(not entry.picked and not model.byID.Beta.picked,"clearing selection reaches offscreen entries")
 entry:MoveChild(1);fixture:flush()
-T.expect(M33kAurasSaved.displays.Group.controlledChildren[2]=="Renamed" and model.byID.Group.children[2]==entry,"reordering synchronizes data and tree children")
+T.expect(EverythingAurasSaved.displays.Group.controlledChildren[2]=="Renamed" and model.byID.Group.children[2]==entry,"reordering synchronizes data and tree children")
 entry:Ungroup();fixture:flush()
 T.expect(not entry.data.parent and not entry.parent,"ungrouping synchronizes the canonical tree")
 options.RevealDisplay("Renamed")
-Menu.ModifyMenu("M33KAURAS_DISPLAY_BUTTON_MENU",function(_,root,context)
+Menu.ModifyMenu("EVERYTHINGAURAS_DISPLAY_BUTTON_MENU",function(_,root,context)
   root:Insert(MenuUtil.CreateButton(context.auraId..":"..#context.selectedIds),#root)
 end)
 options.OpenDisplayButtonMenu(entry)
@@ -62,14 +62,14 @@ options.PickDisplayMultiple("Other")
 options.OpenDisplayButtonMenu(entry)
 T.expect(fixture.menu[#fixture.menu-1].text=="Renamed:2","multiple-selection menus supply both selected identities")
 -- Execute the real import/update phase-two methods with no row for the imported aura.
-T.loadAddonFile("M33kAurasOptions/OptionsFrames/Update.lua","M33kAurasOptions",options)
+T.loadAddonFile("EverythingAurasOptions/OptionsFrames/Update.lua","EverythingAurasOptions",options)
 local function upvalue(fn,wanted)
   for i=1,100 do local name,value=debug.getupvalue(fn,i);if not name then break end;if name==wanted then return value end end
   error("missing upvalue "..wanted)
 end
 local methods=upvalue(upvalue(options.UpdateFrame,"ConstructUpdateFrame"),"methods")
 local imported=fixture:add("Imported")
-M33kAuras.NewDisplayButton(imported,true)
+EverythingAuras.NewDisplayButton(imported,true)
 local importer=setmetatable({IncProgress=function() end,IncProgress10=function() end},{__index=methods})
 local map={GetPhase2Data=function() return imported end,GetParentIsDynamicGroup=function() return false end,GetGroupOrder=function() return nil,nil end}
 local copies={}
@@ -85,14 +85,14 @@ fixture.private.StringToTable=function(encoded)
 end
 fixture.private.CompanionData.stash={stash={encoded="install",name="Install"}}
 fixture.private.CompanionData.slugs={slug={encoded="update",name="Update",wagoVersion=2}}
-M33kAurasSaved.displays.Group.url="https://wago.io/slug/1"
-M33kAurasSaved.displays.Beta.url="https://wago.io/slug/1"
+EverythingAurasSaved.displays.Group.url="https://wago.io/slug/1"
+EverythingAurasSaved.displays.Beta.url="https://wago.io/slug/1"
 options.SortDisplayButtons("")
 fixture.view:Render(1,8)
 local updates, installs
 for _,container in ipairs(fixture.view.containers) do
-  if container.widget.type=="M33kAurasPendingUpdateButton" then updates=container.widget end
-  if container.widget.type=="M33kAurasPendingInstallButton" then installs=container.widget end
+  if container.widget.type=="EverythingAurasPendingUpdateButton" then updates=container.widget end
+  if container.widget.type=="EverythingAurasPendingInstallButton" then installs=container.widget end
 end
 T.expect(updates and installs,"pending install and update sections have visible pooled controls")
 T.expect(updates.linkedAuras.Group and updates.linkedAuras.Beta and updates.linkedChildren.Beta,"updates preserve linked roots and descendants")
@@ -104,16 +104,16 @@ options.SortDisplayButtons("")
 T.section("Batch selection and operations span offscreen rows")
 for i=1,40 do fixture:add(("Top %02d"):format(i)) end
 options.SortDisplayButtons("")
-M33kAuras.PickDisplay("Top 01")
+EverythingAuras.PickDisplay("Top 01")
 options.PickDisplayMultipleShift("Top 40")
 T.expect(#options.tempGroup.controlledChildren==40,"range selection includes rows outside the viewport")
 options.GetDisplayEntry("Top 01"):PriorityShow(2)
 options.ClearPicks()
 T.expect(not options.GetDisplayEntry("Top 40").picked and options.GetDisplayEntry("Top 01"):GetVisibility()==2,"clearing offscreen selections retains explicitly enabled previews")
-M33kAuras.PickDisplay("Top 01")
+EverythingAuras.PickDisplay("Top 01")
 options.ClearPick("Top 01")
 T.expect(fixture.frame.pickedDisplay==nil,"control-deselecting the single selection clears the options selection")
-M33kAuras.PickDisplay("Top 01")
+EverythingAuras.PickDisplay("Top 01")
 options.PickDisplayMultiple("Top 40")
 local source=options.GetDisplayEntry("Top 01")
 local destination=options.GetDisplayEntry("Group")
@@ -140,7 +140,7 @@ options.ConvertDisplay(converted.data,"text")
 T.expect(converted.data.regionType=="text" and converted:GetVisibility()==2,"conversion works without a row and retains explicit preview priority")
 options.SortDisplayButtons("NEW MATCH")
 local added=fixture:add("New Match")
-M33kAuras.NewDisplayButton(added)
+EverythingAuras.NewDisplayButton(added)
 fixture:flush()
 T.expect(model:Includes(model.byID[added.id]) and model.filter=="new match","creating an aura updates the active filtered projection without clearing search")
 local kept=options.GetDisplayEntry("Group"):GetExpanded()
@@ -155,9 +155,9 @@ options.BindAuraListRow(container,node)
 options.ReleaseAuraListRow(container)
 T.expect(not container.widget and fixture.acquired<=beforeRebind+1,"reinitializing a retained container releases its previous widget")
 local importing=true
-M33kAuras.IsImporting=function() return importing end
+EverythingAuras.IsImporting=function() return importing end
 local provider=fixture.view.provider
-M33kAuras.NewDisplayButton(fixture:add("Bulk Import"),true)
+EverythingAuras.NewDisplayButton(fixture:add("Bulk Import"),true)
 options.SortDisplayButtons()
 T.expect(fixture.view.provider==provider,"bulk import defers rebuilding the visible provider")
 importing=false
@@ -172,23 +172,23 @@ local function upvalue(fn, key)
   end
   error("missing upvalue: "..key)
 end
-local onRename=upvalue(M33kAuras.ToggleOptions,"OnRename")
-local onDelete=upvalue(M33kAuras.ToggleOptions,"OnAboutToDelete")
+local onRename=upvalue(EverythingAuras.ToggleOptions,"OnRename")
+local onDelete=upvalue(EverythingAuras.ToggleOptions,"OnAboutToDelete")
 local renamed=model.byID["Bulk Import"]
 renamed:PriorityShow(2)
 fixture.frame.OnRename=function(self,uid,oldid,newid)
   if self.pickedDisplay==oldid then self.pickedDisplay=newid end
 end
 options.SortDisplayButtons("bulk")
-M33kAurasSaved.displays["Bulk Import"]=nil
+EverythingAurasSaved.displays["Bulk Import"]=nil
 renamed.data.id="Bulk Renamed"
-M33kAuras.Add(renamed.data)
+EverythingAuras.Add(renamed.data)
 onRename("Rename",renamed.uid,"Bulk Import","Bulk Renamed")
 T.expect(model.byID["Bulk Renamed"]==renamed and not model.byID["Bulk Import"] and renamed:GetVisibility()==2,
   "real rename callback preserves UID identity and preview state")
 T.expect(model.filter=="bulk" and model:Includes(renamed),"real rename callback synchronizes the active search")
 onDelete("AboutToDelete",renamed.uid,renamed.data.id)
-M33kAurasSaved.displays[renamed.data.id]=nil
+EverythingAurasSaved.displays[renamed.data.id]=nil
 fixture:flush()
 T.expect(not model.byUID[renamed.uid] and not model.byID[renamed.data.id] and not options.auraListNodes[renamed.uid],
   "real deletion callback removes a filtered aura from all indexes and the provider")
@@ -213,7 +213,7 @@ local warningIcon
 for _,icon in ipairs(warnedRow.statusIcons.buttons) do if icon.key=="sound" then warningIcon=icon end end
 local removeSound
 MenuUtil={CreateContextMenu=function(_,builder)
-  builder(nil,{CreateButton=function(_,label,callback) if label==M33kAuras.L["Remove All Sounds"] then removeSound=callback end end})
+  builder(nil,{CreateButton=function(_,label,callback) if label==EverythingAuras.L["Remove All Sounds"] then removeSound=callback end end})
 end}
 warningIcon:GetScript("OnClick")()
 fixture.view:Render(1000)
@@ -233,10 +233,10 @@ fixture.private.Async=function(_,_,fn)
   previewThread=coroutine.create(fn)
   return {Finally=function(_,fn) cleanup=fn end}
 end
-local layout=upvalue(M33kAuras.ShowOptions,"LayoutDisplayButtons")
+local layout=upvalue(EverythingAuras.ShowOptions,"LayoutDisplayButtons")
 layout()
 assert(coroutine.resume(previewThread))
-M33kAuras.NewDisplayButton(fixture:add("Created between preview slices"))
+EverythingAuras.NewDisplayButton(fixture:add("Created between preview slices"))
 options.SortDisplayButtons()
 local resumed=true
 while coroutine.status(previewThread)~="dead" do
@@ -249,3 +249,4 @@ fixture:flush()
 T.expect(resumed,"preview scheduling tolerates rebuilding the UID/ID indexes between coroutine slices")
 T.expect(#fixture.errors==0,"no hidden UI callback errors occurred")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

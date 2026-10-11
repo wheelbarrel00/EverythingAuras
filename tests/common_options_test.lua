@@ -8,12 +8,12 @@ local stubs = require("wow_stubs")
 
 stubs.install()
 local realG = _G
-_G.M33kAuras = stubs.permissive(stubs.newM33kAuras())
+_G.EverythingAuras = stubs.permissive(stubs.newEverythingAuras())
 local Private, warnings = stubs.newPrivate()
 
-T.loadAddonFile("M33kAuras/AuraEnvironment.lua", "M33kAuras", Private)
+T.loadAddonFile("EverythingAuras/AuraEnvironment.lua", "EverythingAuras", Private)
 local OptionsPrivate = stubs.permissive({ Private = Private })
-T.loadAddonFile("M33kAurasOptions/CommonOptions.lua", "M33kAurasOptions", OptionsPrivate)
+T.loadAddonFile("EverythingAurasOptions/CommonOptions.lua", "EverythingAurasOptions", OptionsPrivate)
 
 -- Custom Variables is registered without encloseInFunction and with a
 -- validator, so its text is evaluated as an expression on every render.
@@ -67,3 +67,4 @@ end
 T.expect(#warnings > 0, "the sandbox raised warnings while evaluating the malicious code")
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

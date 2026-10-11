@@ -8,7 +8,7 @@ options.RefreshAuraList("")
 f.view:Render(1000)
 local entry=options.GetDisplayEntry("A")
 f.private.StringToTable=function() return {d={id="Preview",uid="preview",regionType="icon",load={}}} end
-for _,kind in ipairs({"M33kAurasDisplayButton","M33kAurasPendingInstallButton","M33kAurasPendingUpdateButton"}) do
+for _,kind in ipairs({"EverythingAurasDisplayButton","EverythingAurasPendingInstallButton","EverythingAurasPendingUpdateButton"}) do
   local container=CreateFrame("Frame")
   local thumbnail,releases=nil,0
   f.private.regionOptions.icon={
@@ -23,12 +23,12 @@ for _,kind in ipairs({"M33kAurasDisplayButton","M33kAurasPendingInstallButton","
     end,
   }
   local node={GetData=function()
-    if kind=="M33kAurasDisplayButton" then return {entry=entry} end
+    if kind=="EverythingAurasDisplayButton" then return {entry=entry} end
     return {kind=kind,id="preview",companion={encoded="valid",name="Preview"}}
   end}
   options.BindAuraListRow(container,node)
   local row=container.widget
-  T.expect(row.thumbnail==thumbnail and (kind=="M33kAurasDisplayButton" or thumbnail.desaturated),kind.." acquires its own thumbnail")
+  T.expect(row.thumbnail==thumbnail and (kind=="EverythingAurasDisplayButton" or thumbnail.desaturated),kind.." acquires its own thumbnail")
   options.ReleaseAuraListRow(container)
   T.expect(releases==1,kind.." releases its thumbnail once")
   T.expect(not row.data and not row.thumbnail and not row.callbacks and not row.frame:GetScript("OnEnter"),kind.." clears old aura references on release")
@@ -36,7 +36,7 @@ for _,kind in ipairs({"M33kAurasDisplayButton","M33kAurasPendingInstallButton","
   options.BindAuraListRow(container,node)
   T.expect(container.widget==row and row.thumbnail~=nil,kind.." reuses the released row")
   options.ReleaseAuraListRow(container)
-  T.expect(kind=="M33kAurasDisplayButton" or thumbnail.desaturated==false,kind.." restores Companion desaturation on successful release")
+  T.expect(kind=="EverythingAurasDisplayButton" or thumbnail.desaturated==false,kind.." restores Companion desaturation on successful release")
   local original=f.private.regionOptions.icon
   options.BindAuraListRow(container,node)
   local countBefore=releases
@@ -61,7 +61,7 @@ for _,kind in ipairs({"M33kAurasDisplayButton","M33kAurasPendingInstallButton","
   T.expect(releases==count,kind.." repeated release never returns a thumbnail twice")
 end
 -- Exercise thumbnail pooling through the real registration function.
-local file=assert(io.open(T.repoRoot.."/M33kAuras/M33kAuras.lua"))
+local file=assert(io.open(T.repoRoot.."/EverythingAuras/EverythingAuras.lua"))
 local source=file:read("*a");file:close()
 local first=assert(source:find("function Private.RegisterRegionOptions(",1,true))
 local last=assert(source:find("\n---@private",first,true))
@@ -91,3 +91,4 @@ registered.releaseThumbnail(reused)
 T.expect(active==0,"registered thumbnail release balances its acquisition")
 T.expect(#f.errors==0,"thumbnail lifecycle checks report no UI errors")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

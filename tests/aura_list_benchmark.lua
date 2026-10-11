@@ -1,7 +1,7 @@
 -- Synthetic CPU/lifecycle comparison; these are not in-game frame-time measurements.
 -- lua5.1 tests/aura_list_benchmark.lua tree 1000
 -- lua5.1 tests/aura_list_benchmark.lua original 1000 <baseline-directory>
--- Baseline directory needs M33kAurasOptions.lua and AceGUIWidget-M33kAurasDisplayButton.lua from 13ff1d02.
+-- Baseline directory needs EverythingAurasOptions.lua and AceGUIWidget-EverythingAurasDisplayButton.lua from 13ff1d02.
 local testsDir=arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path=testsDir.."/?.lua;"..package.path
 local T=require("helpers")
@@ -15,8 +15,8 @@ if mode=="original" then
     local file=assert(io.open(assert(arg[3],"baseline directory required").."/"..name))
     local text=file:read("*a");file:close();return text
   end
-  local main=read("M33kAurasOptions.lua")
-  assert(loadstring(read("AceGUIWidget-M33kAurasDisplayButton.lua")))("M33kAurasOptions",options)
+  local main=read("EverythingAurasOptions.lua")
+  assert(loadstring(read("AceGUIWidget-EverythingAurasDisplayButton.lua")))("EverythingAurasOptions",options)
   options.displayButtons={}
   options.GetDisplayButton=function(id) return options.displayButtons[id] end
   f.private.TraverseLeafsOrAura=f.private.TraverseLeafs
@@ -32,11 +32,11 @@ if mode=="original" then
   frame.CenterOnPicked=function() end
   a=assert(main:find("local function addButton(",1,true))
   b=assert(main:find("function OptionsPrivate.IsPickedMultiple",a,true))
-  local prefix="local OptionsPrivate,frame=...;local displayButtons=OptionsPrivate.displayButtons;local AceGUI=LibStub('AceGUI-3.0');local L=M33kAuras.L;local tinsert=table.insert; "
+  local prefix="local OptionsPrivate,frame=...;local displayButtons=OptionsPrivate.displayButtons;local AceGUI=LibStub('AceGUI-3.0');local L=EverythingAuras.L;local tinsert=table.insert; "
   assert(loadstring(prefix..main:sub(a,b-1)))(options,frame)
   open=function()
-    for id,data in pairs(M33kAurasSaved.displays) do
-      local row=f.ace:Create("M33kAurasDisplayButton")
+    for id,data in pairs(EverythingAurasSaved.displays) do
+      local row=f.ace:Create("EverythingAurasDisplayButton")
       options.displayButtons[id]=row
       row:SetData(data);row:Initialize();row:UpdateWarning()
     end
@@ -60,3 +60,4 @@ search("")
 local rowsBefore=f.acquired-4
 local scrolling=timed(function() for i=1,100 do scroll(1+(i*37)%(count-16)) end end)/100
 print(("%s,%d,%.3f,%.3f,%.3f,%d,%d"):format(mode,count,opening,searching,scrolling,rowsBefore,f.acquired-4))
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

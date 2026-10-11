@@ -1,0 +1,11 @@
+<Bindings>
+  <Binding name="EverythingAurasTOGGLE" Category="BINDING_HEADER_EverythingAuras">
+    EverythingAuras.OpenOptions()
+  </Binding>
+  <Binding name="EverythingAurasPROFILINGTOGGLE" Category="BINDING_HEADER_EverythingAuras">
+    EverythingAurasProfilingFrame:Toggle()
+  </Binding>
+  <Binding name="EverythingAurasPRINTPROFILING" Category="BINDING_HEADER_EverythingAuras">
+    EverythingAuras.PrintProfile()
+  </Binding>
+</Bindings>

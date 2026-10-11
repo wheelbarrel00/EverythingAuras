@@ -20,18 +20,18 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local core = readSource("M33kAuras/M33kAuras.lua")
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local init = readSource("M33kAuras/Init.lua")
+local core = readSource("EverythingAuras/EverythingAuras.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local init = readSource("EverythingAuras/Init.lua")
 local loadArgs = "return { args = {" .. section(prototypes,
   '    {\n      name = "combat",', '    {\n      name = "class_and_spec",') .. "} }"
 local querySource = "return function()\n" .. section(core, "  local ruleset\n", "  local pvp = false")
   .. "\nreturn ruleset end"
-local compilerSource = section(core, "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions")
+local compilerSource = section(core, "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions")
   .. "\nreturn ConstructFunction"
-local callSource = section(core, "      if M33kAuras.IsForever() then\n        shouldBeLoaded", "      -- end")
-local registrationSource = section(core, 'if M33kAuras.IsForever() then\n  loadFrame:RegisterEvent("VEHICLE_UPDATE")',
-  "if M33kAuras.IsWrathOrCataOrMists() then")
+local callSource = section(core, "      if EverythingAuras.IsForever() then\n        shouldBeLoaded", "      -- end")
+local registrationSource = section(core, 'if EverythingAuras.IsForever() then\n  loadFrame:RegisterEvent("VEHICLE_UPDATE")',
+  "if EverythingAuras.IsWrathOrCataOrMists() then")
 local version = assert(tonumber(core:match("local internalVersion = (%d+)")))
 
 for _, flavor in ipairs({"Forever", "Midnight"}) do
@@ -39,7 +39,7 @@ for _, flavor in ipairs({"Forever", "Midnight"}) do
   local forever = flavor == "Forever"
   local active, calls, registrations = {}, {}, {}
   local env = setmetatable({
-    M33kAuras = {BuildInfo = forever and 16001 or 120100, IsLibsOK = function() return true end,
+    EverythingAuras = {BuildInfo = forever and 16001 or 120100, IsLibsOK = function() return true end,
       InternalVersion = function() return version end},
     Private = {}, L = setmetatable({}, {__index = function(_, key) return key end}),
     Enum = {GameRule = {HardcoreRuleset = "Hardcore", RPRuleset = "RP", PvPRuleset = "PvP"}},
@@ -52,7 +52,7 @@ for _, flavor in ipairs({"Forever", "Midnight"}) do
     issecretvalue = function() return false end,
     loadFrame = {RegisterEvent = function(_, event) registrations[event] = true end},
   }, {__index = _G})
-  load("local flavor = 10\n" .. section(init, "function M33kAuras.IsClassicEra()", "---@param ... string"), env)
+  load("local flavor = 10\n" .. section(init, "function EverythingAuras.IsClassicEra()", "---@param ... string"), env)
   load(registrationSource, env)
   local query = load(querySource, env)
   local prototype = load(loadArgs, env)
@@ -110,7 +110,7 @@ for _, flavor in ipairs({"Forever", "Midnight"}) do
   end
 
   T.section(flavor .. ": old Hardcore modernization")
-  setfenv(assert(loadfile(T.repoRoot .. "/M33kAuras/Modernize.lua")), env)("M33kAuras", env.Private)
+  setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/Modernize.lua")), env)("EverythingAuras", env.Private)
   for _, choice in ipairs({true, false}) do
     local data = {internalVersion = 89, load = {use_hardcore = choice, use_combat = true}}
     env.Private.Modernize(data)
@@ -147,3 +147,4 @@ for _, flavor in ipairs({"Forever", "Midnight"}) do
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

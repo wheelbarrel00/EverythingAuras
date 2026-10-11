@@ -23,7 +23,7 @@ local ready, usable, charges, maxCharges, count, range = true, true, 2, 3, 0, 1
 local observedUsableId, observedRangeId, cooldownReads = nil, nil, 0
 local env = setmetatable({
   L = setmetatable({}, {__index = function(_, key) return key end}),
-  M33kAuras = {
+  EverythingAuras = {
     IsWrathOrCataOrMists = function() return false end,
     GetSpellCooldown = function() cooldownReads = cooldownReads + 1; return secret, secret, nil, 10, secret, true end,
     GetSpellCharges = function() return charges, maxCharges, count, 20, 30 end,
@@ -43,9 +43,9 @@ local env = setmetatable({
     return false
   end,
 }, {__index = _G})
-local prototype = load("return {" .. section(read("M33kAuras/Prototypes.lua"),
+local prototype = load("return {" .. section(read("EverythingAuras/Prototypes.lua"),
   '  ["Action Usable"] = {', '  ["Talent Known"] = {') .. "}", env)["Action Usable"]
-local construct = load(section(read("M33kAuras/GenericTrigger.lua"),
+local construct = load(section(read("EverythingAuras/GenericTrigger.lua"),
   "function TestForTriState", "function Private.EndEvent") .. "\nreturn ConstructFunction", env)
 local function trigger(options)
   options = options or {}
@@ -100,3 +100,4 @@ T.expect(not target(), "invalid target fails the target requirement")
 range = secret
 T.expect(target(), "target validity checks presence without inspecting a secret range result")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

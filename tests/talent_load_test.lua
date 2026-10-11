@@ -16,18 +16,18 @@ local function section(source, first, last)
   return source:sub(from, to - 1)
 end
 
-local prototypes = readSource("M33kAuras/Prototypes.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
 local helperStart = prototypes:find("local function talentSpecIdForLoad", 1, true)
   and "local function talentSpecIdForLoad" or "local function valuesForTalentFunction"
 local loadHelpers = section(prototypes, helperStart, "Private.load_prototype =")
 local talentArgs = section(prototypes, '    {\n      name = "talent",', '    {\n      name = "herotalent",')
 local loadSource = loadHelpers .. "\nreturn { args = {\n" .. talentArgs .. "\n} }"
-local compilerSource = section(readSource("M33kAuras/M33kAuras.lua"),
-  "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions") .. "\nreturn ConstructFunction"
-local metadataSource = section(readSource("M33kAuras/Types_Retail.lua"),
-  "local backgroundAlias", "M33kAuras.StopMotion =")
+local compilerSource = section(readSource("EverythingAuras/EverythingAuras.lua"),
+  "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions") .. "\nreturn ConstructFunction"
+local metadataSource = section(readSource("EverythingAuras/Types_Retail.lua"),
+  "local backgroundAlias", "EverythingAuras.StopMotion =")
 local widgetSource = "return {" .. section(readSource(
-  "M33kAurasOptions/AceGUI-Widgets/AceGUIWidget-M33kAurasMiniTalent_TWW.lua"),
+  "EverythingAurasOptions/AceGUI-Widgets/AceGUIWidget-EverythingAurasMiniTalent_TWW.lua"),
   "  SetList = function", "  SetDisabled = function") .. "}"
 
 local function load(source, env)
@@ -68,7 +68,7 @@ local function environment(flavor)
     end,
   }
   local env = setmetatable({
-    M33kAuras = wa, Private = private, tinsert = table.insert,
+    EverythingAuras = wa, Private = private, tinsert = table.insert,
     UnitClass = function() return "Mage", "MAGE" end,
     L = setmetatable({}, { __index = function(_, key) return key end }),
   }, { __index = _G })
@@ -90,7 +90,7 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
   T.expect(talent.values(trigger)() == mageTalents, "returns the selected class's talents")
 
   if flavor == "Forever" or flavor == "Midnight" then
-    T.expect(talent.control == "M33kAurasMiniTalent" and talent.multiNoSingle and talent.multiTristate,
+    T.expect(talent.control == "EverythingAurasMiniTalent" and talent.multiNoSingle and talent.multiTristate,
       "uses the picker with required and excluded selections")
     T.expect(talent.multiConvertKey(trigger, 2) == 1002 and talent.multiConvertKey(trigger, 99) == nil,
       "stores entry IDs instead of picker positions")
@@ -206,3 +206,4 @@ for _, flavor in ipairs({ "Forever", "Midnight" }) do
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

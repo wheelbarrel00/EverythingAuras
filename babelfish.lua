@@ -16,15 +16,15 @@ local function generateFileList(dir)
 end
 
 local fileList = {
-    M33kAuras_Main = generateFileList("M33kAuras"),
-    M33kAuras_Options = generateFileList("M33kAurasOptions"),
-    M33kAuras_Templates = generateFileList("M33kAurasTemplates"),
+    EverythingAuras_Main = generateFileList("EverythingAuras"),
+    EverythingAuras_Options = generateFileList("EverythingAurasOptions"),
+    EverythingAuras_Templates = generateFileList("EverythingAurasTemplates"),
 }
 
 local ordered = {
-    "M33kAuras_Main",
-    "M33kAuras_Options",
-    "M33kAuras_Templates",
+    "EverythingAuras_Main",
+    "EverythingAuras_Options",
+    "EverythingAuras_Templates",
 }
 
 local overrides = {
@@ -46,7 +46,7 @@ Choose which events cause the custom trigger to be checked. Multiple events can 
 • "CLEU" can be used instead of COMBAT_LOG_EVENT_UNFILTERED and colons can be used to separate specific "subEvents" you want to receive.
 • The keyword "TRIGGER" can be used, with colons separating trigger numbers, to have the custom trigger get updated when the specified trigger(s) update.
 
-Since this is a status-type trigger, the specified events may be called by M33kAuras without the expected arguments.
+Since this is a status-type trigger, the specified events may be called by EverythingAuras without the expected arguments.
 
 |cFF4444FFFor example:|r
 UNIT_POWER_UPDATE:player, UNIT_AURA:nameplate:group PLAYER_TARGET_CHANGED CLEU:SPELL_CAST_SUCCESS TRIGGER:3:1
@@ -125,3 +125,4 @@ for _, namespace in ipairs(ordered) do
     end
     ns_file:close()
 end
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

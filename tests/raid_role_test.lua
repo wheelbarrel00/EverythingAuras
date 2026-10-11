@@ -20,17 +20,17 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local prototypes = readSource("M33kAuras/Prototypes.lua")
-local core = readSource("M33kAuras/M33kAuras.lua")
-local buffs = readSource("M33kAuras/BuffTrigger2.lua")
-local helper = section(prototypes, "if M33kAuras.IsClassicOrWrathOrCataOrMists() or M33kAuras.IsForever() then",
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
+local core = readSource("EverythingAuras/EverythingAuras.lua")
+local buffs = readSource("EverythingAuras/BuffTrigger2.lua")
+local helper = section(prototypes, "if EverythingAuras.IsClassicOrWrathOrCataOrMists() or EverythingAuras.IsForever() then",
   "local function")
 local loadArg = section(prototypes, '    {\n      name = "raid_role",', '    {\n      name = "ingroup",')
-local compiler = section(core, "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions")
+local compiler = section(core, "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions")
   .. "\nreturn ConstructFunction"
 local assignment = section(core, "  local mounted = IsMounted()", "  vehicle =")
 -- End before the legacy vehicle branches when testing committed source.
-assignment = assignment:match("^(.-)\n  if M33kAuras.IsClassicEra%(%)") or assignment
+assignment = assignment:match("^(.-)\n  if EverythingAuras.IsClassicEra%(%)") or assignment
 local applies = section(buffs, "local function TriggerInfoApplies", "local function FormatAffectedUnaffected")
   .. "\nreturn TriggerInfoApplies"
 local effective = assert(buffs:match("local effectiveRaidRole = ([^\n]+)"))
@@ -39,10 +39,10 @@ local fetchRole = assert(buffs:match("fetchRole = ([^\n]+)")):gsub(",$", "")
 local roleForTriggerInfo = section(buffs, "local function roleForTriggerInfo", "local function markForTriggerInfo")
   .. "\nreturn roleForTriggerInfo"
 local properties = section(buffs, "function BuffTrigger.GetAdditionalProperties", "function BuffTrigger.GetProgressSources")
-local optionSource = readSource("M33kAurasOptions/BuffTrigger2.lua")
+local optionSource = readSource("EverythingAurasOptions/BuffTrigger2.lua")
 local optionsSource = "return {" .. section(optionSource, "    fetchRole = {", "    fetchRaidMark = {")
   .. section(optionSource, "    useActualSpec = {", "    useRaidRole = {") .. "}"
-local handler = section(buffs, "local function EventHandler", "\nif M33kAuras.IsCataOrMistsOrRetail() then")
+local handler = section(buffs, "local function EventHandler", "\nif EverythingAuras.IsCataOrMistsOrRetail() then")
   .. "\nreturn EventHandler"
 local registration = section(buffs, 'Buff2Frame:RegisterEvent("UNIT_AURA")', "-- For UNIT_IN_RANGE_UPDATE")
 
@@ -65,7 +65,7 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
     petUnitToUnit = { raidpet1 = "raid1" },
   }
   local env = setmetatable({
-    M33kAuras = wa, Private = {}, tinsert = table.insert,
+    EverythingAuras = wa, Private = {}, tinsert = table.insert,
     L = setmetatable({}, { __index = function(_, key) return key end }),
     issecretvalue = function() return false end,
     UnitInRaid = function(unit) return units[unit] end,
@@ -209,3 +209,4 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

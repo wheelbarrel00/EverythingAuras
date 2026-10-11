@@ -20,24 +20,24 @@ local function load(source, env)
   return setfenv(assert(loadstring(source)), env)()
 end
 
-local core = readSource("M33kAuras/M33kAuras.lua")
-local prototypes = readSource("M33kAuras/Prototypes.lua")
+local core = readSource("EverythingAuras/EverythingAuras.lua")
+local prototypes = readSource("EverythingAuras/Prototypes.lua")
 local loadSource = "return { args = {" .. section(prototypes,
   '    {\n      name = "vehicle",', '    {\n      name = "dragonriding",') .. "} }"
 local conditionSource = section(prototypes, '  ["Conditions"] = {', '  ["Spell Known"] = {')
 local eventSource = "return {" .. section(conditionSource, "    events = function", "    internal_events =") .. "}"
 local triggerSource = "return { args = {" .. section(conditionSource,
   '      {\n        name = "vehicle",', '      {\n        name = "resting",') .. "} }"
-local queryContext = section(core, "  local mounted = IsMounted()", "  if M33kAuras.IsCataOrMistsOrRetail() then")
-local queryStart = assert(queryContext:find("  if M33kAuras.IsClassicEra()", 1, true))
+local queryContext = section(core, "  local mounted = IsMounted()", "  if EverythingAuras.IsCataOrMistsOrRetail() then")
+local queryStart = assert(queryContext:find("  if EverythingAuras.IsClassicEra()", 1, true))
 local querySource = "return function()\nlocal vehicle, vehicleUi = false, false\n"
   .. queryContext:sub(queryStart)
   .. "\nreturn vehicle, vehicleUi end"
-local loadCompiler = section(core, "local function EvalBooleanArg", "function M33kAuras.GetActiveConditions")
+local loadCompiler = section(core, "local function EvalBooleanArg", "function EverythingAuras.GetActiveConditions")
   .. "\nreturn ConstructFunction"
-local triggerCompiler = section(readSource("M33kAuras/GenericTrigger.lua"), "function TestForTriState", "function Private.EndEvent")
+local triggerCompiler = section(readSource("EverythingAuras/GenericTrigger.lua"), "function TestForTriState", "function Private.EndEvent")
   .. "\nreturn ConstructFunction"
-local globalEvents = section(core, 'if M33kAuras.IsRetail() then\n  loadFrame:RegisterEvent("PLAYER_TALENT_UPDATE")',
+local globalEvents = section(core, 'if EverythingAuras.IsRetail() then\n  loadFrame:RegisterEvent("PLAYER_TALENT_UPDATE")',
   'loadFrame:RegisterEvent("GROUP_ROSTER_UPDATE")')
 local unitEvents = section(core, 'unitLoadFrame:RegisterUnitEvent("UNIT_FLAGS"', 'function Private.RegisterLoadEvents()')
 
@@ -59,7 +59,7 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
     end,
   }
   local env = setmetatable({
-    M33kAuras = {
+    EverythingAuras = {
       IsForever = function() return forever end,
       IsRetail = function() return flavor == "Midnight" end,
       IsClassicEra = function() return classic end,
@@ -137,3 +137,4 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
 end
 
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

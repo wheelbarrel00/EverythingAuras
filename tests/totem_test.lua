@@ -31,7 +31,7 @@ restricted.durationObject = durationObject
 local restrictedEmpty = {secret, secret, secret, secret, secret, secret, secret}
 local env = setmetatable({
   L = setmetatable({}, {__index = function(_, key) return key end}),
-  M33kAuras = {
+  EverythingAuras = {
     IsRetail = function() return false end,
     IsForever = function() return true end,
   },
@@ -51,9 +51,9 @@ local env = setmetatable({
   GetTime = function() return now end,
 
 }, {__index = _G})
-load(section(read("M33kAuras/GenericTrigger.lua"),
+load(section(read("EverythingAuras/GenericTrigger.lua"),
   "function Private.ExecEnv.CheckTotemName", "-- Queueable Spells"), env)
-local prototype = load("return {" .. section(read("M33kAuras/Prototypes.lua"),
+local prototype = load("return {" .. section(read("EverythingAuras/Prototypes.lua"),
   '  ["Totem"] = {', '  ["Item Count"] = {') .. "}", env)["Totem"]
 local function trigger(options)
   return load(prototype.triggerFunction(options or {}), env)
@@ -251,3 +251,4 @@ for _, event in ipairs(prototype.internal_events) do
 end
 T.expect(listensForRestrictions, "reevaluates on secrecy changes beyond combat events")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

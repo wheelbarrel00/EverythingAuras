@@ -4,11 +4,11 @@
   "allowCompoundWords": true,
   "ignoreRegExpList": ["\\((.+?)\\)"],
   "ignorePaths": [
-    "M33kAurasModelPaths",
-    "M33kAurasTemplates",
-    "M33kAuras/Atlas_*.lua",
-    "M33kAuras/Types*.lua",
-    "M33kAuras/Libs",
+    "EverythingAurasModelPaths",
+    "EverythingAurasTemplates",
+    "EverythingAuras/Atlas_*.lua",
+    "EverythingAuras/Types*.lua",
+    "EverythingAuras/Libs",
     ".luacheckrc"
   ],
   "words": [

@@ -1,0 +1,18 @@
+## Interface: 16001
+## Title: Everything Auras Model Paths (RG fork)
+## Author: m33shoq
+## Version: @project-version@
+## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## Notes: Model paths for EverythingAuras
+## Notes-esES: Las rutas de modelos para EverythingAuras
+## Notes-esMX: Las rutas de modelos para EverythingAuras
+## Notes-deDE: 3D-Model Pfade für EverythingAuras
+## Notes-ruRU: Ссылки на файлы моделей EverythingAuras
+## Notes-zhTW: EverythingAuras的模組路徑
+## X-Category: Interface Enhancements
+## Globe-Main: EverythingAuras
+## DefaultState: Enabled
+## LoadOnDemand: 1
+## Dependencies: EverythingAuras, EverythingAurasOptions
+
+ModelPaths.lua

@@ -1,6 +1,6 @@
 -- Run from the repository root with Lua 5.1 or LuaJIT.
 local function noop() end
-M33kAuras = { IsLibsOK = function() return true end, L = {}, GetDataByUID = noop }
+EverythingAuras = { IsLibsOK = function() return true end, L = {}, GetDataByUID = noop }
 issecretvalue = function() return false end
 local now = 0
 GetTime = function() return now end
@@ -15,8 +15,8 @@ local Private = {
   StartProfileUID = noop, StopProfileUID = noop,
   ActivateAuraEnvironmentForRegion = noop, ActivateAuraEnvironment = noop,
 }
-assert(loadfile("M33kAuras/Animations.lua"))("M33kAuras", Private)
-local frame = Private.frames["M33kAuras Animation Frame"]
+assert(loadfile("EverythingAuras/Animations.lua"))("EverythingAuras", Private)
+local frame = Private.frames["EverythingAuras Animation Frame"]
 local function tick(elapsed)
   now = now + elapsed
   assert(frame.OnUpdate, "updates must be active")
@@ -75,3 +75,4 @@ Private.RegisterGroupForPositioning("cancel", {
 tick(0.1)
 assert(frame.OnUpdate == nil, "cancellation inside OnUpdate drains safely")
 print("Animation lifecycle checks passed")
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

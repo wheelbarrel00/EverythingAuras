@@ -7,10 +7,10 @@ local function read(path)
   file:close()
   return source
 end
-local types = read("M33kAuras/Types_Retail.lua")
+local types = read("EverythingAuras/Types_Retail.lua")
 types = types:sub(1, assert(types:find("local backgroundAlias", 1, true)) - 1)
-local generated = read("M33kAuras/Encounters_Forever.lua")
-local optionsSource = read("M33kAurasOptions/LoadOptions.lua")
+local generated = read("EverythingAuras/Encounters_Forever.lua")
+local optionsSource = read("EverythingAurasOptions/LoadOptions.lua")
 optionsSource = optionsSource:sub(assert(optionsSource:find("local function AddEncounterReference", 1, true)),
   assert(optionsSource:find("function OptionsPrivate.GetLoadOptions", 1, true)) - 1)
 local L = setmetatable({}, {__index = function(_, key) return key end})
@@ -18,7 +18,7 @@ for _, forever in ipairs({true, false}) do
   T.section(forever and "Forever encounter reference" or "Midnight journal reference")
   local private, opened, journalCalls, tier = {}, 0, 0, 3
   local env = setmetatable({
-    M33kAuras = {
+    EverythingAuras = {
       newFeatureString = "",
       L = L, IsLibsOK = function() return true end, IsForever = function() return forever end,
     },
@@ -35,7 +35,7 @@ for _, forever in ipairs({true, false}) do
     end,
     C_Map = {GetMapGroupID = function() return nil end},
   }, {__index = _G})
-  local function load(source) return setfenv(assert(loadstring(source)), env)("M33kAuras", private) end
+  local function load(source) return setfenv(assert(loadstring(source)), env)("EverythingAuras", private) end
   load(generated)
   load(types)
   private.InitializeEncounterAndZoneLists()
@@ -90,7 +90,8 @@ for _, forever in ipairs({true, false}) do
     T.expect(options.encounterReference == nil, "Midnight options are unchanged")
   end
 end
-local toc = read("M33kAuras/M33kAuras.toc")
+local toc = read("EverythingAuras/EverythingAuras_Camelot.toc")
 T.expect(toc:find("Encounters_Forever.lua", 1, true) < toc:find("Types_Retail.lua", 1, true),
   "generated reference loads before its consumer")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

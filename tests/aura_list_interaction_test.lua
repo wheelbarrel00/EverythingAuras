@@ -86,7 +86,7 @@ T.expect(refreshCount==3 and options.auraListModel.filter=="",
 options.RefreshAuraList=refresh
 local entry=options.GetDisplayEntry("Aura 02")
 local before=f.scrolls
-M33kAuras.PickDisplay(entry.data.id)
+EverythingAuras.PickDisplay(entry.data.id)
 T.expect(f.scrolls==before,"clicking a fully visible aura does not scroll the list")
 f.view:Render(12)
 local offset=f.box:GetDerivedScrollOffset()
@@ -97,7 +97,7 @@ T.expect(f.box:GetDerivedScrollOffset()==offset,"provider rebuild retains the pi
 options.SortDisplayButtons("Aura 01")
 T.expect(#f.view.containers>0 and f.box:GetDerivedScrollOffset()==0,"shorter search results clamp the old scroll offset instead of leaving an empty list")
 local created=f:add("New unrelated aura")
-M33kAuras.NewDisplayButton(created);f:flush()
+EverythingAuras.NewDisplayButton(created);f:flush()
 options.PickAndEditDisplay(created.id)
 T.expect(f.frame.filterInput:GetText()=="Aura 01" and options.auraListModel.filter=="aura 01",
   "creating and selecting a nonmatching aura preserves search text and results")
@@ -111,7 +111,7 @@ f.view:Render(1000)
 T.expect(entry.renameInput==input and input:HasFocus() and input:GetText()=="Offscreen committed",
   "rename input stays focused when its display button is released")
 local renamed
-M33kAuras.Rename=function(_,text) renamed=text end
+EverythingAuras.Rename=function(_,text) renamed=text end
 input:GetScript("OnEnterPressed")(input)
 T.expect(renamed=="Offscreen committed" and not entry.renaming and not input:HasFocus(),"Enter confirms an offscreen rename and releases its focus")
 options.RevealDisplay(entry.data.id)
@@ -204,7 +204,7 @@ f.private.AuraWarnings.GetAllWarnings=function(uid)
 end
 options.GetDisplayEntry(child.id):RecheckParentVisibility()
 options.massDelete=true
-M33kAurasSaved.displays[child.id]=nil
+EverythingAurasSaved.displays[child.id]=nil
 f:flush()
 T.expect(#f.errors==0,"queued preview refresh does not read deleted auras during a mutation")
 options.auraListModel:Remove(child.uid)
@@ -212,3 +212,4 @@ options.massDelete=nil
 options.RefreshAuraPreviews()
 T.expect(#f.errors==0,"preview traversal skips removed entries still present in an old child list")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

@@ -2,7 +2,7 @@
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
-local file = assert(io.open(T.repoRoot .. "/M33kAuras/GenericTrigger.lua"))
+local file = assert(io.open(T.repoRoot .. "/EverythingAuras/GenericTrigger.lua"))
 local source = file:read("*a"):gsub("\r\n", "\n")
 file:close()
 local first = assert(source:find("-- CD/Rune/GCD support code", 1, true))
@@ -46,7 +46,7 @@ local function fixture()
     local charges = wa.GetSpellCharges(id, true)
     table.insert(f.events, {event = event, id = id, charges = charges, ready = wa.IsSpellReady(id)})
   end
-  local env = setmetatable({M33kAuras = wa, Private = private, CreateFrame = frame,
+  local env = setmetatable({EverythingAuras = wa, Private = private, CreateFrame = frame,
     GetTime = function() return f.now end, issecretvalue = issecret, hasanysecretvalues = hassecret,
     Constants = {SpellCooldownConsts = {GLOBAL_RECOVERY_CATEGORY = 133}},
     abs = math.abs, C_Secrets = {ShouldSpellCooldownBeSecret = function(id)
@@ -208,7 +208,7 @@ f:send("SPELL_UPDATE_COOLDOWN", 40)
 T.expect(f.wa.IsSpellReady(40) == nil, "missing API data clears readiness")
 
 T.section("Generated trigger visibility")
-local protoFile = assert(io.open(T.repoRoot .. "/M33kAuras/Prototypes.lua"))
+local protoFile = assert(io.open(T.repoRoot .. "/EverythingAuras/Prototypes.lua"))
 local prototypes = protoFile:read("*a"):gsub("\r\n", "\n")
 protoFile:close()
 local protoStart = assert(prototypes:find('  ["Cooldown Progress (Spell)"]', 1, true))
@@ -575,3 +575,4 @@ for _, payload in ipairs({
   end
 end
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

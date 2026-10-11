@@ -1,8 +1,0 @@
-## Interface: 120100, 16001
-## Title: M33kAuras Archive
-## Author: m33shoq
-## Version: @project-version@
-## IconTexture: Interface\AddOns\M33kAuras\Media\Textures\icon.blp
-## LoadOnDemand: 1
-## SavedVariables: M33kAurasArchive
-## Dependencies: M33kAuras

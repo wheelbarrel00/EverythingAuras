@@ -1,0 +1,121 @@
+## Interface: 16001
+## Title: Everything Auras Options
+## Author: m33shoq
+## Version: @project-version@
+## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## Notes: Options for EverythingAuras
+## Notes-esES: Opciones para EverythingAuras
+## Notes-esMX: Opciones para EverythingAuras
+## Notes-deDE: Optionen für EverythingAuras
+## Notes-ruRU: Опции EverythingAuras
+## Notes-zhTW: EverythingAuras的設定
+## X-Category: Interface Enhancements
+## Globe-Main: EverythingAuras
+## DefaultState: Enabled
+## LoadOnDemand: 1
+## Dependencies: EverythingAuras, Blizzard_Menu
+## SavedVariables: EverythingAurasOptionsSaved
+
+embeds.xml
+locales.xml
+
+VersionCheck.lua
+ForAllIndentsAndPurposes.lua
+
+RegionOptions\Empty.lua
+RegionOptions\AuraBar.lua
+RegionOptions\Texture.lua
+RegionOptions\Icon.lua
+RegionOptions\Text.lua
+RegionOptions\Group.lua
+RegionOptions\DynamicGroup.lua
+RegionOptions\StopMotion.lua
+RegionOptions\Model.lua
+RegionOptions\ProgressTexture.lua
+
+SubRegionOptions\SubRegionCommon.lua
+SubRegionOptions\Background.lua
+SubRegionOptions\SubText.lua
+SubRegionOptions\Border.lua
+SubRegionOptions\Glow.lua
+SubRegionOptions\Tick.lua
+SubRegionOptions\Model.lua
+SubRegionOptions\StopMotion.lua
+SubRegionOptions\Texture.lua
+SubRegionOptions\CircularProgressTexture.lua
+SubRegionOptions\LinearProgressTexture.lua
+
+Cache.lua
+
+CommonOptions.lua
+GroupOptions.lua
+DisplayOptions.lua
+TriggerOptions.lua
+LoadOptions.lua
+ActionOptions.lua
+AnimationOptions.lua
+InformationOptions.lua
+
+BuffTrigger2.lua
+GenericTrigger.lua
+
+AuraListModel.lua
+AuraList.lua
+AuraListThumbnail.lua
+DisplayEntryActions.lua
+DisplayButtonMenu.lua
+EverythingAurasOptions.lua
+ConditionOptions.lua
+AuthorOptions.lua
+
+Changelog.lua
+
+OptionsFrames\OptionsFrame.lua
+
+# Groups
+OptionsFrames\CodeReview.lua
+OptionsFrames\IconPicker.lua
+OptionsFrames\ImportExport.lua
+OptionsFrames\ModelPicker.lua
+OptionsFrames\TextEditor.lua
+OptionsFrames\TexturePicker.lua
+OptionsFrames\Update.lua
+OptionsFrames\DebugLogFrame.lua
+OptionsFrames\EncounterBrowser.lua
+
+# Misc frames
+OptionsFrames\MoverSizer.lua
+OptionsFrames\FrameChooser.lua
+
+AceGUI-Widgets\AceGUIWidget-EverythingAurasExpand.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasExpandSmall.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasIcon.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasNewHeaderButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasLoadedHeaderButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasDisplayButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasDropDownItemCurrency.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasPendingInstallButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasPendingUpdateButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasTextureButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasIconButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasMultiLineEditBox.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasMultiLineEditBoxWithEnter.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasNewButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasImportButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasToolbarButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasTwoColumnDropDown.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasSnippetButton.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasAnchorButtons.lua
+AceGUI-Widgets\AceGUIContainer-EverythingAurasTreeGroup.lua
+AceGUI-Widgets\AceGUIContainer-EverythingAurasInlineGroup.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasExpandAnchor.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasSpacer.lua
+AceGUI-Widgets\AceGuiWidget-EverythingAurasProgressBar.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasSpinBox.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasMiniTalent_TWW.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasScrollArea.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasInput.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasInputFocus.lua
+AceGUI-Widgets\AceGUIWidget-EverythingAurasInputWithIndentation.lua
+AceGUI-Widgets\AceGuiWidget-EverythingAurasMediaSound.lua
+AceGUI-Widgets\EverythingAurasStatusbarAtlasWidget.lua

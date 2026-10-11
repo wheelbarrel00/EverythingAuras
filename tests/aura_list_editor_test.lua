@@ -81,7 +81,7 @@ options.SortDisplayButtons()
 local deleted=options.GetDisplayEntry("Deleted")
 deleted:BeginRename()
 local deletedInput=deleted.renameInput
-M33kAurasSaved.displays.Deleted=nil
+EverythingAurasSaved.displays.Deleted=nil
 options.SortDisplayButtons()
 T.expect(not deleted.renameInput and not deletedInput:IsShown() and not deletedInput:HasFocus(),
   "removing an aura releases its active rename editor")
@@ -94,7 +94,7 @@ local row=container.widget
 input=entry.renameInput
 input:SetText("Committed name")
 local renamed
-M33kAuras.Rename=function(data,newid)
+EverythingAuras.Rename=function(data,newid)
   renamed=newid
   -- A real rename callback can release and reuse the row synchronously.
   options.ReleaseAuraListRow(container)
@@ -115,7 +115,7 @@ options.GetCompanionPreview(companion)
 T.expect(parses==2,"a changed Companion payload invalidates a cached decode failure")
 
 f.private.StringToTable=function() return {d={id="preview",uid="preview",regionType="icon",load={}}} end
-local previewNode={GetData=function() return {kind="M33kAurasPendingUpdateButton",id="slug",companion={encoded="valid",name="Preview"}} end}
+local previewNode={GetData=function() return {kind="EverythingAurasPendingUpdateButton",id="slug",companion={encoded="valid",name="Preview"}} end}
 options.BindAuraListRow(container,previewNode)
 local update=container.widget
 options.ReleaseAuraListRow(container)
@@ -123,3 +123,4 @@ T.expect(not update.frame:GetScript("OnEnter") and not update.frame:GetScript("O
   "releasing a Companion update removes its data-dependent tooltip callbacks")
 T.expect(#f.errors==0,"editor and Companion lifecycle checks have no callback errors")
 T.finish()
+-- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md
