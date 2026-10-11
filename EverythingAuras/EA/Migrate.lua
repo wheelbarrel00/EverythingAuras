@@ -1,7 +1,6 @@
 if not EverythingAuras.IsLibsOK() then return end
 
 local Private = select(2, ...)
-local L = EverythingAuras.L
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
 local EA_VERSION = 1
@@ -109,23 +108,6 @@ local function ConvertSecretAura(trigger)
   end
 end
 
-local function UpdateImportWarnings(data)
-  local converted, cooldownManager
-  if type(data.triggers) == "table" then
-    for _, triggerData in ipairs(data.triggers) do
-      local trigger = type(triggerData) == "table" and triggerData.trigger
-      if type(trigger) == "table" then
-        converted = converted or trigger.eaConvertedFrom == "secretAura"
-        cooldownManager = cooldownManager or trigger.type == "cdm"
-      end
-    end
-  end
-  Private.AuraWarnings.UpdateWarning(data.uid, "EAConvertedSecretAura", converted and "info" or nil,
-    converted and L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. In combat it can only show what Blizzard lets addons read."] or nil)
-  Private.AuraWarnings.UpdateWarning(data.uid, "EACooldownManagerTrigger", cooldownManager and "warning" or nil,
-    cooldownManager and L["Uses ForeverAuras' Cooldown Manager trigger, which Everything Auras does not support yet. That trigger never activates."] or nil)
-end
-
 function Private.EAModernize(data)
   local version = data.eaVersion or 0
   if version < 1 then
@@ -140,7 +122,5 @@ function Private.EAModernize(data)
     RemapMedia(data, 0)
   end
   data.eaVersion = math.max(version, EA_VERSION)
-  if data.uid then
-    UpdateImportWarnings(data)
-  end
+  Private.EAUpdateWarnings(data)
 end

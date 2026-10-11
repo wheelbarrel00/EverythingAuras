@@ -630,6 +630,7 @@ local overridden = {
   WeakAuras = FakeEverythingAuras,
   ForeverAuras = FakeEverythingAuras,
 }
+Private.EASandboxOverrides = overridden
 
 -- Block global function names in namespace API tables
 for name, functions in pairs(blockedNamespaceFunctions) do

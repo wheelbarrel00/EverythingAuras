@@ -37,3 +37,7 @@ each change and its date.
   is, "Aura (Modern)" triggers become standard Aura triggers matched by spell name, ForeverAuras media paths
   point at the same files in Everything Auras, and custom code that names `ForeverAuras` or its swing timer
   event keeps working. Added Everything Auras' own migration counter.
+- 2026-10-11: Added stand-ins for older Classic functions that WoW Forever lacks, available only to aura custom
+  code. Added warnings on auras that use the combat log, secret health values, missing functions or trigger events
+  Everything Auras does not have. A trigger with an unknown event now keeps its name and stays off instead of
+  turning into an always-on Conditions trigger.

@@ -111,4 +111,6 @@ DiscordList.lua
 # Everything Auras
 EA\Compat.lua
 EA\Migrate.lua
+EA\Sandbox.lua
+EA\Warnings.lua
 EA\Slash.lua

@@ -1671,13 +1671,8 @@ function GenericTrigger.Add(data, region)
         if(Private.category_event_prototype[triggerType]) then
           if not(trigger.event) then
             error("Improper arguments to EverythingAuras.Add - trigger type is \"event\" but event is not defined");
-          elseif not(event_prototypes[trigger.event]) then
-            if(event_prototypes["Conditions"]) then
-              trigger.event = "Conditions";
-            else
-              error("Improper arguments to EverythingAuras.Add - no event prototype can be found for event type \""..trigger.event.."\" and default prototype reset failed.");
-            end
-          else
+          -- An unknown event keeps its name and leaves the trigger off, not WeakAuras' always-on Conditions rewrite.
+          elseif event_prototypes[trigger.event] then
             if (trigger.event == "Combat Log") then
               if (not trigger.subeventPrefix) then
                 trigger.subeventPrefix = ""
