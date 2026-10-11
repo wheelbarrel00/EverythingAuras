@@ -8,7 +8,9 @@ local OptionsPrivate = select(2, ...)
 local pairs, error, coroutine = pairs, error, coroutine
 
 -- WoW APIs
-local IsSpellKnown = IsSpellKnown
+local IsSpellKnown = function(spellID)
+  return C_SpellBook.IsSpellInSpellBook(spellID, Enum.SpellBookSpellBank.Player, false)
+end
 local neverSecret = Enum.SecrecyLevel.NeverSecret
 local getAuraSecrecy = C_Secrets.GetSpellAuraSecrecy
 local getCooldownSecrecy = C_Secrets.GetSpellCooldownSecrecy

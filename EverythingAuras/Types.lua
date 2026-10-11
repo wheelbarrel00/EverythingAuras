@@ -3607,7 +3607,7 @@ Private.classification_types = {
   minus = L["Minus (Small Nameplate)"]
 }
 
-if EverythingAuras.IsWrathOrMistsOrRetail() then
+if EverythingAuras.IsWrathOrMistsOrRetail() or EverythingAuras.IsForever() then
   ---@type table<number, string>
   Private.creature_type_types = {}
   for _, creatureID in ipairs(C_CreatureInfo.GetCreatureTypeIDs()) do

@@ -415,7 +415,8 @@ function OptionsPrivate.AddTriggerMetaFunctions(options, data, triggernum)
       end
     end
   }
-  if (C_AddOns.GetAddOnEnableState("EverythingAurasTemplates") ~= Enum.AddOnEnableState.None) then
+  if (C_AddOns.GetAddOnEnableState("EverythingAurasTemplates") ~= Enum.AddOnEnableState.None)
+     and EverythingAuras.IsRetail() then
     options.__applyTemplate = function()
       -- If we have more than a single aura selected,
       -- we want to open the template view with the group/multi selection

@@ -2950,7 +2950,12 @@ do
   ---@param identifier string | number
   ---@return number? startTime, number? duration
   function EverythingAuras.GetSpellLossOfControlCooldown(identifier)
-    if EverythingAuras.IsTWW() then
+    if C_Spell.GetSpellLossOfControlCooldownInfo then
+      local info = C_Spell.GetSpellLossOfControlCooldownInfo(identifier)
+      if info and info.isActive and not hasanysecretvalues(info.startTime, info.duration) then
+        return info.startTime, info.duration
+      end
+    elseif EverythingAuras.IsTWW() then
       return C_Spell.GetSpellLossOfControlCooldown(identifier)
     else
       return GetSpellLossOfControlCooldown(identifier)
@@ -3470,7 +3475,7 @@ do
   end
 
   local GetOverrideSpell
-  if EverythingAuras.IsTWW() then
+  if EverythingAuras.IsTWW() or EverythingAuras.IsForever() then
     GetOverrideSpell = C_Spell.GetOverrideSpell
   else
     GetOverrideSpell = FindSpellOverrideByID
@@ -3564,9 +3569,9 @@ end
 -- Swing timer support code (Forever only, uses the native PLAYER_SWING event)
 if EverythingAuras.IsForever() then
   local handSlots = {
-    main = GetInventorySlotInfo("MainHandSlot"),
-    off = GetInventorySlotInfo("SecondaryHandSlot"),
-    ranged = GetInventorySlotInfo("RangedSlot"),
+    main = C_PaperDollInfo.GetInventorySlotInfo("MainHandSlot"),
+    off = C_PaperDollInfo.GetInventorySlotInfo("SecondaryHandSlot"),
+    ranged = C_PaperDollInfo.GetInventorySlotInfo("RangedSlot"),
   }
 
   local handForSwingType = {
@@ -4064,7 +4069,7 @@ function Private.ExecEnv.CheckTotemSpellId(spellId, triggerSpellId, followoverri
   end
 
   if followoverride then
-    if spellId == FindSpellOverrideByID(triggerSpellId) then
+    if spellId == C_SpellBook.FindSpellOverrideByID(triggerSpellId) then
       return true
     end
   end
@@ -4152,8 +4157,8 @@ end
 do
   local isCata = EverythingAuras.IsCataClassic()
 
-  local mh = GetInventorySlotInfo("MainHandSlot")
-  local oh = GetInventorySlotInfo("SecondaryHandSlot")
+  local mh = C_PaperDollInfo.GetInventorySlotInfo("MainHandSlot")
+  local oh = C_PaperDollInfo.GetInventorySlotInfo("SecondaryHandSlot")
 
   local mh_name, mh_shortenedName, mh_exp, mh_dur, mh_charges, mh_EnchantID;
   ---@type string?
@@ -4166,7 +4171,7 @@ do
   local rw, rw_icon, rw_exp, rw_dur, rw_name, rw_shortenedName, rw_charges, rw_EnchantID;
   ---@type string?
   if isCata then
-    rw = GetInventorySlotInfo("RANGEDSLOT")
+    rw = C_PaperDollInfo.GetInventorySlotInfo("RANGEDSLOT")
     rw_icon = GetInventoryItemTexture("player", rw) or "Interface\\Icons\\INV_Misc_QuestionMark"
   end
 
@@ -4238,7 +4243,7 @@ do
       local function tenchUpdate()
         Private.StartProfileSystem("generictrigger temporary enchant");
         local _, mh_rem, oh_rem, rw_rem
-        _, mh_rem, mh_charges, mh_EnchantID, _, oh_rem, oh_charges, oh_EnchantID, _, rw_rem, rw_charges, rw_EnchantID = GetWeaponEnchantInfo();
+        _, mh_rem, mh_charges, mh_EnchantID, _, oh_rem, oh_charges, oh_EnchantID, _, rw_rem, rw_charges, rw_EnchantID = Private.GetWeaponEnchantInfo();
         local time = GetTime();
         local mh_exp_new = mh_rem and (time + (mh_rem / 1000));
         local oh_exp_new = oh_rem and (time + (oh_rem / 1000));

@@ -15,7 +15,7 @@ local _G = _G
 
 if not AceGUIEverythingAurasInputWithIndentationInsertLink then
   -- upgradeable hook
-  hooksecurefunc("ChatEdit_InsertLink", function(...) return _G.AceGUIEverythingAurasInputWithIndentationInsertLink(...) end)
+  hooksecurefunc(ChatFrameUtil, "InsertLink", function(...) return _G.AceGUIEverythingAurasInputWithIndentationInsertLink(...) end)
 end
 
 function _G.AceGUIEverythingAurasInputWithIndentationInsertLink(text)

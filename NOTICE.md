@@ -29,3 +29,7 @@ each change and its date.
   helper and the hooks for a guild's private addons. Closed custom-code access to the addon's internal tables.
   Fixed custom text receiving empty values for duration-based progress. Claimed `/wa` and `/ea` only when no
   other addon uses them. Took 15 fixes from WeakAuras (listed in `tools/wa-picks.tsv`).
+- 2026-10-11: Fixed errors on WoW Forever in the loss-of-control cooldown and in power bars on other units.
+  Restored aura tooltip values out of combat. Replaced every deprecated Blizzard function so nothing depends on the
+  `loadDeprecationFallbacks` setting. Turned on creature type, summon pending and the SAY and YELL note for
+  Forever. Hid the trigger templates on Forever, whose template data is retail-only.

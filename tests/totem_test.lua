@@ -40,7 +40,7 @@ local env = setmetatable({
     GetSpellIcon = function() return 50 end,
     ScheduleScan = function(time, event) scheduled = {time, event} end,
   }},
-  FindSpellOverrideByID = function(id) return id == 100 and 200 or id end,
+  C_SpellBook = {FindSpellOverrideByID = function(id) return id == 100 and 200 or id end},
   GetTotemInfo = function(slot) return unpack(slots[slot] or empty, 1, 7) end,
   GetTotemDuration = function(slot)
     queriedSlots[#queriedSlots + 1] = slot

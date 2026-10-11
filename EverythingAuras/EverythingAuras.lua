@@ -3773,31 +3773,31 @@ function Private.HandleChatAction(message_type, message, message_dest, message_d
       if message_dest_isunit == true then
         message_dest = GetUnitName(message_dest, true)
       end
-      pcall(function() SendChatMessage(message, "WHISPER", nil, message_dest) end);
+      pcall(function() C_ChatInfo.SendChatMessage(message, "WHISPER", nil, message_dest) end);
     end
   elseif(message_type == "SMARTRAID") then
     local isInstanceGroup = IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
     if UnitInBattleground("player") then
-      pcall(function() SendChatMessage(message, "INSTANCE_CHAT") end)
+      pcall(function() C_ChatInfo.SendChatMessage(message, "INSTANCE_CHAT") end)
     elseif UnitInRaid("player") then
-      pcall(function() SendChatMessage(message, "RAID") end)
+      pcall(function() C_ChatInfo.SendChatMessage(message, "RAID") end)
     elseif UnitInParty("player") then
       if isInstanceGroup then
-        pcall(function() SendChatMessage(message, "INSTANCE_CHAT") end)
+        pcall(function() C_ChatInfo.SendChatMessage(message, "INSTANCE_CHAT") end)
       else
-        pcall(function() SendChatMessage(message, "PARTY") end)
+        pcall(function() C_ChatInfo.SendChatMessage(message, "PARTY") end)
       end
     else
       if IsInInstance() then
-        pcall(function() SendChatMessage(message, "SAY") end)
+        pcall(function() C_ChatInfo.SendChatMessage(message, "SAY") end)
       end
     end
   elseif(message_type == "SAY" or message_type == "YELL") then
     if IsInInstance() then
-      pcall(function() SendChatMessage(message, message_type, nil, nil) end)
+      pcall(function() C_ChatInfo.SendChatMessage(message, message_type, nil, nil) end)
     end
   else
-    pcall(function() SendChatMessage(message, message_type, nil, nil) end);
+    pcall(function() C_ChatInfo.SendChatMessage(message, message_type, nil, nil) end);
   end
 end
 
@@ -4453,15 +4453,19 @@ do
 end
 
 function EverythingAuras.GetAuraInstanceTooltipInfo(unit, auraInstanceId, filter)
-  if EverythingAuras.IsRetail() then
+  if EverythingAuras.IsRetail() or EverythingAuras.IsForever() then
     local tooltipText = ""
-    local tooltipData
-    if filter == "HELPFUL" then
-      tooltipData = C_TooltipInfo.GetUnitBuffByAuraInstanceID(unit, auraInstanceId, filter)
-    else
-      tooltipData = C_TooltipInfo.GetUnitDebuffByAuraInstanceID(unit, auraInstanceId, filter)
+    -- Both lookups throw while aura data is restricted (RequiresUnitAuraAccess).
+    if C_Secrets.ShouldAurasBeSecret() then
+      return nil, "", "none", 0
     end
-    if not tooltipData then
+    local ok, tooltipData
+    if filter == "HELPFUL" then
+      ok, tooltipData = pcall(C_TooltipInfo.GetUnitBuffByAuraInstanceID, unit, auraInstanceId, filter)
+    else
+      ok, tooltipData = pcall(C_TooltipInfo.GetUnitDebuffByAuraInstanceID, unit, auraInstanceId, filter)
+    end
+    if not ok or not tooltipData or issecretvalue(tooltipData.dataInstanceID) then
       return nil, "", "none", 0
     end
     if not issecretvalue(tooltipData.lines) then

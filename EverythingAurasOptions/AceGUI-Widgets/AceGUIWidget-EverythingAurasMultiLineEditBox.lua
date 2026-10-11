@@ -21,7 +21,7 @@ Support functions
 
 if not AceGUIEverythingAurasMultiLineEditBoxInsertLink then
   -- upgradeable hook
-  hooksecurefunc("ChatEdit_InsertLink", function(...) return _G.AceGUIEverythingAurasMultiLineEditBoxInsertLink(...) end)
+  hooksecurefunc(ChatFrameUtil, "InsertLink", function(...) return _G.AceGUIEverythingAurasMultiLineEditBoxInsertLink(...) end)
 end
 
 function _G.AceGUIEverythingAurasMultiLineEditBoxInsertLink(text)

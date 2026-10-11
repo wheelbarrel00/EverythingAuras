@@ -1136,6 +1136,15 @@ function Private.ExecEnv.CheckRaidFlags(flags, flagToCheck)
   end
 end
 
+-- Blizzard's deprecation shims, inlined so nothing depends on the loadDeprecationFallbacks CVar.
+local IsSpellKnown = function(spellID, isPet)
+  return C_SpellBook.IsSpellInSpellBook(spellID, isPet and Enum.SpellBookSpellBank.Pet or Enum.SpellBookSpellBank.Player, false)
+end
+local IsPlayerSpell = function(spellID)
+  return C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
+end
+local FindBaseSpellByID, FindSpellOverrideByID = C_SpellBook.FindBaseSpellByID, C_SpellBook.FindSpellOverrideByID
+
 local function IsSpellKnownOrOverridesAndBaseIsKnown(spell, pet)
   if spell == 0 then return false end
   if IsSpellKnown(spell, pet) then
@@ -2610,8 +2619,8 @@ Private.event_prototypes = {
         store = true,
         sorted = true,
         conditionType = "select",
-        enable = EverythingAuras.IsWrathOrMistsOrRetail(),
-        hidden = not EverythingAuras.IsWrathOrMistsOrRetail(),
+        enable = EverythingAuras.IsWrathOrMistsOrRetail() or EverythingAuras.IsForever(),
+        hidden = not (EverythingAuras.IsWrathOrMistsOrRetail() or EverythingAuras.IsForever()),
       },
       {
         name = "creatureType",
@@ -2620,7 +2629,7 @@ Private.event_prototypes = {
         store = true,
         test = "true",
         hidden = true,
-        enable = EverythingAuras.IsWrathOrMistsOrRetail(),
+        enable = EverythingAuras.IsWrathOrMistsOrRetail() or EverythingAuras.IsForever(),
       },
       {
         name = "creatureFamilyIndex",
@@ -2704,8 +2713,8 @@ Private.event_prototypes = {
         display = L["Summon Pending"],
         type = "tristate",
         width = EverythingAuras.doubleWidth,
-        enable = EverythingAuras.IsRetail(),
-        hidden = not EverythingAuras.IsRetail(),
+        enable = EverythingAuras.IsRetail() or EverythingAuras.IsForever(),
+        hidden = not (EverythingAuras.IsRetail() or EverythingAuras.IsForever()),
         init = "C_IncomingSummon.HasIncomingSummon(unit)",
         store = true,
         conditionType = "bool",
@@ -3879,12 +3888,18 @@ Private.event_prototypes = {
         if powerType == 4 then
           table.insert(ret, [[
             local power = GetComboPoints(unit, unit .. '-target')
-            local total = math.max(1, UnitPowerMax(unit, Enum.PowerType.ComboPoints))
+            local total = UnitPowerMax(unit, Enum.PowerType.ComboPoints)
+            if not issecretvalue(total) then
+              total = math.max(1, total)
+            end
           ]])
         else
           table.insert(ret, [[
             local power = UnitPower(unit, powerType)
-            local total = math.max(1, UnitPowerMax(unit, powerType))
+            local total = UnitPowerMax(unit, powerType)
+            if not issecretvalue(total) then
+              total = math.max(1, total)
+            end
           ]])
         end
       end

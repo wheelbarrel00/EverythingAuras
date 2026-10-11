@@ -1157,7 +1157,7 @@ local function addControlsForChange(args, order, data, conditionVariable, totalA
       return false;
     end
 
-    if EverythingAuras.IsRetail() then
+    if EverythingAuras.IsRetail() or EverythingAuras.IsForever() then
       args["condition" .. i .. "value" .. j .. "message type warning"] = {
         type = "description",
         width = EverythingAuras.doubleWidth,

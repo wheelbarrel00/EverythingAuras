@@ -109,4 +109,5 @@ Legendaries.lua
 DiscordList.lua
 
 # Everything Auras
+EA\Compat.lua
 EA\Slash.lua
