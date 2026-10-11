@@ -41,3 +41,5 @@ each change and its date.
   code. Added warnings on auras that use the combat log, secret health values, missing functions or trigger events
   Everything Auras does not have. A trigger with an unknown event now keeps its name and stays off instead of
   turning into an always-on Conditions trigger.
+- 2026-10-11: Imported ForeverAuras auras restricted to a WoW Forever spec now load by the matching Player Class.
+  Added a warning on auras that use ForeverAuras' talent spec load option.

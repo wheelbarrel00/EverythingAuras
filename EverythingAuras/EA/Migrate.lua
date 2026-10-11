@@ -3,11 +3,17 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 1
+local EA_VERSION = 2
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
 local FA_CLASSIFICATION = { Buff = "HELPFUL", Debuff = "HARMFUL", Dispel = "HARMFUL" }
+
+-- Forever has one class tree per class, so each of its spec IDs names a class (GetSpecializationInfoByID).
+local FOREVER_SPEC_CLASS = {
+  [1482] = "MAGE", [1484] = "DRUID", [1485] = "HUNTER", [1486] = "PALADIN", [1487] = "PRIEST",
+  [1488] = "ROGUE", [1489] = "SHAMAN", [1490] = "WARLOCK", [1491] = "WARRIOR",
+}
 
 local function IsForeverBuild(tocversion)
   return type(tocversion) == "number" and tocversion >= 16000 and tocversion < 20000
@@ -108,6 +114,40 @@ local function ConvertSecretAura(trigger)
   end
 end
 
+-- M33kAuras loads Forever auras by Player Class, so a spec-only restriction from ForeverAuras becomes a class one.
+local function ConvertSpecLoad(load)
+  if type(load) ~= "table" or load.use_class ~= nil or load.use_class_and_spec == nil
+    or type(load.class_and_spec) ~= "table" then
+    return
+  end
+  local specs = {}
+  if load.use_class_and_spec then
+    specs[1] = load.class_and_spec.single
+  elseif type(load.class_and_spec.multi) == "table" then
+    for specID, enabled in pairs(load.class_and_spec.multi) do
+      if enabled then
+        specs[#specs + 1] = specID
+      end
+    end
+  end
+  local classes, count, last = {}, 0, nil
+  for _, specID in ipairs(specs) do
+    local class = FOREVER_SPEC_CLASS[tonumber(specID)]
+    if not class then
+      return
+    end
+    if not classes[class] then
+      classes[class] = true
+      count = count + 1
+      last = class
+    end
+  end
+  if count > 0 then
+    load.use_class = load.use_class_and_spec
+    load.class = { single = count == 1 and last or nil, multi = classes }
+  end
+end
+
 function Private.EAModernize(data)
   local version = data.eaVersion or 0
   if version < 1 then
@@ -120,6 +160,9 @@ function Private.EAModernize(data)
       end
     end
     RemapMedia(data, 0)
+  end
+  if version < 2 then
+    ConvertSpecLoad(data.load)
   end
   data.eaVersion = math.max(version, EA_VERSION)
   Private.EAUpdateWarnings(data)

@@ -181,6 +181,8 @@ function Private.EAUpdateWarnings(data)
     and L["Custom code calls functions WoW Forever does not have, so that code will cause errors: %s"]:format(table.concat(missing, ", ")))
   SetWarning(uid, "EASecretHealth", "warning", readsHealth
     and L["Custom code reads UnitHealth. Health is a secret value on WoW Forever, so math or comparisons on it cause errors."])
+  SetWarning(uid, "EAForeverSpec", "warning", type(data.load) == "table" and data.load.use_forever_spec ~= nil
+    and L["Uses ForeverAuras' talent spec load option, which Everything Auras does not have. The aura loads regardless of talent spec."])
   SetWarning(uid, "EAAuraReads", "info", auraReads
     and L["Custom code reads auras with UnitAura, UnitBuff or UnitDebuff. On WoW Forever these return nothing while Blizzard keeps auras secret, for example in combat."])
 end
