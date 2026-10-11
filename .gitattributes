@@ -1,2 +1,7 @@
 * text=auto
 *.sh eol=lf
+
+# Bundled libraries are stored byte for byte (TaintLess ships CRLF and must stay unmodified)
+*/Libs/** -text
+# Tracked on vendor-ea from M33kAuras, so it keeps upstream's normalization
+EverythingAuras/Libs/LibCustomGlow-1.0/** text=auto

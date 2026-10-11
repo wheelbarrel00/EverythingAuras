@@ -1,7 +1,9 @@
 ## Interface: 16001
 ## Title: Everything Auras Archive
-## Author: m33shoq
+## Author: Wheelbarrel00
 ## Version: @project-version@
+## X-License: GPL-2.0
+## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
 ## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
 ## LoadOnDemand: 1
 ## SavedVariables: EverythingAurasArchive

@@ -637,48 +637,6 @@ end
 
 ---@type EverythingAurasSaved
 EverythingAurasSaved = EverythingAurasSaved or {};
-if (not next(EverythingAurasSaved) or not (EverythingAurasSaved and EverythingAurasSaved.displays and next(EverythingAurasSaved.displays))) and not EverythingAurasSaved.migrationDisabled then
-  C_AddOns.EnableAddOn("WeakAuras")
-  C_AddOns.LoadAddOn("WeakAuras")
-  if WeakAurasSaved then
-    EverythingAurasSaved = CopyTable(WeakAurasSaved)
-    EverythingAurasSaved.m33kMigrated = true
-    C_AddOns.DisableAddOn("WeakAuras")
-  end
-end
-if not EverythingAurasSaved.m33kMigrated then
-  if not EverythingAurasSaved.migrationPromptCanceled then
-    C_AddOns.EnableAddOn("WeakAuras")
-    C_AddOns.LoadAddOn("WeakAuras")
-  end
-  if type(WeakAurasSaved) == "table" and type(WeakAurasSaved.displays) == "table" and next(WeakAurasSaved.displays) then
-    libsAreOk = false
-    StaticPopupDialogs["EverythingAuras_MIGRATION_PROMPT"] = {
-      text = "EverythingAuras detected data from WeakAuras. Do you want to migrate your settings from WeakAuras to EverythingAuras? This will delete existing settings for EverythingAuras and cannot be undone.\n\nIf you will change your mind enable \"EverythingAuras Settings Migration\" in addons list to see this prompt again.",
-      button1 = YES or "Yes",
-      button2 = NO or "No",
-      showAlert = true,
-      OnAccept = function()
-        EverythingAurasSaved = CopyTable(WeakAurasSaved)
-        EverythingAurasSaved.m33kMigrated = true
-        C_AddOns.DisableAddOn("WeakAuras")
-        C_UI.Reload()
-      end,
-      OnCancel = function()
-        EverythingAurasSaved.migrationPromptCanceled = true
-        C_AddOns.DisableAddOn("WeakAuras")
-        C_UI.Reload()
-      end,
-      timeout = 0,
-      whileDead = true,
-      hideOnEscape = false,
-      preferredIndex = 5,
-    }
-    StaticPopup_Show("EverythingAuras_MIGRATION_PROMPT")
-  elseif not WeakAurasSaved then
-    C_AddOns.DisableAddOn("WeakAuras")
-  end
-end
 
 if not libsAreOk then
   C_Timer.After(1, function()

@@ -1,9 +1,11 @@
 ## Interface: 16001
 ## Title: Everything Auras Templates
-## Author: m33shoq
+## Author: Wheelbarrel00
 ## Version: @project-version@
+## X-License: GPL-2.0
+## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
 ## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
-## Notes: Templates for EverythingAuras
+## Notes: Templates for Everything Auras
 ## Notes-esES: Plantillas para EverythingAuras
 ## Notes-esMX: Plantillas para EverythingAuras
 ## X-Category: Interface Enhancements

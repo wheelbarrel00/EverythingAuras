@@ -5,7 +5,7 @@ exclude_files = {
 	"EverythingAuras_Main.lua",
 	"EverythingAuras_Options.lua",
 	"EverythingAuras_Templates.lua",
-	"EverythingAuras/Libs/",
+	"EverythingAuras/Libs/", "EverythingAurasOptions/Libs/",
 	".luacheckrc"
 }
 ignore = {

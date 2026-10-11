@@ -1,9 +1,11 @@
 ## Interface: 16001
-## Title: Everything Auras Model Paths (RG fork)
-## Author: m33shoq
+## Title: Everything Auras Model Paths
+## Author: Wheelbarrel00
 ## Version: @project-version@
+## X-License: GPL-2.0
+## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
 ## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
-## Notes: Model paths for EverythingAuras
+## Notes: Model paths for Everything Auras
 ## Notes-esES: Las rutas de modelos para EverythingAuras
 ## Notes-esMX: Las rutas de modelos para EverythingAuras
 ## Notes-deDE: 3D-Model Pfade für EverythingAuras

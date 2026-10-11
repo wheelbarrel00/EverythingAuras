@@ -1,0 +1,29 @@
+# Build / packager output
+.release/
+*.zip
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.code-workspace
+
+# Markdown docs are local notes, except the published README, CHANGELOG and NOTICE
+*.md
+!/README.md
+!/CHANGELOG.md
+!/NOTICE.md
+
+# Dev-only retail TOCs (tools/make-dev-tocs.py), never packaged
+/EverythingAuras/EverythingAuras.toc
+/EverythingAurasOptions/EverythingAurasOptions.toc
+/EverythingAurasTemplates/EverythingAurasTemplates.toc
+/EverythingAurasModelPaths/EverythingAurasModelPaths.toc
+/EverythingAurasArchive/EverythingAurasArchive.toc
+
+# Tool scratch
+.git-blame-ignore-revs.pending
+__pycache__/

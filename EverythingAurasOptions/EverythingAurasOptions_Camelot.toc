@@ -1,9 +1,11 @@
 ## Interface: 16001
 ## Title: Everything Auras Options
-## Author: m33shoq
+## Author: Wheelbarrel00
 ## Version: @project-version@
+## X-License: GPL-2.0
+## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
 ## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
-## Notes: Options for EverythingAuras
+## Notes: Options for Everything Auras
 ## Notes-esES: Opciones para EverythingAuras
 ## Notes-esMX: Opciones para EverythingAuras
 ## Notes-deDE: Optionen für EverythingAuras

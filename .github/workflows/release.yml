@@ -1,0 +1,51 @@
+name: Package and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify required secrets
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: |
+          if [ -z "$CF_API_KEY" ]; then
+            echo "::error::CF_API_KEY secret is not set on this repository."
+            echo "Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Check TOC versions and tokens
+        run: |
+          set -e
+          for toc in */*_Camelot.toc; do
+            grep -q '^## Version: @project-version@' "$toc" || { echo "::error::$toc does not use @project-version@"; exit 1; }
+          done
+          if grep -rl -- '--@localization' --include='*.lua' .; then
+            echo "::error::@localization tokens must not ship"; exit 1
+          fi
+
+      - name: Build per-release changelog
+        run: awk '/^## / { if (seen) exit; seen=1 } seen' CHANGELOG.md > .release_changelog.md
+
+      # The packager reads the CurseForge id only from ## X-Curse-Project-ID in the TOC and picks
+      # the release channel from the tag name (a tag containing "beta" uploads as Beta).
+      - name: Package and release
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

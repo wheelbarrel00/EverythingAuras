@@ -1,0 +1,29 @@
+package-as: EverythingAuras
+
+enable-nolib-creation: no
+
+manual-changelog:
+  filename: .release_changelog.md
+  markup-type: markdown
+
+ignore:
+  - tests
+  - tools
+  - docs
+  - README.md
+  - CHANGELOG.md
+  - babelfish.lua
+  - update_translations.sh
+  - generate_changelog.sh
+  - cspell.json
+  - stylua.toml
+
+plain-copy:
+  - EverythingAurasModelPaths/*.lua
+
+move-folders:
+  EverythingAuras/EverythingAuras: EverythingAuras
+  EverythingAuras/EverythingAurasOptions: EverythingAurasOptions
+  EverythingAuras/EverythingAurasModelPaths: EverythingAurasModelPaths
+  EverythingAuras/EverythingAurasTemplates: EverythingAurasTemplates
+  EverythingAuras/EverythingAurasArchive: EverythingAurasArchive
