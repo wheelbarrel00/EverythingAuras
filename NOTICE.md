@@ -25,3 +25,7 @@ each change and its date.
 - 2026-10-11: Based on M33kAuras 5.20.7-rg4-m99. Renamed folders, files, identifiers, saved variables, slash
   commands and addon-message prefixes from M33kAuras to Everything Auras with `tools/ea_transform.py`. Limited
   the TOC files to WoW Forever.
+- 2026-10-11: Removed the login code that enabled and disabled any addon named WeakAuras, the settings-wipe
+  helper and the hooks for a guild's private addons. Closed custom-code access to the addon's internal tables.
+  Fixed custom text receiving empty values for duration-based progress. Claimed `/wa` and `/ea` only when no
+  other addon uses them. Took 15 fixes from WeakAuras (listed in `tools/wa-picks.tsv`).

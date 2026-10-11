@@ -18,8 +18,8 @@ ADDONS = ["EverythingAuras", "EverythingAurasOptions", "EverythingAurasTemplates
           "EverythingAurasModelPaths", "EverythingAurasArchive"]
 # Inherited from M33kAuras 5.20.7-rg4-m99, they fail the same way there (measured 2026-10-11).
 KNOWN_TEST_FAILURES = {"aura_list_async_test.lua", "progress_texture_test.lua"}
-# Shipped-code luacheck warnings may only go down (M33kAuras m99 started at 309).
-SHIPPED_WARNING_LIMIT = 300
+# Shipped code lints clean (M33kAuras m99 started at 309). Known dead code is named in .luacheckrc.
+SHIPPED_WARNING_LIMIT = 0
 TEXT_EXT = {".lua", ".toc", ".xml", ".yml", ".yaml", ".py", ".sh", ".pkgmeta", ".md", ""}
 NO_EM_DASH_EXT = {".lua", ".toc", ".xml", ".yml", ".yaml", ".py", ".sh"}
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF]")
@@ -124,6 +124,10 @@ def gate_text():
         if not os.path.isfile(path) or "/Libs/" in "/" + rel.replace("\\", "/") or ext not in TEXT_EXT:
             continue
         text = open(path, "rb").read().decode("utf-8", errors="replace")
+        norm = rel.replace("\\", "/")
+        if (ext == ".lua" and norm.split("/")[0] in ADDONS and "/EA/" not in norm
+                and not text.rstrip().splitlines()[-1].startswith("-- Modified for Everything Auras")):
+            problems.append(f"{rel}: changed from vendor-ea but has no GPL change notice on its last line")
         for n, line in enumerate(text.splitlines(), 1):
             if re.search(r"(?i)c[l]aude|a[n]thropic", line):
                 problems.append(f"{rel}:{n}: AI tool name")

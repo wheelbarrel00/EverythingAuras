@@ -127,9 +127,6 @@ do
     table.insert(juicedMessage, L["Stack trace:"])
     table.insert(juicedMessage, errorMessage)
     local err = table.concat(juicedMessage, "\n")
-    if data and data.rg_custom_error_handler and GREMINDER and GREMINDER.OnError then
-      GREMINDER:OnError(err,debugstack(2),currentErrorHandlerContext)
-    end
     geterrorhandler()(err)
   end
 
@@ -1382,9 +1379,6 @@ function Private.Login(takeNewSnapshots)
 
   local thread = Private:Async(loginThreadConfig, loginFunc):OnSuccess(function()
     Private.callbacks:Fire("WEAKAURAS_LOGIN_COMPLETE")
-    if GREMINDER and GREMINDER.FireCallback then
-      GREMINDER:FireCallback("WEAKAURAS_LOGIN_COMPLETE")
-    end
   end)
   if not db.deferLogin then
     thread:ForceRun(12000)
@@ -2372,6 +2366,8 @@ function EverythingAuras.Delete(data)
 
   Private.RemoveHistory(data.uid)
 
+  Private.ProfileDeleteAura(id)
+
   Private.AddParents(data)
   Private.callbacks:Fire("Delete", uid, id, parentUid, parentId)
 end
@@ -2609,7 +2605,7 @@ StaticPopupDialogs["EverythingAuras_CONFIRM_REPAIR"] = {
     local AutomaticRepairText = L["EverythingAuras has detected that it has been downgraded.\nYour saved auras may no longer work properly.\nWould you like to run the |cffff0000EXPERIMENTAL|r repair tool? This will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s\n\n|cffff0000You should BACKUP your WTF folder BEFORE pressing this button.|r"]
     local ManualRepairText = L["Are you sure you want to run the |cffff0000EXPERIMENTAL|r repair tool?\nThis will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s"]
 
-    local text = EverythingAuras.IsWrathClassic() and self.Text or self.text
+    local text = self.Text or self.text
     if self.data.reason == "user" then
       text:SetText(ManualRepairText:format(LastUpgrade()))
     else
@@ -4405,18 +4401,22 @@ function Private.ShowMouseoverTooltip(region, owner)
   GameTooltip:SetPoint("LEFT", owner, "RIGHT");
   GameTooltip:ClearLines();
 
-  local triggerType;
-  if (region.state) then
-    triggerType = region.state.trigger.type;
+  local trigger
+  local state = region.state
+  if state and state.id and state.triggernum then
+    local data = EverythingAuras.GetData(state.id)
+    if data then
+      trigger = data.triggers[state.triggernum].trigger
+    end
   end
 
-  local triggerSystem = triggerType and triggerTypes[triggerType];
+  local triggerSystem = trigger and trigger.type and triggerTypes[trigger.type]
   if (not triggerSystem) then
     GameTooltip:Hide();
     return;
   end
 
-  if (triggerSystem.SetToolTip(region.state.trigger, region.state)) then
+  if (triggerSystem.SetToolTip(trigger, region.state)) then
     GameTooltip:Show();
   else
     GameTooltip:Hide();
@@ -5289,8 +5289,7 @@ function Private.RunCustomTextFunc(region, customFunc)
     if state.progressType == "durationObject" and EverythingAuras.IsDurationObject(state.durationObject) then
       expirationTime = state.durationObject:GetEndTime()
       duration = state.durationObject:GetTotalDuration()
-    end
-    if state.progressType == "timed" then
+    elseif state.progressType == "timed" then
       expirationTime = state.expirationTime
       duration = state.duration
     else

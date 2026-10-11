@@ -644,7 +644,7 @@ end
 local function UpdateProgressFromManual(self, minMaxConfig, state, value, total)
   self.durationObject = nil
   value = type(value) == "number" and value or 0
-  total = type(total) == "number" and total or 0
+  total = type(total) == "number" and total or 100
   local adjustMin
   if minMaxConfig.adjustedMin then
     adjustMin = minMaxConfig.adjustedMin

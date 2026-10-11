@@ -1,0 +1,17 @@
+wa_commit	wa_date	status	subject	note
+d3984679	2026-01-15	applied	Fix: Add missing difficulty entry	batch 1
+4532f81c	2026-02-18	applied	Tweak Repair Dialogs text setting	batch 1
+8eff4774	2025-05-13	applied	Remove the only dependency on state.trigger	batch 1, states carry id and triggernum here
+24372d0c	2026-02-21	applied	Add a missing WeakAuras.Add	batch 1
+364f625c	2026-03-29	applied	Sound Repeat Option: Fix missing step value	batch 1
+6cc8f6da	2026-05-26	applied	Set consistent empty font flags	batch 1
+a0468275	2026-05-31	applied	Fix lua error on creating a icon in a dynamic group	batch 1
+bf217189	2026-05-31	deferred	Create a font string for each font on options first load	SetFont throws on a missing font file on the retail engine, so one stale SharedMedia font would break the first options open. Retake with a pcall guard
+cca99773	2026-05-31	applied	Fix: Model thumbnail transform not resetting correctly after changing api	batch 1
+5bb44771	2026-06-05	applied	Fix manual progress if the user never sets the total	batch 1
+d1928e42	2026-06-29	applied	Fix bug: AdditionalProgress is not showing up when using circular mode	batch 1
+02d33272	2026-08-30	applied	fix: make aura warning severity deterministic	batch 1, pair with c9866059
+c9866059	2026-08-30	applied	fix: mark increasing warning severity as mixed	batch 1
+a7374a02	2026-09-05	applied	fix: clean up profiling state when deleting an aura	batch 1, pair with 51b39fb6
+51b39fb6	2026-09-05	applied	fix: retain profiling start and stop invariants	batch 1, nets out a7374a02's guard
+feef5a83	2026-10-02	applied	WeakAuras: Update security	batch 1, sandbox blocks pet abandon, macro delete, guild disband, trade money

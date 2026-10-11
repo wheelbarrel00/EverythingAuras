@@ -200,7 +200,7 @@ local MINUTE = MINUTE_ONELETTER_ABBR:gsub(" ", "")
 local HOUR = HOUR_ONELETTER_ABBR:gsub(" ", "")
 local DAY = DAY_ONELETTER_ABBR:gsub(" ", "")
 
-local SECONDS_PER_MIN = SECONDS_PER_MINUTE or 60
+local SECONDS_PER_MIN = SECONDS_PER_MIN or 60
 local SECONDS_PER_HOUR = SECONDS_PER_HOUR or 3600
 local SECONDS_PER_DAY = SECONDS_PER_DAY or 86400
 
@@ -3501,6 +3501,7 @@ if not (EverythingAuras.IsClassicEra() or EverythingAuras.IsForever()) then
     [232] = unused, -- event party
     [233] = L["Raid (Mythic Flex)"],
     [236] = L["Lorewalking"],
+    [241] = L["Lorewalking"],
     [237] = EverythingAuras.IsMists() and L["Dungeon (Celestial)"] or unused,
   }
 
@@ -4233,19 +4234,6 @@ Private.update_categories = {
     },
     default = true,
     label = L["Meta Data"],
-  },
-  {
-    name = "wasync",
-    fields = {
-      "exrtLastSync",
-      "exrtLastSender",
-      "exrtUpdateConfig",
-      "exrtDefaultLoadNever",
-      "rg_custom_error_handler",
-      "exrtToSend",
-    },
-    default = false,
-    label = "WASync settings",
   },
 }
 

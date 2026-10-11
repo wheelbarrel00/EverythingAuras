@@ -138,6 +138,7 @@ function Private.AuraWarnings.FormatWarnings(uid)
       maxSeverity = warning.severity
     elseif severityLevel[warning.severity] > severityLevel[maxSeverity] then
       maxSeverity = warning.severity
+      mixedSeverity = true
     elseif severityLevel[warning.severity] < severityLevel[maxSeverity] then
       mixedSeverity = true
     end

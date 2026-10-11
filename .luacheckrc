@@ -6,6 +6,7 @@ exclude_files = {
 	"EverythingAuras_Options.lua",
 	"EverythingAuras_Templates.lua",
 	"EverythingAuras/Libs/", "EverythingAurasOptions/Libs/",
+	"EverythingAuras/TimelineParser.lua",
 	".luacheckrc"
 }
 ignore = {
@@ -19563,3 +19564,48 @@ globals = {
 	"ZOOM_OUT_BUTTON_TEXT",
 	"_RECORDING_WARNING_CORRUPTED",
 }
+
+-- Everything Auras: Midnight and Forever APIs, its own globals, and known dead code kept for upstream merges
+local everythingAuras = {
+	globals = {
+		"BackdropTemplateEverythingAurasMixin",
+		"SLASH_EverythingAurasShort1",
+		"SLASH_EverythingAurasShort2",
+	},
+	read_globals = {
+		"C_ChatInfo",
+		"C_CurveUtil",
+		"C_InstanceEncounter",
+		"C_Secrets",
+		"C_StringUtil",
+		"C_UI",
+		"CreateScrollBoxListTreeListView",
+		"CreateTreeDataProvider",
+		"CreateVector2D",
+		"DevTool",
+		"EventRegistry",
+		"GetRangedHitModifier",
+		"hasanysecretvalues",
+		"hash_SlashCmdList",
+		"issecrettable",
+		"issecretvalue",
+		"NineSliceUtil",
+		"PixelUtil",
+		"ScrollBoxConstants",
+		"SECONDS_PER_DAY",
+		"SECONDS_PER_HOUR",
+		"SECONDS_PER_MIN",
+		"UnitCreatureID",
+		"UnitDefenseSkill",
+	},
+}
+files["EverythingAuras/"] = everythingAuras
+files["EverythingAurasOptions/"] = everythingAuras
+files["EverythingAuras/BuffTrigger2.lua"] = { globals = everythingAuras.globals, read_globals = everythingAuras.read_globals,
+	ignore = { "241/nameplateExists" } }
+files["EverythingAuras/Prototypes.lua"] = { globals = everythingAuras.globals, read_globals = everythingAuras.read_globals,
+	ignore = { "241/RangeCacheStrings" } }
+files["EverythingAuras/GenericTrigger.lua"] = { globals = everythingAuras.globals, read_globals = everythingAuras.read_globals,
+	ignore = { "231/isOnGCD", "231/atMaxCharges", "221/shootStart", "221/shootDuration" } }
+files["EverythingAuras/EverythingAuras.lua"] = { globals = everythingAuras.globals, read_globals = everythingAuras.read_globals,
+	ignore = { "511" } }

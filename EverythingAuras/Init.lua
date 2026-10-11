@@ -2,7 +2,6 @@
 local AddonName = ...
 ---@class Private
 local Private = select(2, ...)
-WASYNC_MAIN_PRIVATE = Private
 
 ---@class EverythingAuras
 EverythingAuras = {}
@@ -701,30 +700,5 @@ function EverythingAuras.PurgeSecrets(tbl)
       tbl[k] = nil
     end
   end
-end
-
-function EVERYTHINGAURAS_WIPE_ALL_SETTINGS()
-  StaticPopupDialogs["EVERYTHINGAURAS_WIPE_ALL_SETTINGS"] = {
-      text = "Are you sure you want to wipe all settings for EverythingAuras and disable settings migration from WeakAuras?\n\nThis action cannot be undone.",
-      button1 = ACCEPT or "Yes",
-      button2 = NO or "No",
-      showAlert = true,
-      OnAccept = function()
-        C_AddOns.LoadAddOn("EverythingAurasArchive")
-        EverythingAurasArchive = nil
-        EverythingAurasSaved = {
-          migrationDisabled = true,
-          migrationPromptCanceled = true,
-          m33kMigrated = true,
-        }
-
-        C_UI.Reload()
-      end,
-      timeout = 0,
-      whileDead = true,
-      hideOnEscape = false,
-      preferredIndex = 5,
-    }
-  StaticPopup_Show("EVERYTHINGAURAS_WIPE_ALL_SETTINGS")
 end
 -- Modified for Everything Auras by tools/ea_transform.py (identifiers renamed), see NOTICE.md

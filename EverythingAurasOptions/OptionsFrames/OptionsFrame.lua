@@ -379,7 +379,7 @@ function OptionsPrivate.CreateFrame()
   local tipPopupLabel = tipPopup:CreateFontString(nil, "BACKGROUND", "GameFontWhite")
   local fontPath = SharedMedia:Fetch("font", "Fira Sans Medium")
   if (fontPath) then
-    tipPopupLabel:SetFont(fontPath, 12)
+    tipPopupLabel:SetFont(fontPath, 12, "")
   end
   tipPopupLabel:SetPoint("TOPLEFT", tipPopupTitle, "BOTTOMLEFT", 0, -6)
   tipPopupLabel:SetPoint("TOPRIGHT", tipPopupTitle, "BOTTOMRIGHT", 0, -6)
@@ -387,14 +387,14 @@ function OptionsPrivate.CreateFrame()
   tipPopupLabel:SetJustifyV("TOP")
 
   local tipPopupLabelCJ = tipPopup:CreateFontString(nil, "BACKGROUND", "GameFontWhite")
-  tipPopupLabelCJ:SetFont("Fonts\\ARKai_T.ttf", 12)
+  tipPopupLabelCJ:SetFont("Fonts\\ARKai_T.ttf", 12, "")
   tipPopupLabelCJ:SetPoint("TOPLEFT", tipPopupLabel, "BOTTOMLEFT", 0, 0)
   tipPopupLabelCJ:SetPoint("TOPRIGHT", tipPopupLabel, "BOTTOMRIGHT", 0, 0)
   tipPopupLabelCJ:SetJustifyH("LEFT")
   tipPopupLabelCJ:SetJustifyV("TOP")
 
   local tipPopupLabelK = tipPopup:CreateFontString(nil, "BACKGROUND", "GameFontWhite")
-  tipPopupLabelK:SetFont("Fonts\\K_Pagetext.TTF", 12)
+  tipPopupLabelK:SetFont("Fonts\\K_Pagetext.TTF", 12, "")
   tipPopupLabelK:SetPoint("TOPLEFT", tipPopupLabelCJ, "BOTTOMLEFT", 0, 0)
   tipPopupLabelK:SetPoint("TOPRIGHT", tipPopupLabelCJ, "BOTTOMRIGHT", 0, 0)
   tipPopupLabelK:SetJustifyH("LEFT")
@@ -515,7 +515,7 @@ function OptionsPrivate.CreateFrame()
   documentationButton:SetPoint("LEFT", tipFrame, "LEFT")
 
   local aboutButton = addFooter(L["About EverythingAuras"], [[Interface\AddOns\EverythingAuras\Media\Textures\icon.blp]],
-            "https://github.com/m33shoq/M33kAuras/wiki/About-M33kAuras",
+            "https://github.com/wheelbarrel00/EverythingAuras#readme",
             L["Read about EverythingAuras development, supported features, and current limitations."])
   aboutButton:SetParent(tipFrame)
   aboutButton:SetPoint("LEFT", documentationButton, "RIGHT", footerSpacing, 0)
@@ -539,7 +539,7 @@ function OptionsPrivate.CreateFrame()
     changelogButton:SetPoint("LEFT", thanksButton, "RIGHT", footerSpacing, 0)
   end
 
-  local reportbugButton = addFooter(L["Found a Bug?"], [[Interface\AddOns\EverythingAuras\Media\Textures\bug_report.tga]], "https://github.com/m33shoq/M33kAuras/issues/new?template=bug_report.yml",
+  local reportbugButton = addFooter(L["Found a Bug?"], [[Interface\AddOns\EverythingAuras\Media\Textures\bug_report.tga]], "https://github.com/wheelbarrel00/EverythingAuras/issues",
             L["Report bugs on our issue tracker."], nil, nil, true)
   reportbugButton:SetParent(tipFrame)
   reportbugButton:SetPoint("RIGHT", tipFrame, "RIGHT")

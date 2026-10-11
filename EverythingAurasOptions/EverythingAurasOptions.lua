@@ -3,7 +3,6 @@ if not EverythingAuras.IsLibsOK() then return end
 local AddonName = ...
 ---@class OptionsPrivate
 local OptionsPrivate = select(2, ...)
-WASYNC_OPTIONS_PRIVATE = OptionsPrivate
 
 -- Lua APIs
 local tinsert, tremove, wipe = table.insert, table.remove, wipe
@@ -1408,6 +1407,9 @@ function EverythingAuras.NewAura(sourceData, regionType, targetId)
           return
         end
 
+        data.parent = group.data.id
+        EverythingAuras.Add(data)
+
         local children = group.data.controlledChildren;
         local index = target:GetGroupOrder();
         if (ensure(children, index, target.data.id)) then
@@ -1418,8 +1420,7 @@ function EverythingAuras.NewAura(sourceData, regionType, targetId)
           -- move source into group as the first child
           tinsert(children, 1, data.id);
         end
-        data.parent = group.data.id;
-        EverythingAuras.Add(data);
+
         EverythingAuras.Add(group.data);
         OptionsPrivate.Private.AddParents(group.data)
         EverythingAuras.NewDisplayButton(data);

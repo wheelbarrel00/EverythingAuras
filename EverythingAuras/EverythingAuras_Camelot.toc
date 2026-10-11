@@ -61,7 +61,6 @@ LibSpecializationWrapper.lua
 BuffTrigger2.lua
 GenericTrigger.lua
 BossMods.lua
-TimelineParser.lua
 
 # Helper Systems
 TSUHelpers.lua
@@ -108,3 +107,6 @@ SubRegionTypes\LinearProgressTexture.lua
 # Misc
 Legendaries.lua
 DiscordList.lua
+
+# Everything Auras
+EA\Slash.lua
