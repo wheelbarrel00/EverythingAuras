@@ -535,6 +535,7 @@ function EverythingAuras.Import(inData, target, callbackFunc, linkedAuras)
     return nil, "Invalid import data."
   end
 
+  Private.EANormalizeImport(data, children)
   local highestVersion = data.internalVersion or 0
   if children then
     for _, child in ipairs(children) do

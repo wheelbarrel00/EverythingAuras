@@ -110,4 +110,5 @@ DiscordList.lua
 
 # Everything Auras
 EA\Compat.lua
+EA\Migrate.lua
 EA\Slash.lua

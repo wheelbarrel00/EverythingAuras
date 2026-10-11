@@ -33,3 +33,7 @@ each change and its date.
   Restored aura tooltip values out of combat. Replaced every deprecated Blizzard function so nothing depends on the
   `loadDeprecationFallbacks` setting. Turned on creature type, summon pending and the SAY and YELL note for
   Forever. Hid the trigger templates on Forever, whose template data is retail-only.
+- 2026-10-11: Added imports of ForeverAuras exports: their aura data is read as the WeakAuras version it really
+  is, "Aura (Modern)" triggers become standard Aura triggers matched by spell name, ForeverAuras media paths
+  point at the same files in Everything Auras, and custom code that names `ForeverAuras` or its swing timer
+  event keeps working. Added Everything Auras' own migration counter.

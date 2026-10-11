@@ -3282,6 +3282,7 @@ function EverythingAuras.PreAdd(data, snapshot)
   end
 
   xpcall(Private.Modernize, Private.GetErrorHandlerId(data.id, L["Modernize"]), data, snapshot)
+  xpcall(Private.EAModernize, Private.GetErrorHandlerId(data.id, L["Modernize"]), data)
 
   local default = data.regionType and Private.regionTypes[data.regionType] and Private.regionTypes[data.regionType].default
   if default then

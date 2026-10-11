@@ -628,6 +628,7 @@ local overridden = {
   EverythingAuras = FakeEverythingAuras,
   M33kAuras = FakeEverythingAuras,
   WeakAuras = FakeEverythingAuras,
+  ForeverAuras = FakeEverythingAuras,
 }
 
 -- Block global function names in namespace API tables

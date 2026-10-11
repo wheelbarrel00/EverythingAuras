@@ -3585,6 +3585,8 @@ if EverythingAuras.IsForever() then
 
   local function swingTriggerUpdate()
     Private.ScanEvents("SWING_TIMER_UPDATE")
+    -- ForeverAuras renamed this event, and custom triggers from its exports listen for that name.
+    Private.ScanEvents("FA_SWING_TIMER_UPDATE")
   end
 
   local function OnPlayerSwing(swingDuration, swingType)
