@@ -612,8 +612,9 @@ local function UpdateMatchData(time, matchDataChanged, unit, index, auraInstance
     changed = true
   end
 
-  if data.eaLastKnown then
+  if data.eaLastKnown or data.eaEstimated then
     data.eaLastKnown = nil
+    data.eaEstimated = nil
     changed = true
   end
 
@@ -1982,7 +1983,7 @@ local function EAExpireLastKnown()
     for filter, matches in pairs(filters) do
       for auraInstanceID, data in pairs(matches) do
         local expirationTime = data.expirationTime
-        if data.eaLastKnown and not issecretvalue(expirationTime) and expirationTime and expirationTime > 0 then
+        if (data.eaLastKnown or data.eaEstimated) and not issecretvalue(expirationTime) and expirationTime and expirationTime > 0 then
           if expirationTime <= now then
             EARemoveMatch(unit, filter, auraInstanceID)
           else
@@ -2005,7 +2006,7 @@ local function EAKeepLastKnown(unit, filter, onlySecret)
   for _, data in pairs(matches) do
     local readable = onlySecret and data.spellId and not issecretvalue(data.spellId)
       and not C_Secrets.ShouldSpellAuraBeSecret(data.spellId)
-    if not data.eaLastKnown and not readable then
+    if not data.eaLastKnown and not data.eaEstimated and not readable then
       data.eaLastKnown = true
       for id, triggerData in pairs(data.auras) do
         for triggernum in pairs(triggerData) do
@@ -2024,7 +2025,7 @@ local function EADropReadable(unit, filter)
     return
   end
   for auraInstanceID, data in pairs(matches) do
-    if data.eaLastKnown and data.spellId and not issecretvalue(data.spellId)
+    if data.eaLastKnown and not data.eaEstimated and data.spellId and not issecretvalue(data.spellId)
       and not C_Secrets.ShouldSpellAuraBeSecret(data.spellId) then
       EARemoveMatch(unit, filter, auraInstanceID)
     end
@@ -2047,6 +2048,114 @@ local function EAMarkSecretLastKnown()
   end
   EARescheduleExpiry()
 end
+
+-- Everything Auras: own buffs learned out of combat by name, so a cast in combat can restart one as estimated.
+local eaOwnBuffs, eaCastTargets = {}, {}
+
+-- At restriction start what EA holds was still read exactly, so it can be learned from then too.
+local function EALearnOwnBuffs(restrictionStart)
+  local matches = matchData.player and matchData.player.HELPFUL
+  if not matches or (C_Secrets.ShouldAurasBeSecret() and not restrictionStart) then
+    return
+  end
+  local present = {}
+  for _, data in pairs(matches) do
+    local name, duration = data.name, data.duration
+    if not data.eaLastKnown and not data.eaEstimated
+      and not hasanysecretvalues(name, duration, data.spellId, data.icon, data.isCastByPlayer)
+      and data.isCastByPlayer and type(name) == "string" and type(duration) == "number" then
+      local rec = eaOwnBuffs[name]
+      if not rec then
+        rec = { seenWith = {} }
+        eaOwnBuffs[name] = rec
+      elseif math.abs(rec.duration - duration) > 0.5 then
+        rec.variable = true
+      end
+      rec.duration, rec.spellId, rec.icon = duration, data.spellId, data.icon
+      present[#present + 1] = name
+    end
+  end
+  for _, name in ipairs(present) do
+    for _, other in ipairs(present) do
+      if other ~= name then
+        eaOwnBuffs[name].seenWith[other] = true
+      end
+    end
+  end
+end
+
+-- Cooldown Master's rule: a cast proves the buff started, so restart its learned length.
+local function EAEstimateOwnBuff(spellID)
+  local name = C_Spell.GetSpellName(spellID)
+  local rec = name and not issecretvalue(name) and eaOwnBuffs[name]
+  if not rec or rec.variable then
+    return
+  end
+  matchData.player = matchData.player or {}
+  matchData.player.HELPFUL = matchData.player.HELPFUL or {}
+  local matches = matchData.player.HELPFUL
+  local key = -rec.spellId
+  for auraInstanceID, data in pairs(matches) do
+    if not issecretvalue(data.name) and data.name == name then
+      if not data.eaLastKnown and not data.eaEstimated then
+        return
+      end
+      key = auraInstanceID
+    end
+  end
+  local now = GetTime()
+  UpdateMatchData(now, matchDataChanged, "player", nil, key, "HELPFUL", name, rec.icon, 0, nil, rec.duration,
+    rec.duration > 0 and now + rec.duration or 0, "player", false, false, true, rec.spellId, 1, nil)
+  matches[key].eaEstimated = true
+  for _, registry in ipairs({ scanFuncName, scanFuncNameGroup }) do
+    CheckScanFuncs(GetSubTable(registry, "player", "HELPFUL", name), "player", "HELPFUL", key)
+  end
+  for _, registry in ipairs({ scanFuncSpellId, scanFuncSpellIdGroup }) do
+    CheckScanFuncs(GetSubTable(registry, "player", "HELPFUL", rec.spellId), "player", "HELPFUL", key)
+  end
+  CheckScanFuncs(GetSubTable(scanFuncGeneral, "player", "HELPFUL"), "player", "HELPFUL", key)
+  CheckScanFuncs(GetSubTable(scanFuncGeneralGroup, "player", "HELPFUL"), "player", "HELPFUL", key)
+  -- Buffs of one length never read together are exclusive, like the seals, and in combat a removal is unreadable.
+  if next(rec.seenWith) then
+    for auraInstanceID, data in pairs(matches) do
+      local other = data.name
+      local otherRec = not issecretvalue(other) and eaOwnBuffs[other]
+      if auraInstanceID ~= key and (data.eaLastKnown or data.eaEstimated) and otherRec and other ~= name
+        and not rec.seenWith[other] and math.abs(otherRec.duration - rec.duration) <= 0.5 then
+        EARemoveMatch("player", "HELPFUL", auraInstanceID)
+      end
+    end
+  end
+  EARescheduleExpiry()
+end
+
+local eaCastFrame = CreateFrame("Frame")
+Private.frames["Everything Auras Cast Estimates"] = eaCastFrame
+eaCastFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
+eaCastFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+eaCastFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eaCastFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3)
+  if event == "PLAYER_REGEN_ENABLED" then
+    wipe(eaCastTargets)
+  elseif unit ~= "player" then
+    return
+  elseif event == "UNIT_SPELLCAST_SENT" then
+    -- arg2 is the target name, nil for a self-cast, arg3 the castGUID.
+    if arg3 and not issecretvalue(arg3) then
+      eaCastTargets[arg3] = arg2 or false
+    end
+  elseif arg3 and not issecretvalue(arg3) and C_Secrets.ShouldAurasBeSecret() then
+    local target
+    if arg2 and not issecretvalue(arg2) then
+      target = eaCastTargets[arg2]
+      eaCastTargets[arg2] = nil
+    end
+    -- Only a cast on yourself proves the buff is on you.
+    if not target or (not issecretvalue(target) and target == UnitName("player")) then
+      EAEstimateOwnBuff(arg3)
+    end
+  end
+end)
 
 local ScanUnitWithFilter
 do
@@ -2464,12 +2573,16 @@ local function EventHandler(frame, event, arg1, arg2, ...)
     else
       ScanUnit(time, arg1, arg2)
     end
+    if arg1 == "player" then
+      EALearnOwnBuffs()
+    end
   elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
     local restrictionType, restrictionState = arg1, arg2
     if restrictionState == Enum.AddOnRestrictionState.Inactive then
       for unit in pairs(matchData) do
         ScanUnit(time, unit, C_Secrets.ShouldAurasBeSecret() and EA_RESTRICTED_RESCAN or nil)
       end
+      EALearnOwnBuffs()
       for triggerInfo in pairs(eaHeldTriggers) do
         local id, triggernum = triggerInfo.id, triggerInfo.triggernum
         if triggerInfos[id] and triggerInfos[id][triggernum] == triggerInfo then
@@ -2479,6 +2592,7 @@ local function EventHandler(frame, event, arg1, arg2, ...)
       end
       wipe(eaHeldTriggers)
     elseif C_Secrets.ShouldAurasBeSecret() then
+      EALearnOwnBuffs(true)
       EAMarkSecretLastKnown()
     end
   elseif event == "RAID_TARGET_UPDATE" then

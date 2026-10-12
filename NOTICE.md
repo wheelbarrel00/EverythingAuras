@@ -47,3 +47,5 @@ each change and its date.
   aura WoW Forever hides from addons stays shown as last known, dimmed with a marker, until its timer runs out,
   and never fires sounds, glows, chat or custom actions. Missing reminders wait until combat ends. Added a
   per-aura "When Unsure in Combat" option.
+- 2026-10-11: In combat, casting one of your own buffs on yourself restarts it as an estimate with the length
+  learned out of combat, and a buff of the same length that it replaces (such as another seal) is dropped.
