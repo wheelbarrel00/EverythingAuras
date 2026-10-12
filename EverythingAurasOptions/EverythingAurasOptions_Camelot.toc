@@ -124,3 +124,4 @@ AceGUI-Widgets\EverythingAurasStatusbarAtlasWidget.lua
 
 # Everything Auras
 EA\CombatOptions.lua
+EA\ErrorOptions.lua

@@ -51,3 +51,5 @@ each change and its date.
   learned out of combat, and a buff of the same length that it replaces (such as another seal) is dropped.
 - 2026-10-11: The Aura trigger options show what each aura can do in combat on WoW Forever, replacing text that
   said secret auras cannot be tracked.
+- 2026-10-11: An aura that causes 10 Lua errors in one session gets its custom code switched off for that session,
+  with a warning and a button in its Information tab to turn it back on.
