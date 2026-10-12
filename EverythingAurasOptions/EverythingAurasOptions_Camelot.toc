@@ -121,3 +121,6 @@ AceGUI-Widgets\AceGUIWidget-EverythingAurasInputFocus.lua
 AceGUI-Widgets\AceGUIWidget-EverythingAurasInputWithIndentation.lua
 AceGUI-Widgets\AceGuiWidget-EverythingAurasMediaSound.lua
 AceGUI-Widgets\EverythingAurasStatusbarAtlasWidget.lua
+
+# Everything Auras
+EA\CombatOptions.lua

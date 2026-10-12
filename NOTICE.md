@@ -43,3 +43,7 @@ each change and its date.
   turning into an always-on Conditions trigger.
 - 2026-10-11: Imported ForeverAuras auras restricted to a WoW Forever spec now load by the matching Player Class.
   Added a warning on auras that use ForeverAuras' talent spec load option.
+- 2026-10-11: The Aura trigger no longer drops every tracked aura on a unit when an aura changes in combat. An
+  aura WoW Forever hides from addons stays shown as last known, dimmed with a marker, until its timer runs out,
+  and never fires sounds, glows, chat or custom actions. Missing reminders wait until combat ends. Added a
+  per-aura "When Unsure in Combat" option.

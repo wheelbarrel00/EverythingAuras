@@ -80,6 +80,8 @@ def gate_luacheck():
 
 def gate_tests():
     names = re.findall(r'^\s*"([\w]+_test\.lua)",', open(os.path.join(ROOT, "tests", "run.lua"), encoding="utf-8").read(), re.M)
+    # EA's own tests stay out of the inherited run.lua list.
+    names += sorted(n for n in os.listdir(os.path.join(ROOT, "tests")) if re.fullmatch(r"ea_\w+_test\.lua", n))
     fails = []
     for name in names:
         r = run([LUA, os.path.join("tests", name)])

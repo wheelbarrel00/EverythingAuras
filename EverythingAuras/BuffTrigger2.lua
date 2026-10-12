@@ -612,6 +612,11 @@ local function UpdateMatchData(time, matchDataChanged, unit, index, auraInstance
     changed = true
   end
 
+  if data.eaLastKnown then
+    data.eaLastKnown = nil
+    changed = true
+  end
+
   if changed then
     data.lastChanged = time
   end
@@ -758,10 +763,12 @@ local roleIcons = {
 
 local function UpdateStateWithMatch(time, bestMatch, triggerStates, cloneId, matchCount, unitCount, maxUnitCount, matchCountPerUnit, totalStacks, affected, affectedUnits, unaffected, unaffectedUnits, role, raidMark)
   local debuffClassIcon = EverythingAuras.EJIcons[bestMatch.debuffClass]
+  local eaUnsure = bestMatch.eaLastKnown and "lastKnown" or bestMatch.eaEstimated and "estimated" or nil
   if not triggerStates[cloneId] then
     triggerStates[cloneId] = {
       show = true,
       changed = true,
+      eaUnsure = eaUnsure,
       name = bestMatch.name,
       icon = bestMatch.icon,
       stacks = bestMatch.stacks,
@@ -838,6 +845,11 @@ local function UpdateStateWithMatch(time, bestMatch, triggerStates, cloneId, mat
 
     if state.show ~= true then
       state.show = true
+      changed = true
+    end
+
+    if state.eaUnsure ~= eaUnsure then
+      state.eaUnsure = eaUnsure
       changed = true
     end
 
@@ -1010,12 +1022,42 @@ local function UpdateStateWithMatch(time, bestMatch, triggerStates, cloneId, mat
   end
 end
 
+-- Everything Auras: Missing reminders held in combat get one recheck when restrictions end.
+local eaHeldTriggers = {}
+
+-- Everything Auras: while auras are secret, "not found" is a guess unless every tracked spell ID reads exactly.
+local function EANoMatchUnsure(triggerInfo)
+  if not C_Secrets.ShouldAurasBeSecret() then
+    return nil
+  end
+  if triggerInfo.auraspellids and not triggerInfo.auranames then
+    for _, spellId in ipairs(triggerInfo.auraspellids) do
+      if C_Secrets.ShouldSpellAuraBeSecret(spellId) then
+        return "unknown"
+      end
+    end
+    return nil
+  end
+  return "unknown"
+end
+
 local function UpdateStateWithNoMatch(time, triggerStates, triggerInfo, cloneId, unit, matchCount, unitCount, maxUnitCount, matchCountPerUnit, totalStacks, affected, affectedUnits, unaffected, unaffectedUnits, role, raidMark)
+  local eaUnsure = EANoMatchUnsure(triggerInfo)
+  if eaUnsure and not (triggerStates[cloneId] and triggerStates[cloneId].show) then
+    -- A Missing reminder holds its last display instead of appearing from a guess.
+    local data = EverythingAuras.GetData(triggerInfo.id)
+    local triggerData = data and data.triggers[triggerInfo.triggernum]
+    if triggerData and triggerData.trigger.matchesShowOn == "showOnMissing" then
+      eaHeldTriggers[triggerInfo] = true
+      return false
+    end
+  end
   local fallbackName, fallbackIcon = BuffTrigger.GetNameAndIconSimple(EverythingAuras.GetData(triggerInfo.id), triggerInfo.triggernum)
   if not triggerStates[cloneId] then
     triggerStates[cloneId] = {
       show = true,
       changed = true,
+      eaUnsure = eaUnsure,
       progressType = 'timed',
       duration = 0,
       expirationTime = math.huge,
@@ -1048,6 +1090,11 @@ local function UpdateStateWithNoMatch(time, triggerStates, triggerInfo, cloneId,
 
     if state.show ~= true then
       state.show = true
+      changed = true
+    end
+
+    if state.eaUnsure ~= eaUnsure then
+      state.eaUnsure = eaUnsure
       changed = true
     end
 
@@ -1213,6 +1260,10 @@ local function RemoveState(triggerStates, cloneId)
   if state then
     if state.show then
       state.show = false
+      if C_Secrets.ShouldAurasBeSecret() then
+        -- Hiding on what EA cannot read is a guess too, so On Hide stays silent.
+        state.eaUnsure = state.eaUnsure or "unknown"
+      end
       state.changed = true
       return true
     end
@@ -1901,6 +1952,102 @@ end
 
 
 
+-- Everything Auras: while auras are secret, a rescan keeps what it cannot read as last known instead of wiping it.
+local EA_RESTRICTED_RESCAN = {}
+local eaExpiryHandle
+
+local function EARemoveMatch(unit, filter, auraInstanceID)
+  local data = matchData[unit][filter][auraInstanceID]
+  matchData[unit][filter][auraInstanceID] = nil
+  for id, triggerData in pairs(data.auras) do
+    for triggernum in pairs(triggerData) do
+      local byUnit = GetSubTable(matchDataByTrigger, id, triggernum, unit)
+      if byUnit then
+        byUnit[auraInstanceID] = nil
+      end
+      matchDataChanged[id] = matchDataChanged[id] or {}
+      matchDataChanged[id][triggernum] = true
+    end
+  end
+  if data.dataInstanceID then
+    TooltipHelper:Untrack(data.dataInstanceID, data)
+  end
+end
+
+local function EAExpireLastKnown()
+  eaExpiryHandle = nil
+  local now = GetTime()
+  local nextExpiry
+  for unit, filters in pairs(matchData) do
+    for filter, matches in pairs(filters) do
+      for auraInstanceID, data in pairs(matches) do
+        local expirationTime = data.expirationTime
+        if data.eaLastKnown and not issecretvalue(expirationTime) and expirationTime and expirationTime > 0 then
+          if expirationTime <= now then
+            EARemoveMatch(unit, filter, auraInstanceID)
+          else
+            nextExpiry = math.min(nextExpiry or expirationTime, expirationTime)
+          end
+        end
+      end
+    end
+  end
+  if nextExpiry then
+    eaExpiryHandle = timer:ScheduleTimerFixed(EAExpireLastKnown, nextExpiry - now)
+  end
+end
+
+local function EAKeepLastKnown(unit, filter, onlySecret)
+  local matches = matchData[unit] and matchData[unit][filter]
+  if not matches then
+    return
+  end
+  for _, data in pairs(matches) do
+    local readable = onlySecret and data.spellId and not issecretvalue(data.spellId)
+      and not C_Secrets.ShouldSpellAuraBeSecret(data.spellId)
+    if not data.eaLastKnown and not readable then
+      data.eaLastKnown = true
+      for id, triggerData in pairs(data.auras) do
+        for triggernum in pairs(triggerData) do
+          matchDataChanged[id] = matchDataChanged[id] or {}
+          matchDataChanged[id][triggernum] = true
+        end
+      end
+    end
+  end
+end
+
+-- A spell Blizzard does not hide reads exactly, so the lookup missing it means it is gone.
+local function EADropReadable(unit, filter)
+  local matches = matchData[unit] and matchData[unit][filter]
+  if not matches then
+    return
+  end
+  for auraInstanceID, data in pairs(matches) do
+    if data.eaLastKnown and data.spellId and not issecretvalue(data.spellId)
+      and not C_Secrets.ShouldSpellAuraBeSecret(data.spellId) then
+      EARemoveMatch(unit, filter, auraInstanceID)
+    end
+  end
+end
+
+local function EARescheduleExpiry()
+  if eaExpiryHandle then
+    timer:CancelTimer(eaExpiryHandle)
+  end
+  EAExpireLastKnown()
+end
+
+-- When restrictions start, everything Blizzard now hides is last known, even before any aura changes.
+local function EAMarkSecretLastKnown()
+  for unit, filters in pairs(matchData) do
+    for filter in pairs(filters) do
+      EAKeepLastKnown(unit, filter, true)
+    end
+  end
+  EARescheduleExpiry()
+end
+
 local ScanUnitWithFilter
 do
   local _matchDataChanged, _time, _unit, _filter, _scanFuncNameGroup, _scanFuncSpellIdGroup, _scanFuncGeneralGroup, _scanFuncName, _scanFuncSpellId, _scanFuncGeneral
@@ -1938,7 +2085,12 @@ do
     if UnitExistsFixed(unit) then
       -- copy parameters passed to ScanUnitWithFilter in parent's scope for HandleAura
       _matchDataChanged, _time, _unit, _filter, _scanFuncNameGroup, _scanFuncSpellIdGroup, _scanFuncGeneralGroup, _scanFuncName, _scanFuncSpellId, _scanFuncGeneral = matchDataChanged, time, unit, filter, scanFuncNameGroup, scanFuncSpellIdGroup, scanFuncGeneralGroup, scanFuncName, scanFuncSpellId, scanFuncGeneral
-      if unitAuraUpdateInfo then
+      if unitAuraUpdateInfo == EA_RESTRICTED_RESCAN then
+        EAKeepLastKnown(unit, filter)
+        SafeForEachAura(unit, filter, nil, HandleAura, true)
+        EADropReadable(unit, filter)
+        EARescheduleExpiry()
+      elseif unitAuraUpdateInfo then
         -- incremental
         if unitAuraUpdateInfo.addedAuras ~= nil then
           for _, aura in ipairs(unitAuraUpdateInfo.addedAuras) do
@@ -2308,7 +2460,7 @@ local function EventHandler(frame, event, arg1, arg2, ...)
     -- arg1: unit
     -- arg2: unitAuraUpdateInfo
     if arg2 == nil or issecretvalue(arg2.isFullUpdate) or arg2.isFullUpdate or hasanysecretvalues(arg2.addedAuras, arg2.removedAuraInstanceIDs, arg2.updatedAuraInstanceIDs) then
-      ScanUnit(time, arg1)
+      ScanUnit(time, arg1, C_Secrets.ShouldAurasBeSecret() and EA_RESTRICTED_RESCAN or nil)
     else
       ScanUnit(time, arg1, arg2)
     end
@@ -2316,8 +2468,18 @@ local function EventHandler(frame, event, arg1, arg2, ...)
     local restrictionType, restrictionState = arg1, arg2
     if restrictionState == Enum.AddOnRestrictionState.Inactive then
       for unit in pairs(matchData) do
-        ScanUnit(time, unit)
+        ScanUnit(time, unit, C_Secrets.ShouldAurasBeSecret() and EA_RESTRICTED_RESCAN or nil)
       end
+      for triggerInfo in pairs(eaHeldTriggers) do
+        local id, triggernum = triggerInfo.id, triggerInfo.triggernum
+        if triggerInfos[id] and triggerInfos[id][triggernum] == triggerInfo then
+          matchDataChanged[id] = matchDataChanged[id] or {}
+          matchDataChanged[id][triggernum] = true
+        end
+      end
+      wipe(eaHeldTriggers)
+    elseif C_Secrets.ShouldAurasBeSecret() then
+      EAMarkSecretLastKnown()
     end
   elseif event == "RAID_TARGET_UPDATE" then
     ScanRaidMarkScanFunc(matchDataChanged)
