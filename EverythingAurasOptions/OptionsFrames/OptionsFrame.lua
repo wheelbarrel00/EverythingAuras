@@ -100,28 +100,20 @@ function OptionsPrivate.CreateFrame()
   local db = OptionsPrivate.savedVars.db
   local odb = OptionsPrivate.savedVars.odb
 
-  frame = CreateFrame("Frame", "EverythingAurasOptions", UIParent, "PortraitFrameTemplate")
+  -- Everything Auras: the library's window instead of PortraitFrameTemplate, with Escape through the library.
+  frame = OptionsPrivate.EACreateOptionsWindow(odb, defaultWidth, defaultHeight, minWidth, minHeight)
   local color = CreateColorFromHexString("ff1f1e21") -- PANEL_BACKGROUND_COLOR
   local r, g, b = color:GetRGB()
-  frame.Bg:SetColorTexture(r, g, b, 0.8)
-  frame.Bg.colorTexture = {r, g, b, 0.8}
 
   function OptionsPrivate.SetTitle(title)
-    local text = "Everything Auras " .. EverythingAuras.versionString
     if title and title ~= "" then
-      text = ("%s - %s"):format(text, title)
+      frame:SetSection(title)
+    else
+      frame:SetSection("v" .. (EverythingAuras.versionString:gsub("^v", "")))
     end
-    EverythingAurasOptionsTitleText:SetText(text)
   end
 
-  tinsert(UISpecialFrames, frame:GetName())
   frame:EnableMouse(true)
-  frame:SetMovable(true)
-  frame:SetResizable(true)
-  frame:SetResizeBounds(minWidth, minHeight)
-  frame:SetFrameStrata("DIALOG")
-  -- Workaround classic issue
-  EverythingAurasOptionsPortrait:SetTexture([[Interface\AddOns\EverythingAuras\Media\Textures\logo_256_round.tga]])
 
   frame.window = "default"
 
@@ -149,7 +141,7 @@ function OptionsPrivate.CreateFrame()
   frame:SetPoint("TOP", UIParent, "BOTTOMLEFT", xOffset, yOffset)
   frame:Hide()
 
-  frame:SetScript("OnHide", function()
+  frame:HookScript("OnHide", function()
     OptionsPrivate.DragReset()
     local suspended = OptionsPrivate.Private.PauseAllDynamicGroups()
 
@@ -218,26 +210,14 @@ function OptionsPrivate.CreateFrame()
     end
   end
 
-  if not frame.TitleContainer then
-    frame.TitleContainer = CreateFrame("Frame", nil, frame)
-    frame.TitleContainer:SetAllPoints(frame.TitleBg)
-  end
-
-  frame.TitleContainer:SetScript("OnMouseDown", function()
-    frame:StartMoving()
-  end)
-  frame.TitleContainer:SetScript("OnMouseUp", function()
-    frame:StopMovingOrSizing()
-    commitWindowChanges()
-  end)
-
-
-  frame.bottomRightResizer = CreateFrameSizer(frame, commitWindowChanges, "BOTTOMRIGHT")
+  OptionsPrivate.EAWindowCommits(frame, commitWindowChanges)
+  frame.bottomRightResizer = frame.grip
 
   frame.UpdateFrameVisible = function(self)
     self.tipPopup:Hide()
     if self.minimized then
-      EverythingAurasOptionsTitleText:Hide()
+      self.section:Hide()
+      self.slash:Hide()
       self.buttonsContainer.frame:Hide()
       for _, fn in ipairs({"TexturePicker", "IconPicker", "ModelPicker", "ImportExport", "TextEditor", "CodeReview", "UpdateFrame", "DebugLog"}) do
         local obj = OptionsPrivate[fn](self, true)
@@ -258,7 +238,7 @@ function OptionsPrivate.CreateFrame()
       self.bottomRightResizer:Hide()
       self.dynamicTextCodesFrame:Hide()
     else
-      EverythingAurasOptionsTitleText:Show()
+      self.section:Show()
       self.bottomRightResizer:Show()
       if self.window == "default" then
         OptionsPrivate.SetTitle()
@@ -325,9 +305,7 @@ function OptionsPrivate.CreateFrame()
 
 
 
-  local minimizebutton = CreateFrame("Button", nil, frame, "MaximizeMinimizeButtonFrameTemplate")
-  minimizebutton:SetFrameLevel(frame.TitleContainer:GetFrameLevel() + 1)
-  minimizebutton:SetPoint("RIGHT", frame.CloseButton, "LEFT", EverythingAuras.IsClassicOrWrathOrCataOrMists() and 10 or 0, 0)
+  local minimizebutton = OptionsPrivate.EAMinimizeButton(frame)
   minimizebutton:SetOnMaximizedCallback(function()
     frame.minimized = false
     local right, top = frame:GetRight(), frame:GetTop()
@@ -344,8 +322,8 @@ function OptionsPrivate.CreateFrame()
     local right, top = frame:GetRight(), frame:GetTop()
     frame:ClearAllPoints()
     frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", right, top)
-    frame:SetHeight(75)
-    frame:SetWidth(160)
+    frame:SetHeight(OptionsPrivate.EAFoldedHeight)
+    frame:SetWidth(OptionsPrivate.EAFoldedWidth)
     frame:UpdateFrameVisible()
   end)
 
@@ -458,19 +436,6 @@ function OptionsPrivate.CreateFrame()
 
   OptionsPrivate.ToggleTip = ToggleTip
 
-  --- @type fun(title: string, texture: string, url: string?, description: string, descriptionCJ: string?, descriptionK: string?, rightAligned: boolean?, width: number?)
-  local addFooter = function(title, texture, url, description, descriptionCJ, descriptionK, rightAligned, width)
-    local button = AceGUI:Create("EverythingAurasToolbarButton")
-    button:SetSmallFont(true)
-    button:SetText(title)
-    button:SetTexture(texture)
-    button:SetCallback("OnClick", function()
-      ToggleTip(button.frame, url, title, description, descriptionCJ, descriptionK, rightAligned, width)
-    end)
-    button.frame:Show()
-    return button.frame
-  end
-
   local function lineWrapDiscordList(list)
     local patreonLines = {}
     local lineLength = 0
@@ -505,57 +470,19 @@ function OptionsPrivate.CreateFrame()
 
   thanksList = thanksList .. lineWrapDiscordList(OptionsPrivate.Private.DiscordList)
 
-  local footerSpacing = 4
   local thanksListCJ = lineWrapDiscordList(OptionsPrivate.Private.DiscordListCJ)
   local thanksListK = lineWrapDiscordList(OptionsPrivate.Private.DiscordListK)
 
-  local documentationButton = addFooter(L["Documentation"], [[Interface\AddOns\EverythingAuras\Media\Textures\GitHub.tga]], "https://github.com/m33shoq/M33kAuras/wiki",
-            L["Check out our wiki for a large collection of examples and snippets."])
-  documentationButton:SetParent(tipFrame)
-  documentationButton:SetPoint("LEFT", tipFrame, "LEFT")
-
-  -- Everything Auras: About and In Combat open the Everything Auras window's pages.
-  local aboutButton = OptionsPrivate.EAFooterButton(L["About EverythingAuras"], [[Interface\AddOns\EverythingAuras\Media\Textures\icon.blp]], "about")
-  aboutButton:SetParent(tipFrame)
-  aboutButton:SetPoint("LEFT", documentationButton, "RIGHT", footerSpacing, 0)
-
-  local combatButton = OptionsPrivate.EAFooterButton(L["In Combat"], [[Interface\AddOns\EverythingAuras\Media\EA\icon-combat.tga]], "combat")
-  combatButton:SetParent(tipFrame)
-  combatButton:SetPoint("LEFT", aboutButton, "RIGHT", footerSpacing, 0)
-
-  local thanksButton = addFooter(L["Thanks"], [[Interface\AddOns\EverythingAuras\Media\Textures\waheart.tga]],
-                                 nil, thanksList, thanksListCJ, thanksListK, nil, 800)
-  thanksButton:SetParent(tipFrame)
-  thanksButton:SetPoint("LEFT", combatButton, "RIGHT", footerSpacing, 0)
-
-  if OptionsPrivate.changelog then
-    local changelog
-    if OptionsPrivate.changelog.highlightText then
-      changelog = L["Highlights"] .. "\n" .. OptionsPrivate.changelog.highlightText
-    else
-      changelog = OptionsPrivate.changelog.commitText
-    end
-
-    local changelogButton = addFooter(L["Changelog"], "", OptionsPrivate.changelog.fullChangeLogUrl,
-                                      changelog, nil, nil, false, 800)
-    changelogButton:SetParent(tipFrame)
-    changelogButton:SetPoint("LEFT", thanksButton, "RIGHT", footerSpacing, 0)
-  end
-
-  local reportbugButton = addFooter(L["Found a Bug?"], [[Interface\AddOns\EverythingAuras\Media\Textures\bug_report.tga]], "https://github.com/wheelbarrel00/EverythingAuras/issues",
-            L["Report bugs on our issue tracker."], nil, nil, true)
-  reportbugButton:SetParent(tipFrame)
-  reportbugButton:SetPoint("RIGHT", tipFrame, "RIGHT")
-
-  local wagoButton = addFooter(L["Find Auras"], [[Interface\AddOns\EverythingAuras\Media\Textures\wago.tga]], "https://wago.io",
-            L["Browse Wago, the largest collection of auras."], nil, nil, true)
-  wagoButton:SetParent(tipFrame)
-  wagoButton:SetPoint("RIGHT", reportbugButton, "LEFT", -footerSpacing, 0)
+  -- Everything Auras: a footer bar of library buttons. The links open copy-only dialogs, About and In Combat
+  -- open the Everything Auras window, and Thanks keeps its list.
+  OptionsPrivate.EAOptionsFooter(frame, tipFrame, function(button)
+    ToggleTip(button, nil, L["Thanks"], thanksList, thanksListCJ, thanksListK, nil, 800)
+  end)
 
   frame.ShowTip = function(self)
     self.tipFrame:Show()
-    self.buttonsContainer.frame:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 17, 30)
-    self.container.frame:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -17, 28)
+    self.buttonsContainer.frame:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 17, OptionsPrivate.EAFooterHeight + 10)
+    self.container.frame:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -17, OptionsPrivate.EAFooterHeight + 10)
   end
 
   frame.HideTip = function(self)
@@ -568,7 +495,7 @@ function OptionsPrivate.CreateFrame()
   local container = AceGUI:Create("InlineGroup")
   container.frame:SetParent(frame)
   container.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -17, 10)
-  container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, 0)
+  container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, -24)
   container.frame:Show()
   container.frame:SetClipsChildren(true)
   container.titletext:Hide()
@@ -591,7 +518,7 @@ function OptionsPrivate.CreateFrame()
     OptionsPrivate.SortDisplayButtons(text)
   end)
   filterInput:SetHeight(15)
-  filterInput:SetPoint("TOP", frame, "TOP", 0, -65)
+  filterInput:SetPoint("TOP", frame, "TOP", 0, -89)
   filterInput:SetPoint("LEFT", frame, "LEFT", 24, 0)
   filterInput:SetPoint("RIGHT", container.frame, "LEFT", -2, 0)
   filterInput:SetFont(STANDARD_TEXT_FONT, 10, "")
@@ -603,7 +530,7 @@ function OptionsPrivate.CreateFrame()
   buttonsContainer:SetWidth(170)
   buttonsContainer.frame:SetParent(frame)
   buttonsContainer.frame:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 17, 12)
-  buttonsContainer.frame:SetPoint("TOP", frame, "TOP", 0, -67)
+  buttonsContainer.frame:SetPoint("TOP", frame, "TOP", 0, -91)
   buttonsContainer.frame:SetPoint("RIGHT", container.frame, "LEFT", -17)
   buttonsContainer.frame:Show()
   frame.buttonsContainer = buttonsContainer
@@ -927,7 +854,7 @@ function OptionsPrivate.CreateFrame()
   sidegroup:SetLayout("flow")
 
   local dynamicTextCodesFrame = CreateFrame("Frame", "EverythingAurasTextReplacements", sidegroup.frame, "PortraitFrameTemplate")
-  dynamicTextCodesFrame.Bg:SetColorTexture(unpack(frame.Bg.colorTexture))
+  dynamicTextCodesFrame.Bg:SetColorTexture(r, g, b, 0.8)
   ButtonFrameTemplate_HidePortrait(dynamicTextCodesFrame)
   dynamicTextCodesFrame:SetPoint("TOPLEFT", sidegroup.frame, "TOPRIGHT", 20, 0)
   dynamicTextCodesFrame:SetPoint("BOTTOMLEFT", sidegroup.frame, "BOTTOMRIGHT", 20, 0)
@@ -1146,7 +1073,7 @@ function OptionsPrivate.CreateFrame()
 
     local tabsWidget
 
-    container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, -10)
+    container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, -34)
     container:ReleaseChildren()
     container:SetLayout("Fill")
     tabsWidget = AceGUI:Create("TabGroup")
@@ -1296,7 +1223,7 @@ function OptionsPrivate.CreateFrame()
     self.pickedOption = "New"
 
     container:ReleaseChildren()
-    container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, 0)
+    container.frame:SetPoint("TOPLEFT", frame, "TOPRIGHT", -63 - EverythingAuras.normalWidth * 340, -24)
     container:SetLayout("fill")
     local border = AceGUI:Create("InlineGroup")
     border:SetLayout("Fill")

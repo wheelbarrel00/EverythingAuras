@@ -8,6 +8,11 @@ local EUI = LibStub("EverythingUI-1.0")
 Private.EAMedia = "Interface\\AddOns\\EverythingAuras\\Media\\EA\\"
 
 local LINKS = {
+  docs = {
+    title = L["Documentation"],
+    text = L["The M33kAuras wiki has a large collection of examples and snippets. Press Ctrl+C to copy the link."],
+    url = "https://github.com/m33shoq/M33kAuras/wiki",
+  },
   source = {
     title = L["Source Code"],
     text = L["Everything Auras is free software under the GNU General Public License, version 2. Press Ctrl+C to copy the link to its source code."],

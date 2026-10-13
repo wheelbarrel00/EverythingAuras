@@ -59,3 +59,7 @@ each change and its date.
   About button opens the About page, and a new In Combat button opens the In Combat page. The in-combat marker is a
   corner triangle sized to the aura. Text players read says "Everything Auras". `/eauras settings` opens the window,
   and `/eauras help` lists `/eauras` commands.
+- 2026-10-13: The options window is built on the EverythingUI library's window instead of Blizzard's portrait frame,
+  closes on Escape without `UISpecialFrames`, and keeps its minimize as a header button. The links along its bottom
+  are a footer bar of text buttons, and the changelog button was removed. The aura list and editor moved 24 pixels
+  down to clear the taller header.

@@ -31,10 +31,12 @@ local function Stack()
   end
 end
 
+local PARAGRAPH_GAP = 10
+
 local function TextBlock(content, lines, style)
   local block = ui:CreateTextBlock(content)
-  for _, line in ipairs(lines) do
-    block:AddLine(line, style)
+  for i, line in ipairs(lines) do
+    block:AddLine(line, style, i > 1 and { gap = PARAGRAPH_GAP } or nil)
   end
   return block
 end

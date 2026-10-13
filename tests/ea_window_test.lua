@@ -37,7 +37,7 @@ function ctx.CreateGroup(_, _, label)
   return Stub({ label = label, Add = function(_, control, opts) rec.rows[#rec.rows + 1] = { label = label, control = control, opts = opts } end })
 end
 function ctx.CreateTextBlock()
-  return Stub({ AddLine = function(_, text, style) rec.lines[#rec.lines + 1] = { text = text, style = style } end,
+  return Stub({ AddLine = function(_, text, style, lineOpts) rec.lines[#rec.lines + 1] = { text = text, style = style, opts = lineOpts } end,
     Measure = function() return 40 end })
 end
 function ctx.CreateText(_, _, text) return Stub({ text = text }) end
@@ -143,6 +143,8 @@ T.expect(d.readOnly and d.hasEditBox and d.editBoxText == "https://github.com/wh
   "a link opens in a copy-only field")
 opts.discord()
 T.expect(rec.dialogs[#rec.dialogs].editBoxText == "https://discord.gg/vm8K2WfQUE", "the family invite")
+private.EAShowLink("docs")
+T.expect(rec.dialogs[#rec.dialogs].editBoxText == "https://github.com/m33shoq/M33kAuras/wiki", "Documentation is the M33kAuras wiki")
 
 T.section("Opening the window")
 private.EAOpenSettings("combat")
@@ -167,6 +169,13 @@ local function hasLine(fragment)
   end
 end
 T.expect(hasLine("hides the details of auras") and hasLine("10 Lua errors"), "In Combat carries its sentences")
+local function lineOpts(fragment)
+  for _, line in ipairs(rec.lines) do
+    if line.text:find(fragment, 1, true) then return line.opts end
+  end
+end
+T.expect(lineOpts("hides the details of auras") == nil and lineOpts("So it keeps what it read").gap == 10,
+  "paragraphs after the first get a 10 px gap")
 local function rowsOf(label)
   local out = {}
   for _, row in ipairs(rec.rows) do
