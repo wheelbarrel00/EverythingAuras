@@ -1,4 +1,5 @@
 -- Everything Auras step 5a: regions showing an unsure aura state stay silent, dim and carry a marker.
+-- Step 7a: the marker is a corner triangle sized to the aura.
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
@@ -21,22 +22,30 @@ local private = {
     end,
   },
 }
+local function newTexture()
+  return { SetTexture = function(self, path) self.path = path end, SetPoint = function() end,
+    SetSize = function(self, w, h) self.w, self.h = w, h end }
+end
 local env = setmetatable({
   EverythingAuras = { IsLibsOK = function() return true end, GetData = function(id) return auraData[id] end },
   issecretvalue = function() return false end,
+  CreateFrame = function(_, _, parent)
+    return { parent = parent, SetAllPoints = function() end, CreateTexture = newTexture,
+      SetFrameLevel = function(self, level) self.level = level end,
+      SetShown = function(self, shown) self.shown = shown end }
+  end,
 }, { __index = _G })
 local chunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Combat.lua"))
 setfenv(chunk, env)("EverythingAuras", private)
 
 local function newRegion(id)
   local region = {
-    id = id, alpha = 1, shownAlpha = nil,
+    id = id, alpha = 1, shownAlpha = nil, width = 48, height = 48,
     SetAlpha = function(self, alpha) self.shownAlpha = alpha end,
     GetRegionAlpha = function(self) return self.alpha end,
-    CreateFontString = function()
-      return { SetPoint = function() end, SetText = function(self, text) self.text = text end,
-        SetShown = function(self, shown) self.shown = shown end }
-    end,
+    GetFrameLevel = function() return 5 end,
+    GetWidth = function(self) return self.width end,
+    GetHeight = function(self) return self.height end,
   }
   private.regionPrototype.create(region)
   return region
@@ -85,8 +94,13 @@ T.section("Look")
 auraData.Seal = {}
 region.states = { [1] = { show = true, eaUnsure = "lastKnown" } }
 private.RunConditions(region, "uid")
-T.expect(region.shownAlpha == 0.5 and region.eaMarker and region.eaMarker.shown and region.eaMarker.text == "~",
-  "unsure is dimmed with a marker by default")
+T.expect(region.shownAlpha == 0.5 and region.eaMarker and region.eaMarker.shown, "unsure is dimmed with a marker by default")
+local tex = region.eaMarkerTexture
+T.expect(tex.path:find("Media\\EA\\marker.tga", 1, true) ~= nil, "the marker is the corner triangle texture")
+T.expect(tex.w == 12 and tex.h == 12, "a 48 px icon gets a 12 px marker")
+T.expect(region.eaMarker.level == 25, "the marker sits above the region's child frames")
+T.expect(private.EAMarkerSize(24, 24) == 6 and private.EAMarkerSize(64, 64) == 14 and private.EAMarkerSize(200, 20) == 6
+  and private.EAMarkerSize(0, 0) == 6 and private.EAMarkerSize(40, 40) == 10, "a quarter of the shorter side, 6 to 14 px")
 region:SetAlpha(0.8)
 T.expect(math.abs(region.shownAlpha - 0.4) < 1e-9, "later alpha changes keep the dim factor")
 region.states = { [1] = { show = true } }

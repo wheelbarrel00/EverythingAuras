@@ -53,3 +53,9 @@ each change and its date.
   said secret auras cannot be tracked.
 - 2026-10-11: An aura that causes 10 Lua errors in one session gets its custom code switched off for that session,
   with a warning and a button in its Information tab to turn it back on.
+- 2026-10-11: Added the Everything Auras window (In Combat, General and About) and a What's New window, built with
+  the EverythingUI library (MIT, bundled in `EverythingAuras/Libs/EverythingUI`). The delete, trigger delete, repair
+  and hardcore import confirmations use that library's dialog instead of Blizzard's StaticPopup. The options footer's
+  About button opens the About page, and a new In Combat button opens the In Combat page. The in-combat marker is a
+  corner triangle sized to the aura. Text players read says "Everything Auras". `/eauras settings` opens the window,
+  and `/eauras help` lists `/eauras` commands.

@@ -1650,19 +1650,16 @@ local methods = {
     if (EverythingAuras.IsClassicEra() and C_GameRules.IsHardcoreActive())
       or (EverythingAuras.IsForever() and C_GameRules.IsGameRuleActive(Enum.GameRule.HardcoreRuleset))
     then
-      StaticPopupDialogs["EverythingAuras_CONFIRM_IMPORT_HARDCORE"] = {
+      -- Everything Auras: the library's dialog instead of a StaticPopup.
+      OptionsPrivate.Private.EAShowDialog({
+        title = L["Import"],
         text = L["You are about to Import an Aura with custom Lua code on a Hardcore server.\n\n|cFFFF0000There is a risk the custom code could be used to kill your hardcore character!|r\n\nWould you like to continue?"],
         button1 = L["Import"],
         button2 = L["Cancel"],
-        OnShow = function(self)
-          self.text:SetFontObject(GameFontNormalLarge)
+        onAccept = function()
+          startImport()
         end,
-        OnHide = function(self)
-          self.text:SetFontObject(GameFontNormal)
-        end,
-        OnAccept = startImport,
-      }
-      StaticPopup_Show("EverythingAuras_CONFIRM_IMPORT_HARDCORE")
+      })
       return
     end
     startImport()

@@ -384,11 +384,15 @@ function OptionsPrivate.AddTriggerMetaFunctions(options, data, triggernum)
       end
 
       if canDelete then
-        StaticPopupDialogs["EverythingAuras_CONFIRM_TRIGGER_DELETE"] = {
+        -- Everything Auras: the library's dialog instead of a StaticPopup, with the danger button.
+        triggerDeleteDialogOpen = true
+        OptionsPrivate.Private.EAShowDialog({
+          title = L["Delete Trigger"],
           text = L["You are about to delete a trigger. |cFFFF0000This cannot be undone!|r Would you like to continue?"],
           button1 = L["Delete"],
           button2 = L["Cancel"],
-          OnAccept = function()
+          danger = true,
+          onAccept = function()
             for child in OptionsPrivate.Private.TraverseLeafsOrAura(picked) do
               if #child.triggers > 1 and #child.triggers >= triggernum then
                 tremove(child.triggers, triggernum)
@@ -403,15 +407,10 @@ function OptionsPrivate.AddTriggerMetaFunctions(options, data, triggernum)
             EverythingAuras.FillOptions()
             triggerDeleteDialogOpen = false
           end,
-          OnCancel = function()
+          onCancel = function()
             triggerDeleteDialogOpen = false
           end,
-          showAlert = true,
-          whileDead = true,
-          preferredindex = 4,
-        }
-        triggerDeleteDialogOpen = true
-        StaticPopup_Show("EverythingAuras_CONFIRM_TRIGGER_DELETE")
+        })
       end
     end
   }

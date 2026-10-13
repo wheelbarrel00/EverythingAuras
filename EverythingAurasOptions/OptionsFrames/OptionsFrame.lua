@@ -107,7 +107,7 @@ function OptionsPrivate.CreateFrame()
   frame.Bg.colorTexture = {r, g, b, 0.8}
 
   function OptionsPrivate.SetTitle(title)
-    local text = "EverythingAuras " .. EverythingAuras.versionString
+    local text = "Everything Auras " .. EverythingAuras.versionString
     if title and title ~= "" then
       text = ("%s - %s"):format(text, title)
     end
@@ -514,16 +514,19 @@ function OptionsPrivate.CreateFrame()
   documentationButton:SetParent(tipFrame)
   documentationButton:SetPoint("LEFT", tipFrame, "LEFT")
 
-  local aboutButton = addFooter(L["About EverythingAuras"], [[Interface\AddOns\EverythingAuras\Media\Textures\icon.blp]],
-            "https://github.com/wheelbarrel00/EverythingAuras#readme",
-            L["Read about EverythingAuras development, supported features, and current limitations."])
+  -- Everything Auras: About and In Combat open the Everything Auras window's pages.
+  local aboutButton = OptionsPrivate.EAFooterButton(L["About EverythingAuras"], [[Interface\AddOns\EverythingAuras\Media\Textures\icon.blp]], "about")
   aboutButton:SetParent(tipFrame)
   aboutButton:SetPoint("LEFT", documentationButton, "RIGHT", footerSpacing, 0)
+
+  local combatButton = OptionsPrivate.EAFooterButton(L["In Combat"], [[Interface\AddOns\EverythingAuras\Media\EA\icon-combat.tga]], "combat")
+  combatButton:SetParent(tipFrame)
+  combatButton:SetPoint("LEFT", aboutButton, "RIGHT", footerSpacing, 0)
 
   local thanksButton = addFooter(L["Thanks"], [[Interface\AddOns\EverythingAuras\Media\Textures\waheart.tga]],
                                  nil, thanksList, thanksListCJ, thanksListK, nil, 800)
   thanksButton:SetParent(tipFrame)
-  thanksButton:SetPoint("LEFT", aboutButton, "RIGHT", footerSpacing, 0)
+  thanksButton:SetPoint("LEFT", combatButton, "RIGHT", footerSpacing, 0)
 
   if OptionsPrivate.changelog then
     local changelog

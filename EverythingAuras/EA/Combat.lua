@@ -3,6 +3,16 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 local DIM_ALPHA = 0.5
+local MARKER = "Interface\\AddOns\\EverythingAuras\\Media\\EA\\marker.tga"
+local MARKER_LEVEL = 20
+
+-- A quarter of the aura's shorter side, held between 6 and 14 px (design round 1).
+local function MarkerSize(width, height)
+  local side = math.min(width or 0, height or 0)
+  return math.max(6, math.min(14, math.floor(side / 4 + 0.5)))
+end
+Private.EAMarkerSize = MarkerSize
+Private.EAMarkerTexture = MARKER
 
 -- A trigger state BuffTrigger2 could not confirm while auras are secret carries eaUnsure.
 -- At a hide the hiding state is no longer shown but still marked changed for this update.
@@ -95,11 +105,21 @@ local function UpdateUnsureLook(region)
   end
   local marked = unsure and mode == "dim" or false
   if marked and not region.eaMarker then
-    region.eaMarker = region:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    region.eaMarker:SetPoint("TOPRIGHT", region, "TOPRIGHT", 0, 0)
-    region.eaMarker:SetText("~")
+    -- On a frame of its own, so it draws over the cooldown swipe and the texts, which are child frames.
+    local holder = CreateFrame("Frame", nil, region)
+    holder:SetAllPoints(region)
+    local marker = holder:CreateTexture(nil, "OVERLAY")
+    marker:SetTexture(MARKER)
+    marker:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, 0)
+    region.eaMarker = holder
+    region.eaMarkerTexture = marker
   end
   if region.eaMarker then
+    if marked then
+      region.eaMarker:SetFrameLevel(region:GetFrameLevel() + MARKER_LEVEL)
+      local size = MarkerSize(region:GetWidth(), region:GetHeight())
+      region.eaMarkerTexture:SetSize(size, size)
+    end
     region.eaMarker:SetShown(marked)
   end
 end

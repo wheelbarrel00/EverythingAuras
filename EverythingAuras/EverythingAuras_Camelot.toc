@@ -35,6 +35,7 @@ Init.lua
 Async.lua
 Compatibility.lua
 locales.xml
+EA\Names.lua
 ArchiveTypes\Repository.lua
 DefaultOptions.lua
 
@@ -109,6 +110,7 @@ Legendaries.lua
 DiscordList.lua
 
 # Everything Auras
+Libs\EverythingUI\EverythingUI.xml
 EA\Compat.lua
 EA\Migrate.lua
 EA\Sandbox.lua
@@ -116,3 +118,6 @@ EA\Warnings.lua
 EA\Combat.lua
 EA\Errors.lua
 EA\Slash.lua
+EA\UI.lua
+EA\Settings.lua
+EA\WhatsNew.lua

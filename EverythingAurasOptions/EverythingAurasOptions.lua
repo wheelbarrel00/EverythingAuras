@@ -327,23 +327,6 @@ function OptionsPrivate.DeleteDisplayButtonSelection(ids)
   OptionsPrivate.ConfirmDelete(toDelete, parents)
 end
 
-StaticPopupDialogs["EverythingAuras_CONFIRM_DELETE"] = {
-  text = "",
-  button1 = L["Delete"],
-  button2 = L["Cancel"],
-  OnAccept = function(self)
-    if self.data then
-      OptionsPrivate.DeleteAuras(self.data.toDelete, self.data.parents)
-    end
-  end,
-  OnCancel = function(self)
-    self.data = nil
-  end,
-  showAlert = true,
-  whileDead = true,
-  preferredindex = 4,
-}
-
 function OptionsPrivate.IsWagoUpdateIgnored(auraId)
     local auraData = EverythingAuras.GetData(auraId)
       if auraData then
@@ -371,8 +354,17 @@ end
 function OptionsPrivate.ConfirmDelete(toDelete, parents)
   if toDelete then
     local warningForm = L["You are about to delete %d aura(s). |cFFFF0000This cannot be undone!|r Would you like to continue?"]
-    StaticPopupDialogs["EverythingAuras_CONFIRM_DELETE"].text = warningForm:format(#toDelete)
-    StaticPopup_Show("EverythingAuras_CONFIRM_DELETE", "", "", {toDelete = toDelete, parents = parents})
+    -- Everything Auras: the library's dialog instead of a StaticPopup, with the danger button.
+    OptionsPrivate.Private.EAShowDialog({
+      title = L["Delete"],
+      text = warningForm:format(#toDelete),
+      button1 = L["Delete"],
+      button2 = L["Cancel"],
+      danger = true,
+      onAccept = function()
+        OptionsPrivate.DeleteAuras(toDelete, parents)
+      end,
+    })
   end
 end
 

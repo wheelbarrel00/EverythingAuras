@@ -169,7 +169,7 @@ end
 
 function EverythingAuras.OpenOptions(msg)
   if Private.NeedToRepairDatabase() then
-    StaticPopup_Show("EverythingAuras_CONFIRM_REPAIR", nil, nil, {reason = "downgrade"})
+    Private.ConfirmRepair("downgrade")
   elseif (EverythingAuras.IsLoginFinished() and Private.LoadOptions(msg)) then
     EverythingAuras.ToggleOptions(msg, Private);
   end
@@ -229,7 +229,7 @@ function SlashCmdList.EverythingAuras(input)
   elseif msg == "help" then
     Private.PrintHelp();
   elseif msg == "repair" then
-    StaticPopup_Show("EverythingAuras_CONFIRM_REPAIR", nil, nil, {reason = "user"})
+    Private.ConfirmRepair("user")
   elseif msg == "trackprint" then
     Private.db.disableTrackPrints = not Private.db.disableTrackPrints
     prettyPrint(L["Print tracking is now %s"]:format(Private.db.disableTrackPrints and L["disabled"] or L["enabled"]))
@@ -1137,7 +1137,7 @@ local function tooltip_draw(isAddonCompartment, blizzardTooltip)
     tooltip = GameTooltip
   end
   tooltip:ClearLines()
-  tooltip:AddDoubleLine("EverythingAuras", versionString)
+  tooltip:AddDoubleLine("Everything Auras", versionString)
   if Private.CompanionData.slugs then
     local count = Private.CountWagoUpdates()
     if count > 0 then
@@ -1186,7 +1186,7 @@ end
 local Broker_EverythingAuras;
 Broker_EverythingAuras = LDB:NewDataObject("EverythingAuras", {
   type = "launcher",
-  text = "EverythingAuras",
+  text = "Everything Auras",
   icon = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\icon.blp",
   OnClick = function(self, button)
     if button == 'LeftButton' then
@@ -1461,7 +1461,7 @@ loadedFrame:SetScript("OnEvent", function(self, event, ...)
       Private.Login(takeNewSnapshots)
     else
       -- db isn't valid. Request permission to run repair tool before logging in
-      StaticPopup_Show("EverythingAuras_CONFIRM_REPAIR", nil, nil, {reason = "downgrade"})
+      Private.ConfirmRepair("downgrade")
     end
   elseif event == "PLAYER_LOGOUT" then
     for id in pairs(db.displays) do
@@ -2594,34 +2594,26 @@ local function RepairDatabase()
 
 end
 
-StaticPopupDialogs["EverythingAuras_CONFIRM_REPAIR"] = {
-  text = "",
-  button1 = L["Repair"],
-  button2 = L["Cancel"],
-  OnAccept = function(self)
-     RepairDatabase()
-  end,
-  OnShow = function(self)
-    local AutomaticRepairText = L["EverythingAuras has detected that it has been downgraded.\nYour saved auras may no longer work properly.\nWould you like to run the |cffff0000EXPERIMENTAL|r repair tool? This will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s\n\n|cffff0000You should BACKUP your WTF folder BEFORE pressing this button.|r"]
-    local ManualRepairText = L["Are you sure you want to run the |cffff0000EXPERIMENTAL|r repair tool?\nThis will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s"]
-
-    local text = self.Text or self.text
-    if self.data.reason == "user" then
-      text:SetText(ManualRepairText:format(LastUpgrade()))
-    else
-      text:SetText(AutomaticRepairText:format(LastUpgrade()))
-    end
-  end,
-  OnCancel = function(self)
-    if self.data.reason ~= "user" then
-      Private.Login()
-    end
-  end,
-  whileDead = true,
-  showAlert = true,
-  timeout = 0,
-  preferredindex = 4
-}
+-- Everything Auras: the library's dialog instead of a StaticPopup, with the danger button.
+function Private.ConfirmRepair(reason)
+  local AutomaticRepairText = L["EverythingAuras has detected that it has been downgraded.\nYour saved auras may no longer work properly.\nWould you like to run the |cffff0000EXPERIMENTAL|r repair tool? This will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s\n\n|cffff0000You should BACKUP your WTF folder BEFORE pressing this button.|r"]
+  local ManualRepairText = L["Are you sure you want to run the |cffff0000EXPERIMENTAL|r repair tool?\nThis will overwrite any changes you have made since the last database upgrade.\nLast upgrade: %s"]
+  Private.EAShowDialog({
+    title = L["Repair"],
+    text = (reason == "user" and ManualRepairText or AutomaticRepairText):format(LastUpgrade()),
+    button1 = L["Repair"],
+    button2 = L["Cancel"],
+    danger = true,
+    onAccept = function()
+      RepairDatabase()
+    end,
+    onCancel = function()
+      if reason ~= "user" then
+        Private.Login()
+      end
+    end,
+  })
+end
 
 function Private.ValidateUniqueDataIds(silent)
   -- ensure that there are no duplicated uids anywhere in the database
@@ -5847,7 +5839,7 @@ local function ensureMouseFrame()
   label:SetJustifyH("LEFT")
   label:SetJustifyV("TOP")
   label:SetPoint("TOPLEFT", moverFrame, "BOTTOMLEFT");
-  label:SetText("EverythingAuras Anchor");
+  label:SetText("Everything Auras Anchor");
 
   moverFrame:Hide();
 
@@ -5985,7 +5977,7 @@ function Private.ensurePRDFrame()
 
   local label = moverFrame:CreateFontString(nil, "BACKGROUND", "GameFontHighlight")
   label:SetPoint("CENTER", moverFrame, "CENTER");
-  label:SetText("EverythingAuras Anchor");
+  label:SetText("Everything Auras Anchor");
 
   personalRessourceDisplayFrame:RegisterEvent('NAME_PLATE_UNIT_ADDED');
   personalRessourceDisplayFrame:RegisterEvent('NAME_PLATE_UNIT_REMOVED');

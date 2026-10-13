@@ -536,7 +536,7 @@ end
 
 ---@param ... string
 EverythingAuras.prettyPrint = function(...)
-  print("|cff9900ffEverythingAuras:|r ", ...)
+  print("|cff9900ffEverything Auras:|r ", ...)
 end
 
 -- Force enable EverythingAurasCompanion and Archive because some addon managers interfere with it
@@ -568,7 +568,7 @@ do
   end
   if EverythingAuras.IsRetail() or EverythingAuras.IsForever() then
     AddonCompartmentFrame:RegisterAddon({
-      text = AddonName,
+      text = "Everything Auras",
       icon = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\icon.blp",
       registerForAnyClick = true,
       notCheckable = true,
