@@ -490,7 +490,7 @@ local methods = {
     end
   end,
   ["OverrideIcon"] = function(self)
-    self.icon:SetTexture("Interface\\Addons\\EverythingAuras\\Media\\Textures\\icon.blp")
+    self.icon:SetTexture("Interface\\AddOns\\EverythingAuras\\Media\\EA\\logo.tga")
     self.icon:Show()
     if(self.iconRegion and self.iconRegion.Hide) then
       self.iconRegion:Hide();

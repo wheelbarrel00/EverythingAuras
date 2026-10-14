@@ -114,4 +114,22 @@ auraData.Seal.eaUnsureDisplay = "show"
 private.RunConditions(region, "uid")
 T.expect(region.shownAlpha == 1 and not region.eaMarker.shown, "Show Normally leaves it as is")
 T.expect(conditionsRun == 4, "conditions still run every time")
+
+T.section("Model regions store the alpha they are given")
+auraData.Model = {}
+local model = newRegion("Model")
+-- RegionTypes/Model.lua writes its alpha into self.alpha, which GetRegionAlpha reads back.
+model.SetAlpha = function(self, alpha) self.alpha = alpha; self.shownAlpha = alpha end
+model.states = { [1] = { show = true, eaUnsure = "lastKnown" } }
+private.RunConditions(model, "uid")
+T.expect(model.shownAlpha == 0.5 and model.alpha == 1, "dimmed on screen, its own alpha kept")
+model.states = { [1] = { show = true } }
+private.RunConditions(model, "uid")
+T.expect(model.shownAlpha == 1 and model.alpha == 1, "full alpha again after combat")
+auraData.Model.eaUnsureDisplay = "hide"
+model.states = { [1] = { show = true, eaUnsure = "estimated" } }
+private.RunConditions(model, "uid")
+model.states = { [1] = { show = true } }
+private.RunConditions(model, "uid")
+T.expect(model.shownAlpha == 1 and model.alpha == 1, "Hide comes back to full alpha too")
 T.finish()

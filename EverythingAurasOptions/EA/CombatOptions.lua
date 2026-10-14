@@ -11,7 +11,7 @@ OptionsPrivate.commonOptions.PositionOptions = function(id, data, ...)
       type = "select",
       width = EverythingAuras.normalWidth,
       name = L["When Unsure in Combat"],
-      desc = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a ~ marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."],
+      desc = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."],
       order = 81.5,
       values = { dim = L["Dim"], hide = L["Hide"], show = L["Show Normally"] },
       get = function()
@@ -83,7 +83,7 @@ function OptionsPrivate.EACombatStatus(data, trigger)
   elseif data.eaUnsureDisplay == "show" then
     look = L["While unsure it shows normally (Display tab)."]
   else
-    look = L["While unsure it is dimmed with a ~."]
+    look = L["While unsure it is dimmed with a corner marker."]
   end
   return "|cffffd200" .. status .. "|r " .. look .. " "
     .. L["It never fires sounds, glows, chat or custom actions while unsure."]

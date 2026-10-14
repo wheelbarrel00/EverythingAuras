@@ -569,7 +569,7 @@ do
   if EverythingAuras.IsRetail() or EverythingAuras.IsForever() then
     AddonCompartmentFrame:RegisterAddon({
       text = "Everything Auras",
-      icon = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\icon.blp",
+      icon = "Interface\\AddOns\\EverythingAuras\\Media\\EA\\logo.tga",
       registerForAnyClick = true,
       notCheckable = true,
       func = function(button, menuInputData, menu)

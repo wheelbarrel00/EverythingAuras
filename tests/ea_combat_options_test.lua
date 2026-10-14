@@ -57,7 +57,7 @@ T.expect(has(status(data, { unit = "multi" }), "not available"), "multi-target n
 
 T.section("Look follows the When Unsure option")
 local trigger = { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } }
-T.expect(has(status({}, trigger), "dimmed with a ~"), "default: dimmed")
+T.expect(has(status({}, trigger), "dimmed with a corner marker"), "default: dimmed")
 T.expect(has(status({ eaUnsureDisplay = "hide" }, trigger), "hidden"), "Hide")
 T.expect(has(status({ eaUnsureDisplay = "show" }, trigger), "shows normally"), "Show Normally")
 T.expect(has(status({}, trigger), "never fires sounds"), "always says it stays silent")

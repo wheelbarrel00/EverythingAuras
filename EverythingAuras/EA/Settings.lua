@@ -11,8 +11,9 @@ local EXAMPLE_ICON = 40
 local EXAMPLE_WIDTH = 166
 local QUESTION_MARK_ICON = 134400
 
-local LIBRARIES = "Ace3, Archivist, Chomp, LibCompress, LibCustomGlow, LibDBIcon, LibDeflate, LibGetFrame, LibRangeCheck, "
-  .. "LibSerialize, LibSharedMedia, LibSpecialization, LibSpellRange, LibUIDropDownMenu, LibAPIAutoComplete, TaintLess "
+local LIBRARIES = "Ace3, Archivist, Chomp, LibAdvFlyable, LibCompress, LibCustomGlow, LibDataBroker, LibDBIcon, LibDeflate, "
+  .. "LibGetFrame, LibRangeCheck, LibSerialize, LibSharedMedia, LibSpecialization, LibSpellRange, LibUIDropDownMenu, "
+  .. "LibAPIAutoComplete, TaintLess "
   .. L["and"] .. " EverythingUI."
 
 local function Bright(text)

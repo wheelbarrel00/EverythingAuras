@@ -42,6 +42,17 @@ jobs:
       - name: Build per-release changelog
         run: awk '/^## / { if (seen) exit; seen=1 } seen' CHANGELOG.md > .release_changelog.md
 
+      # The packager leaves --@experimental@ blocks active, which would make every release a "pr" build
+      # with WeakAuras' experimental undo switched on.
+      - name: Comment out experimental blocks
+        run: |
+          grep -rl --include='*.lua' --exclude-dir=Libs -- '--@experimental@' EverythingAuras* | xargs -r sed -i \
+            -e 's/--@experimental@/--[===[@experimental@/' \
+            -e 's/--@end-experimental@/--@end-experimental@]===]/'
+
+      - name: Ship NOTICE in the core addon
+        run: cp NOTICE.md EverythingAuras/NOTICE.md
+
       # The packager reads the CurseForge id only from ## X-Curse-Project-ID in the TOC and picks
       # the release channel from the tag name (a tag containing "beta" uploads as Beta).
       - name: Package and release

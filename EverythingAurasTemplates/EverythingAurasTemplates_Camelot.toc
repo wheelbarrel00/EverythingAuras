@@ -4,7 +4,7 @@
 ## Version: @project-version@
 ## X-License: GPL-2.0
 ## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
-## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## IconTexture: Interface\AddOns\EverythingAuras\Media\EA\logo.tga
 ## Notes: Templates for Everything Auras
 ## Notes-esES: Plantillas para EverythingAuras
 ## Notes-esMX: Plantillas para EverythingAuras

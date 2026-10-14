@@ -5,7 +5,7 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = "0.1.0-beta"
+local WHATS_NEW_VERSION = "0.2.0-beta"
 
 local ENTRIES = {
   {

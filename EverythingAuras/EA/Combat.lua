@@ -79,10 +79,16 @@ end
 -- Every alpha change ends in SetAlpha, so the dim factor survives conditions and animations.
 local function FactorSetAlpha(self, alpha)
   local factor = self.eaAlphaFactor or 1
-  if factor ~= 1 and not issecretvalue(alpha) then
-    alpha = (alpha or 1) * factor
+  if factor == 1 or issecretvalue(alpha) then
+    return self.eaSetAlpha(self, alpha)
   end
-  return self.eaSetAlpha(self, alpha)
+  local shown = (alpha or 1) * factor
+  local result = self.eaSetAlpha(self, shown)
+  -- A Model region stores the alpha it is given, and GetRegionAlpha must keep returning its own one.
+  if not issecretvalue(self.alpha) and self.alpha == shown then
+    self.alpha = alpha
+  end
+  return result
 end
 
 local function UpdateUnsureLook(region)

@@ -19,8 +19,8 @@ headers.
 
 ## Changes
 
-Every file Everything Auras changed carries a notice line saying so. The git history of this repository records
-each change and its date.
+Every Lua file Everything Auras changed carries a notice line saying so. The git history of this repository records
+each change and its date, including the renamed and edited TOC and XML files.
 
 - 2026-10-11: Based on M33kAuras 5.20.7-rg4-m99. Renamed folders, files, identifiers, saved variables, slash
   commands and addon-message prefixes from M33kAuras to Everything Auras with `tools/ea_transform.py`. Limited
@@ -63,3 +63,5 @@ each change and its date.
   closes on Escape without `UISpecialFrames`, and keeps its minimize as a header button. The links along its bottom
   are a footer bar of text buttons, and the changelog button was removed. The aura list and editor moved 24 pixels
   down to clear the taller header.
+- 2026-10-13: Everything Auras has its own logo in place of the WeakAuras one. A Model aura dimmed in combat returns
+  to full alpha afterward.

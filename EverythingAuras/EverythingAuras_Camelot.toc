@@ -4,7 +4,7 @@
 ## Version: @project-version@
 ## X-License: GPL-2.0
 ## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
-## IconTexture: Interface\AddOns\EverythingAuras\Media\Textures\icon.blp
+## IconTexture: Interface\AddOns\EverythingAuras\Media\EA\logo.tga
 ## X-Flavor: Mainline
 ## Notes: A modified fork of WeakAuras for WoW Forever. Displays graphics and information based on buffs, debuffs, cooldowns and other triggers.
 ## Notes-esES: Potente y completa aplicación que te permitirá mostrar por pantalla múltiples diseños, basados en beneficios, perjuicios y otros activadores.
@@ -15,6 +15,7 @@
 ## X-Category: Interface Enhancements
 ## Globe-Post: EverythingAurasOptions, EverythingAurasModelPaths, EverythingAurasTemplates
 ## X-Website: https://github.com/wheelbarrel00/EverythingAuras
+## X-Curse-Project-ID: 1743990
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
 ## SavedVariables: EverythingAurasSaved

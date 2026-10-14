@@ -1187,7 +1187,7 @@ local Broker_EverythingAuras;
 Broker_EverythingAuras = LDB:NewDataObject("EverythingAuras", {
   type = "launcher",
   text = "Everything Auras",
-  icon = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\icon.blp",
+  icon = "Interface\\AddOns\\EverythingAuras\\Media\\EA\\logo.tga",
   OnClick = function(self, button)
     if button == 'LeftButton' then
       if(IsShiftKeyDown()) then
