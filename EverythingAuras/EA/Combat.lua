@@ -34,15 +34,19 @@ Private.EAUnsureState = UnsureState
 local PerformActions = Private.PerformActions
 function Private.PerformActions(data, when, region)
   local actions = data.actions and data.actions[when]
-  if not (actions and region and UnsureState(region, true)) then
+  local unsure = actions and region and UnsureState(region, true)
+  -- Blizzard plays the sound of an aura it draws (EA/Native.lua), so it never plays twice.
+  local native = actions and actions.do_sound and Private.EANativeSound and Private.EANativeSound(data, when)
+  if not (unsure or native) then
     return PerformActions(data, when, region)
   end
-  data.actions[when] = setmetatable({
-    do_message = false,
-    do_sound = false,
-    do_custom = false,
-    do_glow = actions.do_glow and actions.glow_action == "hide" or false,
-  }, { __index = actions })
+  local shadow = { do_sound = false }
+  if unsure then
+    shadow.do_message = false
+    shadow.do_custom = false
+    shadow.do_glow = actions.do_glow and actions.glow_action == "hide" or false
+  end
+  data.actions[when] = setmetatable(shadow, { __index = actions })
   local ok, err = pcall(PerformActions, data, when, region)
   data.actions[when] = actions
   if not ok then
@@ -94,7 +98,8 @@ end
 local function UpdateUnsureLook(region)
   local unsure = UnsureState(region)
   local data = unsure and EverythingAuras.GetData(region.id)
-  local mode = data and data.eaUnsureDisplay or "dim"
+  -- Blizzard draws the icon of a native aura, so its own parts step aside instead of showing a guess beside it.
+  local mode = region.eaNativeOn and "hide" or data and data.eaUnsureDisplay or "dim"
   local factor = 1
   if unsure and mode == "dim" then
     factor = DIM_ALPHA

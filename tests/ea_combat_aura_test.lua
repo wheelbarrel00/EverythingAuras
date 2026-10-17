@@ -196,11 +196,33 @@ local function newFixture(neverSecret, triggers)
       world.auras[id] = nil
       event("UNIT_AURA", "player", world.secret and { isFullUpdate = SECRET } or { isFullUpdate = true })
     end,
-    cast = function(id, target)
+    cast = function(id, target, ending)
       guid = guid + 1
       castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SENT", "player", target, "cast" .. guid, id)
-      castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", "cast" .. guid, id)
+      castFrame.scripts.OnEvent(castFrame, ending or "UNIT_SPELLCAST_SUCCEEDED", "player", "cast" .. guid, id)
       update()
+    end,
+    sent = function(id, target)
+      guid = guid + 1
+      castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SENT", "player", target, "cast" .. guid, id)
+      return "cast" .. guid
+    end,
+    ends = function(ending, castGUID, id)
+      castFrame.scripts.OnEvent(castFrame, ending, "player", castGUID, id)
+      update()
+    end,
+    pending = function()
+      local i = 1
+      while true do
+        local name, value = debug.getupvalue(castFrame.scripts.OnEvent, i)
+        if not name then return nil end
+        if name == "eaCastTargets" then
+          local n = 0
+          for _ in pairs(value) do n = n + 1 end
+          return n
+        end
+        i = i + 1
+      end
     end,
     pull = function()
       world.secret = true
@@ -315,4 +337,21 @@ f.cast(101)
 T.expect(f.show("SealB") and f.unsure("SealB") == "estimated", "casting Seal B in combat shows it estimated")
 T.expect(not f.show("SealA"), "and drops Seal A, never read beside it")
 T.expect(f.show("ShoutC") and f.unsure("ShoutC") == "lastKnown", "Shout C, a different length, stays")
+
+T.section("Cast targets are dropped however the cast ends")
+f = newFixture(false)
+f.cast(6673, "Friend")
+f.cast(6673)
+f.cast(6673, "Friend", "UNIT_SPELLCAST_FAILED")
+f.cast(6673, "Friend", "UNIT_SPELLCAST_FAILED_QUIET")
+f.cast(6673, "Friend", "UNIT_SPELLCAST_INTERRUPTED")
+T.expect(f.pending() == 0, "out of combat no cast target is kept")
+f.pull()
+local held = f.sent(6673, "Friend")
+f.ends("UNIT_SPELLCAST_FAILED_QUIET", "spam", 6673)
+T.expect(f.pending() == 1, "a failed attempt with another cast id keeps the cast in progress")
+f.ends("UNIT_SPELLCAST_SUCCEEDED", held, 6673)
+T.expect(f.pending() == 0 and f.unsure("FoundByID") == "lastKnown", "that cast on another player ends without restarting your buff")
+f.cast(6673, nil, "UNIT_SPELLCAST_INTERRUPTED")
+T.expect(f.unsure("FoundByID") == "lastKnown", "an interrupted cast on yourself restarts nothing")
 T.finish()

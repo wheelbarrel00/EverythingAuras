@@ -46,6 +46,13 @@ T.expect(has(status(data, { unit = "player", debuffType = "HELPFUL", useExactSpe
   "In combat: exact."), "a never-secret spell ID: exact")
 T.expect(has(status(data, { unit = "player", useName = true, auranames = { "Never Shout" } }), "In combat: exact."),
   "a never-secret name: exact")
+T.expect(has(status(data, { unit = "player", useExactSpellId = true, auraspellids = { "999" } }), "On Hide actions do not fire"),
+  "exact still says a hide in combat stays silent")
+local missingByName = status(data, { unit = "player", useName = true, auranames = { "Never Shout" }, matchesShowOn = "showOnMissing" })
+T.expect(has(missingByName, "holds what it showed") and not has(missingByName, "In combat: exact."),
+  "a never-secret Missing reminder by name holds, it is not exact")
+T.expect(has(status(data, { unit = "player", useExactSpellId = true, auraspellids = { "999" }, matchesShowOn = "showOnMissing" }),
+  "In combat: exact."), "a never-secret Missing reminder by spell ID is exact")
 T.expect(has(status(data, { unit = "target", debuffType = "HARMFUL", useName = true, auranames = { "Unknown" } }),
   "until its timer runs out or the unit changes"), "a name the API cannot place: last known on the target")
 T.expect(has(status(data, { unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Never Shout" },
@@ -54,6 +61,19 @@ T.expect(has(status(data, { unit = "player", debuffType = "HELPFUL" }), "last kn
 T.expect(has(status(data, { unit = "player", debuffType = "HELPFUL", matchesShowOn = "showOnMissing",
   useExactSpellId = true, auraspellids = { "6673" } }), "holds what it showed"), "a Missing reminder holds")
 T.expect(has(status(data, { unit = "multi" }), "not available"), "multi-target needs the combat log")
+
+T.section("Icons Blizzard draws (0.3.0)")
+corePrivate.EANativeWanted = function(d) return d.eaNative == true end
+local unsureOption = options.commonOptions.PositionOptions("Seal", { eaNative = true }).eaUnsureDisplay
+T.expect(unsureOption.disabled == nil and unsureOption.name():find("(not used)", 1, true)
+  and unsureOption.desc():find("Blizzard draws this icon", 1, true), "When Unsure in Combat: grey and marked not used, the reason in its tooltip")
+T.expect(options.commonOptions.PositionOptions("Seal", {}).eaUnsureDisplay.name() == "When Unsure in Combat", "plain label otherwise")
+local nativeLine = status({ eaNative = true }, { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } })
+T.expect(has(nativeLine, "In combat: exact. Blizzard draws this icon.") and not has(nativeLine, "last known"),
+  "an aura Blizzard draws says so instead of last known")
+T.expect(has(status({}, { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } }), "last known"),
+  "without the switch it is last known as before")
+corePrivate.EANativeWanted = nil
 
 T.section("Look follows the When Unsure option")
 local trigger = { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } }

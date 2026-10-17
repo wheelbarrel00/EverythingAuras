@@ -10,8 +10,20 @@ OptionsPrivate.commonOptions.PositionOptions = function(id, data, ...)
     options.eaUnsureDisplay = {
       type = "select",
       width = EverythingAuras.normalWidth,
-      name = L["When Unsure in Combat"],
-      desc = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."],
+      -- Grey, not disabled: a disabled control gets no mouse-over on this engine, so the tooltip would not show.
+      name = function()
+        if OptionsPrivate.Private.EANativeWanted(data) then
+          return "|cff808080" .. L["When Unsure in Combat"] .. " " .. L["(not used)"] .. "|r"
+        end
+        return L["When Unsure in Combat"]
+      end,
+      desc = function()
+        local text = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."]
+        if OptionsPrivate.Private.EANativeWanted(data) then
+          text = text .. "\n\n" .. L["Blizzard draws this icon, so its other parts always hide while unsure."]
+        end
+        return text
+      end,
       order = 81.5,
       values = { dim = L["Dim"], hide = L["Hide"], show = L["Show Normally"] },
       get = function()
@@ -58,6 +70,11 @@ function OptionsPrivate.EACombatStatus(data, trigger)
     return "|cffff5555" .. L["In combat: not available."] .. "|r "
       .. L["This mode reads the combat log, which WoW Forever closes to addons."]
   end
+  local Private = OptionsPrivate.Private
+  if Private and Private.EANativeWanted and Private.EANativeWanted(data) then
+    return "|cff55ff55" .. L["In combat: exact. Blizzard draws this icon."] .. "|r "
+      .. L["Its texts, borders and glows hide while Everything Auras is unsure."]
+  end
   local spells = TrackedSpells(trigger)
   local readable = #spells > 0
   for _, spell in ipairs(spells) do
@@ -67,7 +84,15 @@ function OptionsPrivate.EACombatStatus(data, trigger)
     end
   end
   if readable then
-    return "|cff55ff55" .. L["In combat: exact."] .. "|r " .. L["Blizzard never hides these auras."]
+    local exact
+    -- A name can also match a hidden aura, so only spell IDs prove one is missing (EANoMatchUnsure).
+    if trigger.matchesShowOn == "showOnMissing" and trigger.useName and type(trigger.auranames) == "table" then
+      exact = "|cffffd200" .. L["In combat: holds what it showed when the fight started, until the fight ends."] .. "|r "
+        .. L["Blizzard never hides these auras, but only Exact Spell ID can prove one is missing."]
+    else
+      exact = "|cff55ff55" .. L["In combat: exact."] .. "|r " .. L["Blizzard never hides these auras."]
+    end
+    return exact .. " " .. L["Its On Hide actions do not fire in combat."]
   end
   local status
   if trigger.matchesShowOn == "showOnMissing" then

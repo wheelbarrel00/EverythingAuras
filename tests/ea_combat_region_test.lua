@@ -132,4 +132,23 @@ private.RunConditions(model, "uid")
 model.states = { [1] = { show = true } }
 private.RunConditions(model, "uid")
 T.expect(model.shownAlpha == 1 and model.alpha == 1, "Hide comes back to full alpha too")
+
+T.section("Icons Blizzard draws (0.3.0)")
+auraData.Native = { eaUnsureDisplay = "show" }
+local native = newRegion("Native")
+native.eaNativeOn = true
+native.states = { [1] = { show = true, eaUnsure = "estimated" } }
+private.RunConditions(native, "uid")
+T.expect(native.shownAlpha == 0 and not (native.eaMarker and native.eaMarker.shown),
+  "while unsure its own parts hide, whatever When Unsure in Combat says")
+private.EANativeSound = function(_, when) return when == "start" end
+native.states = { [1] = { show = true } }
+local nativeData = actionsData()
+private.PerformActions(nativeData, "start", native)
+p = performed[#performed]
+T.expect(not p.sound and p.message and p.custom and p.glow, "Blizzard plays its On Show sound, the other actions still fire")
+private.PerformActions(nativeData, "finish", native)
+T.expect(performed[#performed].sound, "a sound Blizzard does not play stays Everything Auras' own")
+T.expect(nativeData.actions.start.do_sound, "the aura's own actions are untouched")
+private.EANativeSound = nil
 T.finish()

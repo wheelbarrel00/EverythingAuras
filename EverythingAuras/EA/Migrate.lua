@@ -3,7 +3,7 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 2
+local EA_VERSION = 3
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
@@ -163,6 +163,13 @@ function Private.EAModernize(data)
   end
   if version < 2 then
     ConvertSpecLoad(data.load)
+  end
+  -- A converted Aura (Modern) icon that Blizzard can draw gets Blizzard's drawing (decision 19). Off stays off.
+  if version < 3 and data.eaNative == nil and type(data.triggers) == "table" and #data.triggers == 1 then
+    local trigger = type(data.triggers[1]) == "table" and data.triggers[1].trigger
+    if type(trigger) == "table" and trigger.eaConvertedFrom == "secretAura" and Private.EANativeQualifies(data) then
+      data.eaNative = true
+    end
   end
   data.eaVersion = math.max(version, EA_VERSION)
   Private.EAUpdateWarnings(data)

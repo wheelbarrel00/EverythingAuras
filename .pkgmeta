@@ -17,6 +17,7 @@ ignore:
   - generate_changelog.sh
   - cspell.json
   - stylua.toml
+  - EverythingAuras/TimelineParser.lua
 
 plain-copy:
   - EverythingAurasModelPaths/*.lua

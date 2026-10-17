@@ -97,6 +97,7 @@ local function newFixture(raid)
       return {
         events = {}, scripts = {},
         RegisterEvent = function(self, event) self.events[event] = true end,
+        RegisterUnitEvent = function(self, event) self.events[event] = true end,
         UnregisterEvent = noop,
         SetScript = function(self, event, handler) self.scripts[event] = handler end,
       }

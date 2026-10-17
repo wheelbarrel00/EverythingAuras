@@ -2131,8 +2131,11 @@ end
 
 local eaCastFrame = CreateFrame("Frame")
 Private.frames["Everything Auras Cast Estimates"] = eaCastFrame
-eaCastFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
-eaCastFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+eaCastFrame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+eaCastFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+eaCastFrame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
+eaCastFrame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED_QUIET", "player")
+eaCastFrame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
 eaCastFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eaCastFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3)
   if event == "PLAYER_REGEN_ENABLED" then
@@ -2144,14 +2147,16 @@ eaCastFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3)
     if arg3 and not issecretvalue(arg3) then
       eaCastTargets[arg3] = arg2 or false
     end
-  elseif arg3 and not issecretvalue(arg3) and C_Secrets.ShouldAurasBeSecret() then
+  else
+    -- The cast ended (arg2 is the castGUID, arg3 the spellID), so its target is dropped however it ended.
     local target
     if arg2 and not issecretvalue(arg2) then
       target = eaCastTargets[arg2]
       eaCastTargets[arg2] = nil
     end
     -- Only a cast on yourself proves the buff is on you.
-    if not target or (not issecretvalue(target) and target == UnitName("player")) then
+    if event == "UNIT_SPELLCAST_SUCCEEDED" and arg3 and not issecretvalue(arg3) and C_Secrets.ShouldAurasBeSecret()
+      and (not target or (not issecretvalue(target) and target == UnitName("player"))) then
       EAEstimateOwnBuff(arg3)
     end
   end

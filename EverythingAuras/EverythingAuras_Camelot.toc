@@ -117,6 +117,7 @@ EA\Migrate.lua
 EA\Sandbox.lua
 EA\Warnings.lua
 EA\Combat.lua
+EA\Native.lua
 EA\Errors.lua
 EA\Slash.lua
 EA\UI.lua
