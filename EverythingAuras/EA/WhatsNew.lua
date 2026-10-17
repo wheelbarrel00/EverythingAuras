@@ -5,28 +5,24 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = "0.2.0-beta"
+local WHATS_NEW_VERSION = "0.3.0-beta"
 
 local ENTRIES = {
   {
-    title = L["Your auras on WoW Forever"],
-    desc = L["Everything Auras is a fork of WeakAuras for WoW Forever, built on M33kAuras. Strings from WeakAuras, M33kAuras and ForeverAuras import, with a note wherever Forever works differently."],
+    title = L["Blizzard draws your icons"],
+    desc = L["Turn on Blizzard Draws This Icon on an Icon aura, and Blizzard draws its icon, swipe and timer, in combat too, the moment the aura changes. It works for one Aura trigger on Player, Target or Focus, but not for debuffs on you. You find it at the top of the Display tab."],
   },
   {
-    title = L["Auras that stay put in combat"],
-    desc = L["When Forever hides an aura in combat, it stays shown as last known, dimmed with a marker, until its timer runs out. Your own buffs start over from your casts. Nothing unsure plays a sound or glows."],
+    title = L["Sounds in combat"],
+    desc = L["When Blizzard draws an icon, its On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
   },
   {
     title = L["ForeverAuras imports"],
-    desc = L["Aura (Modern) triggers become standard Aura triggers matched by spell name, spec restrictions become class restrictions, and old media paths point at the same files."],
+    desc = L["Aura (Modern) icons that Blizzard can draw have it switched on, also the ones you imported before, and their note says so."],
   },
   {
-    title = L["Warnings that say what won't work"],
-    desc = L["Auras that use the combat log, secret health values or functions Forever lacks are marked, and older Classic functions get stand-ins inside custom code."],
-  },
-  {
-    title = L["One broken aura can't flood your errors"],
-    desc = L["After 10 Lua errors in a session, that aura's custom code switches off, with a button to turn it back on."],
+    title = L["Equipment slots"],
+    desc = L["Item triggers list the Ammo and Ranged slots, and no longer list profession slots WoW Forever doesn't have."],
   },
 }
 

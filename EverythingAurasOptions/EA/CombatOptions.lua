@@ -3,6 +3,16 @@ if not EverythingAuras.IsLibsOK() then return end
 local OptionsPrivate = select(2, ...)
 local L = EverythingAuras.L
 
+-- On Target or Focus Blizzard can refuse the unit's reaction (Native.lua Drawable), so only Player is always drawn.
+local function Native(data)
+  local Private = OptionsPrivate.Private
+  if not (Private and Private.EANativeWanted and Private.EANativeWanted(data)) then
+    return false, false
+  end
+  local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
+  return true, (type(trigger) == "table" and trigger.unit or "player") == "player"
+end
+
 local PositionOptions = OptionsPrivate.commonOptions.PositionOptions
 OptionsPrivate.commonOptions.PositionOptions = function(id, data, ...)
   local options = PositionOptions(id, data, ...)
@@ -10,17 +20,21 @@ OptionsPrivate.commonOptions.PositionOptions = function(id, data, ...)
     options.eaUnsureDisplay = {
       type = "select",
       width = EverythingAuras.normalWidth,
-      -- Grey, not disabled: a disabled control gets no mouse-over on this engine, so the tooltip would not show.
+      -- Gray, not disabled: a disabled control gets no mouse-over on this engine, so the tooltip would not show.
       name = function()
-        if OptionsPrivate.Private.EANativeWanted(data) then
+        local _, always = Native(data)
+        if always then
           return "|cff808080" .. L["When Unsure in Combat"] .. " " .. L["(not used)"] .. "|r"
         end
         return L["When Unsure in Combat"]
       end,
       desc = function()
         local text = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."]
-        if OptionsPrivate.Private.EANativeWanted(data) then
+        local native, always = Native(data)
+        if always then
           text = text .. "\n\n" .. L["Blizzard draws this icon, so its other parts always hide while unsure."]
+        elseif native then
+          text = text .. "\n\n" .. L["Blizzard draws this icon for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."]
         end
         return text
       end,
@@ -70,10 +84,13 @@ function OptionsPrivate.EACombatStatus(data, trigger)
     return "|cffff5555" .. L["In combat: not available."] .. "|r "
       .. L["This mode reads the combat log, which WoW Forever closes to addons."]
   end
-  local Private = OptionsPrivate.Private
-  if Private and Private.EANativeWanted and Private.EANativeWanted(data) then
+  local native, always = Native(data)
+  if always then
     return "|cff55ff55" .. L["In combat: exact. Blizzard draws this icon."] .. "|r "
       .. L["Its texts, borders and glows hide while Everything Auras is unsure."]
+  elseif native then
+    return "|cff55ff55" .. L["In combat: exact where Blizzard draws this icon."] .. "|r "
+      .. L["That is buffs on friendly units and debuffs on enemies. Otherwise it is last known, as without the option."]
   end
   local spells = TrackedSpells(trigger)
   local readable = #spells > 0

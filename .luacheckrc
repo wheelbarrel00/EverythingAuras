@@ -19603,6 +19603,7 @@ local everythingAuras = {
 		"SECONDS_PER_MIN",
 		"UnitCreatureID",
 		"UnitDefenseSkill",
+		"UnitIsPlayerControlledOrGroupMember",
 	},
 }
 files["EverythingAuras/"] = everythingAuras

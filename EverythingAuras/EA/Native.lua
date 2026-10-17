@@ -38,7 +38,7 @@ local function HasSpells(trigger)
   return false
 end
 
--- What Blizzard's aura slot can show exactly as the trigger would (research R3, probes N1 and N8).
+-- Anything Blizzard's slot cannot match exactly would make its icon and the trigger disagree (probes N1, N8).
 function Private.EANativeQualifies(data)
   if data.regionType ~= "icon" then
     return false, L["Only an Icon can be drawn by Blizzard."]
@@ -153,12 +153,13 @@ local function Filter(trigger)
   return filter
 end
 
-local function StackText(region)
-  for _, subRegion in ipairs(region.subRegions or {}) do
-    if subRegion.type == "subtext" and subRegion.text_text == "%s" and subRegion.text then
-      return subRegion
-    end
-  end
+local function StyleCooldown(cooldown, data)
+  cooldown:SetAlpha(data.cooldown and 1 or 0)
+  cooldown:SetDrawSwipe(data.cooldownSwipe ~= false)
+  cooldown:SetDrawEdge(data.cooldownEdge and true or false)
+  cooldown:SetHideCountdownNumbers(data.cooldownTextDisabled and true or false)
+  -- Icon.lua's UpdateEffectiveInverse for an aura state, which carries no inverse of its own.
+  cooldown:SetReverse(not data.inverse)
 end
 
 -- Runs once per button, before Blizzard locks it while auras are secret, so all art is handed over here.
@@ -172,15 +173,9 @@ local function BuildButton(record, button)
   local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
   cooldown:SetAllPoints(button)
   cooldown:SetDrawBling(false)
+  StyleCooldown(cooldown, record.data)
   button:SetDurationCooldown(cooldown)
-  local overlay = CreateFrame("Frame", nil, button)
-  overlay:SetAllPoints(button)
-  local count = overlay:CreateFontString(nil, "OVERLAY")
-  count:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
-  count:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-  count:SetAlpha(0)
-  button:SetApplicationCount(count)
-  record.icon, record.cooldown, record.overlay, record.count = icon, cooldown, overlay, count
+  record.icon, record.cooldown = icon, cooldown
 end
 
 local function Style(record, data, region)
@@ -188,49 +183,13 @@ local function Style(record, data, region)
   local level = region:GetFrameLevel()
   button:SetFrameLevel(level)
   record.cooldown:SetFrameLevel(level)
-  record.overlay:SetFrameLevel(level + 1)
 
   icon:SetTexCoord(region.icon:GetTexCoord())
   icon:SetDesaturation(region.icon:GetDesaturation())
-  -- A texture's alpha is its vertex color's alpha (FCF_GetChatWindowInfo reads SetAlpha back that way),
-  -- so the color comes from the aura's setting, never from Everything Auras' own icon.
+  -- A texture's alpha is its vertex color's alpha, so the color comes from the aura's setting, not its icon.
   local r, g, b, a = region:GetColor()
   icon:SetVertexColor(r or 1, g or 1, b or 1, a or 1)
-
-  local cooldown = record.cooldown
-  cooldown:SetAlpha(data.cooldown and 1 or 0)
-  cooldown:SetDrawSwipe(data.cooldownSwipe ~= false)
-  cooldown:SetDrawEdge(data.cooldownEdge and true or false)
-  cooldown:SetHideCountdownNumbers(data.cooldownTextDisabled and true or false)
-  -- Icon.lua's UpdateEffectiveInverse for an aura state, which carries no inverse of its own.
-  cooldown:SetReverse(not data.inverse)
-
-  -- Blizzard's count takes over a text that shows only the stacks, in its font and place.
-  local count, stack = record.count, StackText(region)
-  local text = stack and stack.text
-  if record.hiddenText and record.hiddenText ~= text then
-    record.hiddenText:Show()
-  end
-  record.hiddenText = text
-  if text then
-    local font, size, flags = text:GetFont()
-    if font then
-      count:SetFont(font, size, flags)
-    end
-    count:SetTextColor(stack.color_r or 1, stack.color_g or 1, stack.color_b or 1, stack.color_a or 1)
-    count:SetShadowColor(text:GetShadowColor())
-    count:SetShadowOffset(text:GetShadowOffset())
-    count:SetJustifyH(text:GetJustifyH())
-    local point, relativeTo, relativePoint, x, y = text:GetPoint(1)
-    if point then
-      count:ClearAllPoints()
-      count:SetPoint(point, relativeTo, relativePoint, x, y)
-    end
-    count:SetAlpha(1)
-    text:SetShown(not record.active)
-  else
-    count:SetAlpha(0)
-  end
+  StyleCooldown(record.cooldown, data)
 
   button:EnableMouse(false)
   if data.useTooltip then
@@ -263,8 +222,15 @@ end
 
 -- Blizzard plays these itself, in combat too, so the aura's own sound action steps aside (decision 19).
 local function UpdateSounds(record, data, force)
-  local want = record.active and C_UnitAuras.AddAuraSound and SoundKey(record, data) or nil
+  local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
+  -- Blizzard's aura sounds have no caster filter (UnitAuraSoundInfo), so an Own Only trigger keeps its own sound.
+  local anyCaster = type(trigger) == "table" and trigger.ownOnly == nil
+  local want = record.drawn and anyCaster and C_UnitAuras.AddAuraSound and SoundKey(record, data) or nil
   if want == record.soundKey and not force then
+    return
+  end
+  -- Registering may not work while auras are secret, so a loaded aura keeps its sounds through a target swap.
+  if want == nil and record.active and record.soundKey and Secret() then
     return
   end
   for _, handle in ipairs(record.soundHandles) do
@@ -301,7 +267,7 @@ end
 
 function Private.EANativeSound(data, when)
   local record = data and records[data.uid]
-  return record and record.active and record.sounds[when] or false
+  return record and record.drawn and record.sounds[when] or false
 end
 
 local function KeepCooldownHidden(region)
@@ -320,23 +286,46 @@ local function KeepCooldownHidden(region)
   end
 end
 
+-- Blizzard matches spell IDs only for buffs on friends and debuffs on enemies (AuraContainerUtil.lua:52-87).
+local function Drawable(record)
+  local unit = record.unit
+  if unit == "player" or not UnitExists(unit) then
+    return true
+  end
+  local canAssist = UnitCanAssist("player", unit, true, true)
+  if issecretvalue(canAssist) then
+    return true
+  end
+  if record.filter:find("^HELPFUL") then
+    local controlled = UnitIsPlayerControlledOrGroupMember(unit)
+    return issecretvalue(controlled) or controlled or canAssist
+  end
+  return not canAssist
+end
+
 local function SetActive(record, data, active)
   record.active = active
-  record.container:SetShown(active)
+  local drawn = active and Drawable(record) or false
+  record.drawn = drawn
+  record.container:SetShown(drawn)
   local region = record.region
   if region then
-    region.eaNativeOn = active or nil
+    local wasDrawn = region.eaNativeOn
+    region.eaNativeOn = drawn or nil
     -- Hidden, not faded: color conditions and animations set its vertex color, which would bring the alpha back.
-    region.icon:SetShown(not active)
-    if active and region.cooldown then
+    region.icon:SetShown(not drawn)
+    if drawn and region.cooldown then
       region.cooldown:Hide()
+    elseif wasDrawn and region.state and region.UpdateProgress then
+      -- A region that is not showing has no state, and its next show updates the swipe anyway.
+      region:UpdateProgress()
     end
     if region.tooltipFrame then
-      region.tooltipFrame:EnableMouseMotion(not active and data.useTooltip and true or false)
+      region.tooltipFrame:EnableMouseMotion(not drawn and data.useTooltip and true or false)
     end
-  end
-  if record.hiddenText then
-    record.hiddenText:SetShown(not active)
+    if (wasDrawn or false) ~= drawn and Private.EAUpdateUnsureLook then
+      Private.EAUpdateUnsureLook(region)
+    end
   end
   if active and record.styled == false and not Secret() then
     Style(record, data, region)
@@ -344,7 +333,6 @@ local function SetActive(record, data, active)
   UpdateSounds(record, data)
 end
 
--- Mirrors what Everything Auras does to its own icon texture, while Blizzard allows touching the button.
 local function MirrorIcon(region)
   if region.eaNativeMirror then
     return
@@ -390,12 +378,16 @@ local function Release(uid)
   end
   records[uid] = nil
   record.region, record.unit, record.filter, record.idsKey, record.ids, record.styled = nil, nil, nil, nil, nil, nil
-  record.hiddenText = nil
+  record.data = nil
   wipe(record.seen)
   if record.button then
     spare[#spare + 1] = record
   end
 end
+
+local failed = {}
+-- The options store a name's ranks after this runs, so an aura with no spell IDs yet is tried again on refresh.
+local pending = {}
 
 local function Configure(data, region)
   local uid = data.uid
@@ -403,7 +395,8 @@ local function Configure(data, region)
   if region and region.cloneId and region.cloneId ~= "" then
     return
   end
-  if not (region and Private.EANativeWanted(data)) then
+  pending[uid] = nil
+  if failed[uid] or not (region and Private.EANativeWanted(data)) then
     if record then
       SetActive(record, data, false)
     end
@@ -413,6 +406,7 @@ local function Configure(data, region)
   local unit, filter = trigger.unit or "player", Filter(trigger)
   local ids = SpellIds(data, record)
   if not next(ids) then
+    pending[uid] = true
     if record then
       SetActive(record, data, false)
     end
@@ -432,6 +426,7 @@ local function Configure(data, region)
     record.region = region
   end
   region.eaNativeRecord = record
+  record.data = data
   MirrorIcon(region)
 
   local container, idsKey = record.container, Key(ids)
@@ -469,10 +464,11 @@ local function Configure(data, region)
   SetActive(record, data, Private.loaded[data.id] == true and not EverythingAuras.IsPaused())
 end
 
--- A failure here must never break the aura: it falls back to Everything Auras drawing the icon itself.
+-- Blizzard's container API can change during the beta, so a failure falls back to the aura's own icon, reported once.
 local function SafeConfigure(data, region)
   local ok, err = pcall(Configure, data, region)
   if not ok then
+    failed[data.uid] = true
     local record = records[data.uid]
     if record then
       pcall(SetActive, record, data, false)
@@ -492,17 +488,24 @@ local function RefreshAll(force)
       end
     end
   end
+  local waiting = {}
+  for uid in pairs(pending) do
+    waiting[#waiting + 1] = uid
+  end
+  for _, uid in ipairs(waiting) do
+    local id = Private.UIDtoID(uid)
+    local data = id and EverythingAuras.GetData(id)
+    if data and not records[uid] then
+      SafeConfigure(data, EverythingAuras.GetRegion(id))
+    else
+      pending[uid] = nil
+    end
+  end
 end
 
 local iconType = Private.regionTypes.icon
 local modify = iconType.modify
 iconType.modify = function(parent, region, data)
-  -- Modify returns sub-regions to a shared pool, so a stack text Blizzard replaced must be visible again first.
-  local record = region.eaNativeRecord
-  if record and record.hiddenText then
-    record.hiddenText:Show()
-    record.hiddenText = nil
-  end
   modify(parent, region, data)
   if data.eaNative or region.eaNativeRecord then
     SafeConfigure(data, region)
@@ -513,7 +516,7 @@ local RunConditions = Private.RunConditions
 function Private.RunConditions(region, uid, hideRegion)
   local record = region.eaNativeRecord
   if record and record.active then
-    -- A rank read out of combat that the stored spell IDs missed joins the slot's list.
+    -- The spell cache can miss a rank, so a rank read out of combat is added to the slot.
     local state = region.states and region.states[1]
     local spellId = state and state.show and not state.eaUnsure and state.spellId
     if spellId and not issecretvalue(spellId) and not record.ids[spellId] and not Secret() then
@@ -537,10 +540,27 @@ Private.callbacks:RegisterCallback("ScanForLoads", function()
   RefreshAll()
 end)
 Private.callbacks:RegisterCallback("Add", function(_, uid, id, data)
-  if records[uid] then
+  if not records[uid] then
+    return
+  end
+  if data.regionType ~= "icon" then
+    Release(uid)
+  else
     SafeConfigure(data, EverythingAuras.GetRegion(id))
   end
 end)
+
+local function Reevaluate(unit)
+  for uid, record in pairs(records) do
+    if record.active and record.unit == unit and Drawable(record) ~= record.drawn then
+      local id = Private.UIDtoID(uid)
+      local data = id and EverythingAuras.GetData(id)
+      if data then
+        SafeConfigure(data, EverythingAuras.GetRegion(id))
+      end
+    end
+  end
+end
 Private.callbacks:RegisterCallback("Delete", function(_, uid)
   Release(uid)
 end)
@@ -551,7 +571,9 @@ events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_FOCUS_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
-events:SetScript("OnEvent", function(_, event)
+events:RegisterUnitEvent("UNIT_FACTION", "target", "focus")
+events:RegisterUnitEvent("UNIT_FLAGS", "target", "focus")
+events:SetScript("OnEvent", function(_, event, eventUnit)
   local unit = UNIT_EVENTS[event]
   if unit then
     -- The container does not follow unit changes itself (probe N1b).
@@ -560,6 +582,9 @@ events:SetScript("OnEvent", function(_, event)
         record.container:UpdateAllAuras()
       end
     end
+    Reevaluate(unit)
+  elseif event == "UNIT_FACTION" or event == "UNIT_FLAGS" then
+    Reevaluate(eventUnit)
   elseif not Secret() then
     RefreshAll(true)
   end

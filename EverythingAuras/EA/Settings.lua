@@ -128,6 +128,13 @@ local function CombatPage(_, content)
     L["Each aura can show these dimmed, hidden or normally: Display tab, Position and Size Settings, When Unsure in Combat."],
   }, "hint"), { fitHeight = true })
 
+  local native = stack(ui:CreateGroup(content, L["Blizzard Draws Your Icons"]))
+  native:Add(TextBlock(content, {
+    L["Turn on Blizzard Draws This Icon (Display tab, Icon Settings) and Blizzard draws the aura's icon, swipe and timer, in combat too, the moment the aura changes."],
+    L["It works for an Icon with one Aura trigger on Player, Target or Focus that shows when the aura is found, outside dynamic groups. Blizzard does not draw debuffs on you for addons, and on Target or Focus it draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the icon as usual. Where it can't be used, the option says why in its tooltip."],
+    L["The aura's own texts, borders and glows hide while Everything Auras is unsure in combat. Its On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds. ForeverAuras' Aura (Modern) icons that Blizzard can draw have it switched on, also the ones you imported before."],
+  }), { fitHeight = true })
+
   local works = stack(ui:CreateGroup(content, L["What else works in combat"]))
   for _, row in ipairs({
     { L["Spell cooldowns"], L["The swipe, and whether the spell is ready."] },

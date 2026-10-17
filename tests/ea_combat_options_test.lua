@@ -64,11 +64,20 @@ T.expect(has(status(data, { unit = "multi" }), "not available"), "multi-target n
 
 T.section("Icons Blizzard draws (0.3.0)")
 corePrivate.EANativeWanted = function(d) return d.eaNative == true end
-local unsureOption = options.commonOptions.PositionOptions("Seal", { eaNative = true }).eaUnsureDisplay
+local function NativeData(unit)
+  return { eaNative = true, triggers = { { trigger = { unit = unit } } } }
+end
+local unsureOption = options.commonOptions.PositionOptions("Seal", NativeData("player")).eaUnsureDisplay
 T.expect(unsureOption.disabled == nil and unsureOption.name():find("(not used)", 1, true)
-  and unsureOption.desc():find("Blizzard draws this icon", 1, true), "When Unsure in Combat: grey and marked not used, the reason in its tooltip")
+  and unsureOption.desc():find("always hide while unsure", 1, true), "When Unsure in Combat on Player: gray and marked not used, the reason in its tooltip")
+local targetOption = options.commonOptions.PositionOptions("HoJ", NativeData("target")).eaUnsureDisplay
+T.expect(targetOption.name() == "When Unsure in Combat" and targetOption.desc():find("applies when Everything Auras draws it instead", 1, true),
+  "on Target it still applies where Everything Auras draws the icon")
 T.expect(options.commonOptions.PositionOptions("Seal", {}).eaUnsureDisplay.name() == "When Unsure in Combat", "plain label otherwise")
-local nativeLine = status({ eaNative = true }, { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } })
+local targetLine = status(NativeData("target"), { unit = "target", debuffType = "HARMFUL", useExactSpellId = true, auraspellids = { "6673" } })
+T.expect(targetLine:find("exact where Blizzard draws this icon", 1, true) and targetLine:find("Otherwise it is last known", 1, true),
+  "the status line on Target says where it is exact")
+local nativeLine = status(NativeData("player"), { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } })
 T.expect(has(nativeLine, "In combat: exact. Blizzard draws this icon.") and not has(nativeLine, "last known"),
   "an aura Blizzard draws says so instead of last known")
 T.expect(has(status({}, { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } }), "last known"),

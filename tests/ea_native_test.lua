@@ -1,14 +1,12 @@
--- Everything Auras 0.3.0: Blizzard draws a native aura's icon through an AuraContainer slot (decision 19).
--- Loads the real EA/Native.lua and EA/Migrate.lua with a recording stub of Blizzard's container, shaped after
--- probes N0 to N9 (2026-10-15): a slot without spell IDs shows any aura, buttons lock while auras are secret.
+-- Everything Auras 0.3.0: the real EA/Native.lua and EA/Migrate.lua against a stub of Blizzard's AuraContainer.
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
 
-local world = { secret = false, paused = false, created = {}, sounds = {}, nextSound = 0, failContainer = false }
+local world = { secret = false, paused = false, created = {}, sounds = {}, nextSound = 0, failContainer = false,
+  units = { target = "enemy" } }
 
--- Any method not defined records its call, so the test can read what Native.lua asked Blizzard for.
--- Widget methods are capitalized, plain fields are not and read as nil.
+-- Plain fields must read as nil, because Native.lua tests fields such as region.eaNativeRecord.
 local function Object(fields)
   local object = fields or {}
   object.calls = object.calls or {}
@@ -71,6 +69,9 @@ local function NewContainer()
     list[#list + 1] = { unit }
   end
   container.AddAuraSlot = function(self, key, filter, options)
+    if world.failSlot then
+      error("slot failed")
+    end
     self.slot = { key = key, filter = filter, options = options }
     local button = NewWidget(self)
     button.mouse = true
@@ -148,8 +149,14 @@ local env = setmetatable({
   },
   C_Secrets = { ShouldAurasBeSecret = function() return world.secret end },
   C_Spell = { GetSpellInfo = function(name) if name == "Seal of Righteousness" then return { spellID = 20293 } end end },
+  UnitExists = function(unit) return world.units[unit] ~= nil end,
+  UnitCanAssist = function(_, unit) return world.units[unit] == "friend" end,
+  UnitIsPlayerControlledOrGroupMember = function(unit) return unit == "player" end,
   C_UnitAuras = {
     AddAuraSound = function(trigger, info)
+      if world.secret and world.soundLockedWhileSecret then
+        return nil
+      end
       world.nextSound = world.nextSound + 1
       world.sounds[world.nextSound] = { trigger = trigger, info = info }
       return world.nextSound
@@ -188,6 +195,13 @@ local function NewRegion(id)
   region.cooldown = NewWidget(region)
   region.cooldown.Hide = function(self) self.hidden = true end
   region.cooldown.Show = function(self) self.hidden = false end
+  -- Like RegionPrototype.lua:619, which reads state.progressType: a region that is not showing has no state.
+  region.UpdateProgress = function(self)
+    if not self.state then
+      error("attempt to index local 'state' (a nil value)")
+    end
+    Record(self, "UpdateProgress")
+  end
   region.GetFrameLevel = function() return 10 end
   region.GetFrameStrata = function() return "MEDIUM" end
   region.UpdateTime = function(self) self.cooldown:Show() end
@@ -261,7 +275,7 @@ local ids = container.slot.options.candidateFilters.includeSpellIDs
 T.expect(ids[20293] and ids[20154] and ids[20287], "names give the known rank plus the stored ranks")
 T.expect(container.unit == "player" and Count(container, "SetEditModePreviewEnabled") == 1, "unit set, Edit Mode fakes off (probe N9)")
 local button = container.button
-T.expect(button.iconWidget and button.cooldownWidget and button.countWidget, "icon, cooldown and stack count handed to Blizzard")
+T.expect(button.iconWidget and button.cooldownWidget, "icon and cooldown handed to Blizzard")
 T.expect(button.mouse == false, "the button never eats clicks (probe N0)")
 T.expect(container.level == 9 and button.level == 10, "the button lands on the region's own level")
 T.expect(container.shown and region.eaNativeOn and not region.icon.visible, "loaded: Blizzard draws, Everything Auras' icon steps aside")
@@ -318,31 +332,12 @@ data.eaNative = true
 Add(data)
 T.expect(container.shown and #world.created == before, "switched on again: the same container")
 
-T.section("Stack count")
+T.section("Stack count stays Everything Auras' own")
 local text = NewWidget(region)
-text.GetFont = function() return "Fonts\\ARIALN.TTF", 14, "OUTLINE" end
-text.GetTextColor = function() return 1, 0.8, 0, 1 end
-text.GetShadowColor = function() return 0, 0, 0, 1 end
-text.GetShadowOffset = function() return 0, 0 end
-text.GetJustifyH = function() return "CENTER" end
-text.GetPoint = function() return "BOTTOMRIGHT", region.icon, "BOTTOMRIGHT", -2, 2 end
-region.subRegions = { { type = "subtext", text_text = "%p", text = NewWidget(region) }, { type = "subtext", text_text = "%s", text = text,
-  color_r = 1, color_g = 0.8, color_b = 0, color_a = 1 } }
+region.subRegions = { { type = "subtext", text_text = "%s", text = text } }
 Add(data)
-local count = button.countWidget
-T.expect(Last(count, "SetFont")[1] == "Fonts\\ARIALN.TTF" and Last(count, "SetPoint")[2] == region.icon, "Blizzard's count takes the stack text's font and place")
-T.expect(count.alpha == 1 and not text.visible, "and replaces it, so it is never drawn twice")
-region.watchText = text
-Add(data)
-T.expect(region.textShownAtModify and not text.visible, "visible again before modify returns it to the shared pool")
-region.watchText = nil
-private.Pause()
-T.expect(text.visible, "Everything Auras' stack text is back while Blizzard does not draw")
-world.paused = false
-private.callbacks:Fire("ScanForLoads")
+T.expect(button.countWidget == nil and text.visible, "no Blizzard count until one is seen in game, the aura's %s text untouched")
 region.subRegions = {}
-Add(data)
-T.expect(count.alpha == 0 and text.visible, "no stack text: no count")
 
 T.section("Look")
 private.callbacks:Fire("ScanForLoads")
@@ -371,6 +366,59 @@ T.section("Target changes")
 local targetCalls = Count(exactContainer, "UpdateAllAuras")
 events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
 T.expect(Count(exactContainer, "UpdateAllAuras") == targetCalls + 1 and Count(container, "UpdateAllAuras") == 0, "a new target refreshes target slots only (probe N1b)")
+
+T.section("Friend or enemy (Blizzard_AuraContainerUtil.lua:52-87)")
+local exactRegion = regions.Exact
+exact.actions = { start = { do_sound = true, sound = "Interface\\Alert.ogg" } }
+Add(exact)
+T.expect(exactRegion.eaNativeOn and not exactRegion.icon.visible and exactContainer.shown, "a debuff on an enemy target: Blizzard draws it")
+T.expect(private.EANativeSound(exact, "start"), "and plays its sound")
+world.units.target = "friend"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(not exactRegion.eaNativeOn and exactRegion.icon.visible and not exactContainer.shown,
+  "a friendly target: Everything Auras draws the debuff icon itself, Blizzard's container hides, never two icons")
+T.expect(not private.EANativeSound(exact, "start"), "and Everything Auras plays the sound itself")
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "UNIT_FACTION", "target")
+T.expect(exactRegion.eaNativeOn and not exactRegion.icon.visible and exactContainer.shown, "turning hostile hands it back to Blizzard")
+exactRegion.state = { show = true }
+world.units.target = "friend"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(Count(exactRegion, "UpdateProgress") >= 1, "a showing aura gets its own swipe back at once")
+exactRegion.state = nil
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+world.units.target = "friend"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(#errors == 0 and exactRegion.eaNativeOn, "swapping targets while it is not showing raises no error (the re-scan's blocker)")
+local enemyBuff = NewAura("EnemyBuff", { type = "aura2", unit = "target", debuffType = "HELPFUL", useExactSpellId = true,
+  auraspellids = { "9" } })
+private.loaded.EnemyBuff = true
+local enemyBuffRegion = Add(enemyBuff)
+T.expect(not enemyBuffRegion.eaNativeOn and enemyBuffRegion.icon.visible, "a buff on an enemy target: Everything Auras draws it")
+-- Registering a sound while auras are secret was never measured (probe N5c), so assume it fails.
+world.soundLockedWhileSecret = true
+world.secret = true
+world.units.target = "friend"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(exactRegion.eaNativeOn and private.EANativeSound(exact, "start"), "a friend and back in combat keeps Blizzard's sound for the rest of the fight")
+world.secret, world.soundLockedWhileSecret = false, false
+world.units.target = "friend"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+local targetSounds = 0
+for _, sound in pairs(world.sounds) do
+  if sound.info.unitToken == "target" then
+    targetSounds = targetSounds + 1
+  end
+end
+T.expect(targetSounds == 0, "out of combat on a friend, Blizzard's sound for it is removed")
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "UNIT_FLAGS", "target")
+T.expect(exactRegion.eaNativeOn and private.EANativeSound(exact, "start"), "a reaction change through UNIT_FLAGS hands it back, sound included")
 
 T.section("Learning a rank read out of combat")
 region.states = { [1] = { show = true, spellId = 99999 } }
@@ -414,6 +462,19 @@ end
 T.expect(leftover == 0, "none left behind")
 private.loaded.Seal = true
 private.callbacks:Fire("ScanForLoads")
+T.expect(private.EANativeSound(data, "start"), "loaded again: Blizzard's sound is back")
+data.triggers[1].trigger.ownOnly = true
+Add(data)
+local playerSounds = 0
+for _, sound in pairs(world.sounds) do
+  if sound.info.unitToken == "player" then
+    playerSounds = playerSounds + 1
+  end
+end
+T.expect(playerSounds == 0 and not private.EANativeSound(data, "start"),
+  "Own Only: Blizzard's sound cannot tell who cast the aura, so the aura keeps its own sound")
+data.triggers[1].trigger.ownOnly = nil
+Add(data)
 
 T.section("Delete and reuse")
 local reused = #world.created
@@ -431,6 +492,54 @@ private.loaded.Broken = true
 local brokenRegion = Add(broken)
 T.expect(not brokenRegion.eaNativeOn and brokenRegion.icon.visible, "no container: Everything Auras draws the icon itself")
 world.failContainer = false
+local errorsBefore = #errors
+world.failSlot = true
+local failing = NewAura("Failing", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "2" } })
+private.loaded.Failing = true
+local failingRegion = Add(failing)
+world.failSlot = false
+private.callbacks:Fire("ScanForLoads")
+private.callbacks:Fire("ScanForLoads")
+T.expect(#errors == errorsBefore + 1 and not failingRegion.eaNativeOn and failingRegion.icon.visible,
+  "a failure is reported once, then Everything Auras keeps drawing that icon until /reload")
+table.remove(errors)
+
+T.section("Region type change")
+local changing = NewAura("Changing", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "3" } })
+private.loaded.Changing = true
+Add(changing)
+local changingContainer = world.created[#world.created]
+changing.regionType = "aurabar"
+private.callbacks:Fire("Add", "Changing", "Changing", changing)
+T.expect(not changingContainer.shown, "turned into another region type: Blizzard's container hides")
+local pooled = #world.created
+local nextAura = NewAura("NextAura", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "5" } })
+private.loaded.NextAura = true
+Add(nextAura)
+T.expect(#world.created == pooled and changingContainer.shown, "and its container goes back to the pool")
+
+T.section("Built in combat")
+world.secret = true
+local quiet = NewAura("Quiet", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "4" } },
+  { cooldown = false })
+private.loaded.Quiet = true
+Add(quiet)
+local quietCooldown = world.created[#world.created].button.cooldownWidget
+T.expect(quietCooldown.alpha == 0, "a button built while auras are secret already has its swipe settings")
+world.secret = false
+
+T.section("Ranks the options store later")
+local unknown = NewAura("Unknown", { type = "aura2", unit = "target", debuffType = "HARMFUL", useName = true,
+  auranames = { "Somebody Else's Debuff" } })
+private.loaded.Unknown = true
+local createdBefore = #world.created
+local unknownRegion = Add(unknown)
+T.expect(#world.created == createdBefore and not unknownRegion.eaNativeOn, "a name with no spell IDs yet: Everything Auras draws it")
+unknown.eaNativeIds = { 77 }
+private.callbacks:Fire("ScanForLoads")
+local unknownContainer = world.created[#world.created]
+T.expect(unknownContainer and unknownContainer.slot.options.candidateFilters.includeSpellIDs[77] and unknownRegion.eaNativeOn,
+  "the ranks the options store after it are picked up on the next refresh, no /reload")
 
 T.section("ForeverAuras imports")
 private.EAUpdateWarnings = function() end

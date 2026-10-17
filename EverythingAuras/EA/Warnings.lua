@@ -171,7 +171,7 @@ function Private.EAUpdateWarnings(data)
 
   SetWarning(uid, "EAConvertedSecretAura", "info", converted
     and (Private.EANativeWanted and Private.EANativeWanted(data)
-      and L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. Blizzard draws its icon, so the icon stays accurate in combat. You can turn this off under Display, Blizzard Draws This Icon."]
+      and L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. Blizzard draws its icon where it can, so the icon stays accurate in combat. You can turn this off under Display, Blizzard Draws This Icon."]
       or L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. In combat it can only show what Blizzard lets addons read."]))
   SetWarning(uid, "EACooldownManagerTrigger", "warning", cooldownManager
     and L["Uses ForeverAuras' Cooldown Manager trigger, which Everything Auras does not support yet. That trigger never activates."])

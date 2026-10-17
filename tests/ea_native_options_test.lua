@@ -53,7 +53,7 @@ T.expect(option and option.type == "toggle" and option.name() == "Blizzard Draws
 T.expect(not option.desc():find("Not available", 1, true), "available: no reason in the tooltip")
 T.expect(option.disabled == nil, "never disabled, so its tooltip always shows (a disabled checkbox gets no mouse-over in game)")
 qualifies = false
-T.expect(option.name():find("(not available)", 1, true) and option.name():find("^|cff808080"), "unavailable: grey label marked not available")
+T.expect(option.name():find("(not available)", 1, true) and option.name():find("^|cff808080"), "unavailable: gray label marked not available")
 T.expect(option.desc():find("Needs exactly one trigger.", 1, true), "unavailable: the reason is in the tooltip")
 qualifies = true
 local group = corePrivate.regionOptions.icon.create("Group", { controlledChildren = {} })

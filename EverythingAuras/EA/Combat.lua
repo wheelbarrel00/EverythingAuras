@@ -135,6 +135,8 @@ local function UpdateUnsureLook(region)
   end
 end
 
+Private.EAUpdateUnsureLook = UpdateUnsureLook
+
 local RunConditions = Private.RunConditions
 function Private.RunConditions(region, uid, hideRegion)
   UpdateUnsureLook(region)

@@ -4866,10 +4866,13 @@ if EverythingAuras.IsClassicEra() then
   end
 end
 
--- Everything Auras: Forever has the ammo and ranged slots (probe P7: AmmoSlot 0, RangedSlot 18).
+-- Everything Auras: Forever has ammo and ranged slots (probe P7), no profession or fishing slots (2026-10-16).
 if EverythingAuras.IsForever() then
   Private.item_slot_types[0] = AMMOSLOT
   Private.item_slot_types[18] = RANGEDSLOT
+  for slot = 20, 28 do
+    Private.item_slot_types[slot] = nil
+  end
 end
 
 if EverythingAuras.IsWrathOrCata() then

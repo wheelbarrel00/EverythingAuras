@@ -59,7 +59,8 @@ tinsert(OptionsPrivate.registerRegions, function()
           return "|cff808080" .. L["Blizzard Draws This Icon"] .. " " .. L["(not available)"] .. "|r"
         end,
         desc = function()
-          local text = L["Blizzard draws this aura's icon, swipe, timer and stack count, in combat too. Everything Auras' own texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too."]
+          local text = L["Blizzard draws this aura's icon, swipe and timer, in combat too. Everything Auras' own texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."]
+            .. "\n\n" .. L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the icon as usual."]
           local ok, reason = Private.EANativeQualifies(data)
           if not ok then
             text = text .. "\n\n|cffff5555" .. L["Not available:"] .. "|r " .. reason

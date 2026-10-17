@@ -164,7 +164,7 @@ function Private.EAModernize(data)
   if version < 2 then
     ConvertSpecLoad(data.load)
   end
-  -- A converted Aura (Modern) icon that Blizzard can draw gets Blizzard's drawing (decision 19). Off stays off.
+  -- A switch already set, even to off, is left as is (decision 19).
   if version < 3 and data.eaNative == nil and type(data.triggers) == "table" and #data.triggers == 1 then
     local trigger = type(data.triggers[1]) == "table" and data.triggers[1].trigger
     if type(trigger) == "table" and trigger.eaConvertedFrom == "secretAura" and Private.EANativeQualifies(data) then

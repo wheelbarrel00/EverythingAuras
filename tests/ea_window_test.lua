@@ -184,6 +184,8 @@ local function rowsOf(label)
   return out
 end
 T.expect(#rowsOf("What else works in combat") == 5, "five things that work in combat")
+T.expect(hasLine("Turn on Blizzard Draws This Icon") and hasLine("debuffs on you") and not hasLine("stack count"),
+  "In Combat explains icons Blizzard draws, with only what was seen in game (no stack count yet)")
 
 local whatsNewBox = rec.checkboxes["Show What's New after an update"]
 T.expect(whatsNewBox.getter() == true, "What's New is on by default")
@@ -231,9 +233,9 @@ local loginTimers = loginTimerCount()
 fire("PLAYER_LOGIN")
 T.expect(loginTimerCount() == loginTimers + 1 and rec.timers[#rec.timers].delay == 2, "a new version shows What's New after login")
 rec.timers[#rec.timers].f()
-T.expect(whatsNewWindow.shown and whatsNewWindow.section == "Everything Auras 0.2.0-beta", "titled with the version")
+T.expect(whatsNewWindow.shown and whatsNewWindow.section == "Everything Auras 0.3.0-beta", "titled with the version")
 rec.buttons["Got it"].onClick()
-T.expect(not whatsNewWindow.shown and private.db.eaSeenWhatsNew == "0.2.0-beta", "closing it marks the version seen")
+T.expect(not whatsNewWindow.shown and private.db.eaSeenWhatsNew == "0.3.0-beta", "closing it marks the version seen")
 fire("PLAYER_LOGIN")
 T.expect(loginTimerCount() == loginTimers + 1, "the same version does not show again")
 private.db.eaSeenWhatsNew = nil
