@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1-beta] - 2026-10-17
+
+### Bug Fixes
+
+- The 0.3.0-beta download had a broken copy of one bundled library (Archivist), which caused a Lua error at login. Bundled libraries are now packaged exactly as they are
+
 ## [0.3.0-beta] - 2026-10-16
 
 ### New Features

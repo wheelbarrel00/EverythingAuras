@@ -21,6 +21,8 @@ ignore:
 
 plain-copy:
   - EverythingAurasModelPaths/*.lua
+  - EverythingAuras/Libs/*
+  - EverythingAurasOptions/Libs/*
 
 move-folders:
   EverythingAuras/EverythingAuras: EverythingAuras
