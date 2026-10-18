@@ -21,7 +21,7 @@ EA_OWNED_DROPS = (
     "CONTRIBUTING.md",
 )
 
-# AI assistant instruction files from upstream never enter the fork (the pattern keeps the word out of this file).
+# Upstream's coding tool instruction files never enter the fork (the pattern keeps their name out of this file).
 AI_FILES = re.compile(r"(?i)(^|/)(c[l]aude[^/]*\.md|agents[^/]*\.md|\.c[l]aude/)")
 
 BINARY_EXT = {".blp", ".tga", ".ogg", ".mp3", ".wav", ".ttf", ".otf", ".m2", ".png",
@@ -151,7 +151,7 @@ def validate(root):
         if re.search(r"(?i)c[l]aude|a[n]thropic", src):
             problems.append(f"{rel}: contains an AI tool name")
         if AI_FILES.search(rel) or re.search(r"(?i)c[l]aude|a[n]thropic", rel):
-            problems.append(f"{rel}: AI tool file name")
+            problems.append(f"{rel}: coding tool instruction file")
         if "--@localization" in src:
             problems.append(f"{rel}: @localization token left")
         if not (rel.endswith(".lua") and rel.split("/")[0].startswith(NEW) and "/Libs/" not in rel):

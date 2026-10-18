@@ -3604,8 +3604,8 @@ end
 
 --- @return boolean
 function BuffTrigger.SetToolTip(trigger, state)
-  -- Everything Auras: the aura tooltip needs aura access, which Blizzard refuses while auras are secret.
-  if state.eaUnsure or C_Secrets.ShouldAurasBeSecret() then
+  -- Everything Auras: an estimated match may have no live aura instance behind it, so its spell's tooltip stands in.
+  if state.eaUnsure == "estimated" then
     if state.spellId and not issecretvalue(state.spellId) then
       GameTooltip:SetSpellByID(state.spellId)
       return true

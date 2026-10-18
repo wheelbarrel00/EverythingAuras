@@ -133,10 +133,8 @@ local function newFixture(neverSecret, triggers)
     C_Timer = { After = function(_, fn) table.insert(world.nextFrame, fn) end },
     GameTooltip = {
       SetSpellByID = function(_, id) world.tip = "spell " .. id end,
-      SetUnitBuffByAuraInstanceID = function()
-        if world.secret then error("aura tooltip needs aura access") end
-        world.tip = "aura"
-      end,
+      -- Blizzard runs this through a secure delegate, so it works for addons in combat too (TooltipDataHandler.lua:488).
+      SetUnitBuffByAuraInstanceID = function() world.tip = "aura" end,
     },
     AuraUtil = {
       ForEachAura = function(unit, filter, _, callback)
@@ -458,9 +456,14 @@ T.expect(f.show("SealB") and not f.show("SealA"), "the cast marks the old seal i
 
 T.section("Tooltips in combat")
 f = newFixture(false)
+f.give(6673, 120)
 local shown, tip = f.tooltip("FoundByID")
 T.expect(shown and tip == "aura", "out of combat: Blizzard's aura tooltip")
 f.pull()
-local ok2, shown2, tip2 = pcall(f.tooltip, "FoundByID")
-T.expect(ok2 and shown2 and tip2 == "spell 6673", "in combat: the spell's tooltip, no aura access needed")
+shown, tip = f.tooltip("FoundByID")
+T.expect(shown and tip == "aura", "a last known buff keeps Blizzard's aura tooltip in combat")
+f.cast(6673)
+shown, tip = f.tooltip("FoundByID")
+T.expect(f.unsure("FoundByID") == "estimated" and shown and tip == "spell 6673",
+  "a buff recast in combat may have no live aura behind it, so it shows the spell's tooltip")
 T.finish()
