@@ -12,13 +12,17 @@ local corePrivate = {
   triggerTypesOptions = {
     aura2 = function(_, triggernum)
       return { ["trigger." .. triggernum .. ".aura_options"] = { restrictions12_1Warning = { name = "M33 text" },
-        matchesShowOn = { desc = "M33 tooltip" } } }
+        matchesShowOn = { desc = "M33 tooltip" }, neverSecretSpells = { type = "execute" } } }
+    end,
+    event = function(_, triggernum)
+      return { ["trigger." .. triggernum .. ".Cooldown Progress (Spell)"] = { spellName = { type = "spell" },
+        neverSecretSpells = { type = "execute" } } }
     end,
   },
 }
 local env = setmetatable({
   EverythingAuras = { IsLibsOK = function() return true end, L = setmetatable({}, { __index = function(_, k) return k end }),
-    normalWidth = 1, Add = function() end },
+    normalWidth = 1, Add = function() end, IsForever = function() return true end },
   Enum = { SecrecyLevel = { NeverSecret = 0, AlwaysSecret = 1, ContextuallySecret = 2 } },
   C_Secrets = { GetSpellAuraSecrecy = function(spell)
     if secrecy[spell] == nil then error("unknown spell") end
@@ -99,4 +103,10 @@ T.expect(type(name) == "function" and has(name(), "Some auras are explicitly mad
   "the old 'cannot track' sentence is replaced by the status line")
 T.expect(has(result["trigger.1.aura_options"].matchesShowOn.desc, "holds until the fight ends"),
   "the Show On tooltip says a Missing reminder holds")
+
+T.section("Never-secret browsers on Forever")
+T.expect(result["trigger.1.aura_options"].neverSecretSpells == nil, "the Aura trigger has no never-secret browser")
+local cooldownOptions = options.Private.triggerTypesOptions.event(data, 1)["trigger.1.Cooldown Progress (Spell)"]
+T.expect(cooldownOptions.neverSecretSpells == nil and cooldownOptions.spellName ~= nil,
+  "the cooldown trigger loses only its browser")
 T.finish()

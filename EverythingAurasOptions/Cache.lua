@@ -470,13 +470,15 @@ function spellCache.Load(data)
   local locale = GetLocale();
   local version = EverythingAuras.versionString
 
+  -- A complete Forever cache holds about 12000 spell names (12132 at build 70450), so 39000 rebuilt it every session.
+  local minimum = EverythingAuras.IsForever() and 10000 or 39000
   local num = 0;
   for _ in pairs(cache) do
     num = num + 1;
-    if num >= 39000 then break end
+    if num >= minimum then break end
   end
 
-  if(num < 39000 or metaData.locale ~= locale or metaData.build ~= build
+  if(num < minimum or metaData.locale ~= locale or metaData.build ~= build
      or metaData.version ~= version or not metaData.spellCacheStrings or interrupted
      or type(metaData.neverSecretSpells) ~= "table"
      or type(metaData.neverSecretSpells.aura) ~= "table"

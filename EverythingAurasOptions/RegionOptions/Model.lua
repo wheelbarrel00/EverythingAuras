@@ -15,7 +15,7 @@ local function createOptions(id, data)
       width = EverythingAuras.normalWidth,
       name = L["Show model of unit "],
       order = 0.5,
-      hidden = function() return data.modelDisplayInfo and EverythingAuras.BuildInfo > 80100 end
+      hidden = function() return data.modelDisplayInfo and (EverythingAuras.BuildInfo > 80100 or EverythingAuras.IsForever()) end
     },
     modelDisplayInfo = {
       type = "toggle",
@@ -38,7 +38,7 @@ local function createOptions(id, data)
       func = function()
         OptionsPrivate.OpenModelPicker(data, {});
       end,
-      disabled = function() return data.modelIsUnit or (EverythingAuras.BuildInfo > 80100 and data.modelDisplayInfo) end,
+      disabled = function() return data.modelIsUnit or ((EverythingAuras.BuildInfo > 80100 or EverythingAuras.IsForever()) and data.modelDisplayInfo) end,
       imageWidth = 24,
       imageHeight = 24,
       control = "EverythingAurasIcon",

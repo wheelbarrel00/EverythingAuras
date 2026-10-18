@@ -64,4 +64,23 @@ T.expect(data.spellCache["Last Before Gap"] ~= nil, "spells below the gap are ca
 T.expect(#queried == 0, "no spell above 1213143 is ever queried")
 T.expect(data.spellCache["First After Gap"] == nil and data.spellCache["Crashes The Client"] == nil,
   "the scan stops before the spells that crash the client")
+
+T.section("Which saved cache is kept")
+local function savedCache(names)
+  local saved = { build = "100", locale = "enUS", version = "test", spellCacheStrings = true,
+    neverSecretSpells = { aura = {}, cooldown = {}, cast = {} }, spellCache = {} }
+  for i = 1, names do saved.spellCache["Spell " .. i] = { spells = i .. "=100" } end
+  return saved
+end
+local complete = savedCache(12132)
+wa.spellCache.Load(complete)
+T.expect(not complete.needsRebuild and complete.spellCache["Spell 1"] ~= nil,
+  "Forever keeps a complete cache of 12132 names (build 70450)")
+local partial = savedCache(5000)
+wa.spellCache.Load(partial)
+T.expect(partial.needsRebuild and next(partial.spellCache) == nil, "Forever rebuilds a cache of 5000 names")
+wa.IsForever = function() return false end
+local retail = savedCache(12132)
+wa.spellCache.Load(retail)
+T.expect(retail.needsRebuild, "other clients still need 39000 names")
 T.finish()

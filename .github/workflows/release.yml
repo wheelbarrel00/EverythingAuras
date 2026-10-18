@@ -50,8 +50,28 @@ jobs:
             -e 's/--@experimental@/--[===[@experimental@/' \
             -e 's/--@end-experimental@/--@end-experimental@]===]/'
 
-      - name: Ship NOTICE in the core addon
-        run: cp NOTICE.md EverythingAuras/NOTICE.md
+      # A build-only pass, so a file the packager breaks never reaches an upload (0.3.0 shipped a broken Archivist.lua).
+      - name: Build without uploading
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -d -z
+
+      - name: Compile every packaged Lua file
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1 > /dev/null
+          total=0
+          bad=0
+          while IFS= read -r -d '' f; do
+            total=$((total + 1))
+            sed '1s/^\xEF\xBB\xBF//' "$f" > "$RUNNER_TEMP/check.lua"
+            if ! luac5.1 -p "$RUNNER_TEMP/check.lua"; then
+              echo "::error file=$f::does not compile under Lua 5.1"
+              bad=$((bad + 1))
+            fi
+          done < <(find .release -name '*.lua' -print0)
+          echo "luac: $total files, $bad failures"
+          [ "$total" -gt 0 ] && [ "$bad" -eq 0 ]
 
       # The packager reads the CurseForge id only from ## X-Curse-Project-ID in the TOC and picks
       # the release channel from the tag name (a tag containing "beta" uploads as Beta).

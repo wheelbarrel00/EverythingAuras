@@ -153,4 +153,20 @@ tinsert(OptionsPrivate.registerRegions, function()
     end
     return result
   end
+  if EverythingAuras.IsForever() then
+    -- Forever has no never-secret aura, cooldown or cast (the spell cache lists, build 70450), so the browsers stay empty.
+    for triggerType, TriggerOptions in pairs(triggerTypesOptions) do
+      triggerTypesOptions[triggerType] = function(...)
+        local result = TriggerOptions(...)
+        if type(result) == "table" then
+          for _, group in pairs(result) do
+            if type(group) == "table" then
+              group.neverSecretSpells = nil
+            end
+          end
+        end
+        return result
+      end
+    end
+  end
 end)
