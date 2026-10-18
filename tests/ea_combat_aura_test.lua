@@ -18,6 +18,7 @@ local NAMES = { [6673] = "Battle Shout", [100] = "Seal A", [101] = "Seal B", [10
 
 local function newFixture(neverSecret, triggers)
   local world = { now = 100, secret = false, enumerateWhileSecret = 0, timers = {}, nextInstance = 10,
+    scheduled = 0, nextFrame = {},
     auras = { [6673] = { instance = 1, duration = 120, expirationTime = 200 } } }
   local states, data = {}, {}
   local private = {
@@ -42,6 +43,7 @@ local function newFixture(neverSecret, triggers)
     ScheduleTimerFixed = function(_, func, delay, arg)
       local handle = { func = func, at = world.now + delay, arg = arg }
       world.timers[handle] = true
+      world.scheduled = world.scheduled + 1
       return handle
     end,
     CancelTimer = function(_, handle) if handle then world.timers[handle] = nil end end,
@@ -64,6 +66,12 @@ local function newFixture(neverSecret, triggers)
     GetData = function(id) return data[id] end,
   }
   private.multiUnitUnits.group.player = true
+  for i = 1, 40 do
+    addon.raidUnits[i], addon.raidpetUnits[i] = "raid" .. i, "raidpet" .. i
+  end
+  for i = 1, 4 do
+    addon.partyUnits[i], addon.partypetUnits[i] = "party" .. i, "partypet" .. i
+  end
   local function record(id)
     local a = world.auras[id]
     return a and { name = NAMES[id], spellId = id, auraInstanceID = a.instance, isHelpful = true, icon = 132333,
@@ -121,7 +129,15 @@ local function newFixture(neverSecret, triggers)
         if world.secret then error("Auras cannot be accessed when secret while tainted") end
       end,
     },
-    Enum = { AddOnRestrictionState = { Inactive = 0, Active = 2 } },
+    Enum = { AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 } },
+    C_Timer = { After = function(_, fn) table.insert(world.nextFrame, fn) end },
+    GameTooltip = {
+      SetSpellByID = function(_, id) world.tip = "spell " .. id end,
+      SetUnitBuffByAuraInstanceID = function()
+        if world.secret then error("aura tooltip needs aura access") end
+        world.tip = "aura"
+      end,
+    },
     AuraUtil = {
       ForEachAura = function(unit, filter, _, callback)
         if world.secret then
@@ -228,6 +244,20 @@ local function newFixture(neverSecret, triggers)
       world.secret = true
       event("ADDON_RESTRICTION_STATE_CHANGED", 0, 2)
       event("UNIT_AURA", "player", { isFullUpdate = SECRET, addedAuras = {} })
+    end,
+    activating = function()
+      event("ADDON_RESTRICTION_STATE_CHANGED", 0, 1)
+      world.secret = true
+    end,
+    nextFrame = function()
+      local queued = world.nextFrame
+      world.nextFrame = {}
+      for _, fn in ipairs(queued) do fn() end
+      update()
+    end,
+    tooltip = function(id)
+      world.tip = nil
+      return triggerSystem.SetToolTip(data[id].triggers[1].trigger, state(id)), world.tip
     end,
     combatEnds = function()
       world.secret = false
@@ -354,4 +384,83 @@ f.ends("UNIT_SPELLCAST_SUCCEEDED", held, 6673)
 T.expect(f.pending() == 0 and f.unsure("FoundByID") == "lastKnown", "that cast on another player ends without restarting your buff")
 f.cast(6673, nil, "UNIT_SPELLCAST_INTERRUPTED")
 T.expect(f.unsure("FoundByID") == "lastKnown", "an interrupted cast on yourself restarts nothing")
+
+T.section("An Always trigger is rechecked when combat ends")
+f = newFixture(false, { Always = { useName = true, auranames = { "Battle Shout" }, matchesShowOn = "showAlways" } })
+f.pull()
+f.world.auras[6673] = nil
+f.advance(101)
+T.expect(f.show("Always") and f.unsure("Always") == "unknown", "in combat the expired buff leaves Always shown and unsure")
+f.combatEnds()
+T.expect(f.show("Always") and f.unsure("Always") == nil, "after combat it is exact again, not left dimmed")
+
+T.section("A group change in combat keeps what EA cannot read")
+f = newFixture(false)
+f.pull()
+f.event("GROUP_ROSTER_UPDATE")
+T.expect(f.show("FoundByID") and f.unsure("FoundByID") == "lastKnown", "the buff stays shown as last known, no wipe")
+f.combatEnds()
+f.event("GROUP_ROSTER_UPDATE")
+T.expect(f.show("FoundByID") and f.unsure("FoundByID") == nil, "out of combat a group change reads exactly")
+f = newFixture(false)
+f.pull()
+f.world.auras[6673] = nil
+f.event("PLAYER_ALIVE")
+T.expect(not f.show("FoundByID"), "a resurrection in combat still clears what dying removed")
+
+T.section("In-combat aura events keep one expiry timer")
+f = newFixture(false)
+f.pull()
+local scheduled = f.world.scheduled
+for _ = 1, 5 do
+  f.event("UNIT_AURA", "player", { isFullUpdate = SECRET })
+end
+T.expect(f.world.scheduled == scheduled, "aura events with nothing new marked schedule no new timer")
+f.advance(101)
+T.expect(not f.show("FoundByID"), "the last known buff still lets go at its expiration")
+
+T.section("Blizzard's Activating comes before auras turn secret")
+f = newFixture(false)
+f.activating()
+T.expect(f.unsure("FoundByID") == nil, "during Activating nothing reads secret yet")
+f.nextFrame()
+T.expect(f.show("FoundByID") and f.unsure("FoundByID") == "lastKnown", "one frame later the buff is marked last known")
+
+T.section("A seal swapped at the pull, before any aura event")
+f = newFixture(false, {
+  SealA = { useName = true, auranames = { "Seal A" } },
+  SealB = { useName = true, auranames = { "Seal B" } },
+})
+f.give(100, 30)
+f.take(100)
+f.give(101, 30)
+f.take(101)
+f.give(100, 30)
+f.activating()
+f.nextFrame()
+f.cast(101)
+T.expect(f.show("SealB") and f.unsure("SealB") == "estimated", "the new seal shows as estimated")
+T.expect(not f.show("SealA"), "the old seal is dropped")
+
+T.section("A cast before any mark still swaps")
+f = newFixture(false, {
+  SealA = { useName = true, auranames = { "Seal A" } },
+  SealB = { useName = true, auranames = { "Seal B" } },
+})
+f.give(100, 30)
+f.take(100)
+f.give(101, 30)
+f.take(101)
+f.give(100, 30)
+f.world.secret = true
+f.cast(101)
+T.expect(f.show("SealB") and not f.show("SealA"), "the cast marks the old seal itself and swaps it out")
+
+T.section("Tooltips in combat")
+f = newFixture(false)
+local shown, tip = f.tooltip("FoundByID")
+T.expect(shown and tip == "aura", "out of combat: Blizzard's aura tooltip")
+f.pull()
+local ok2, shown2, tip2 = pcall(f.tooltip, "FoundByID")
+T.expect(ok2 and shown2 and tip2 == "spell 6673", "in combat: the spell's tooltip, no aura access needed")
 T.finish()

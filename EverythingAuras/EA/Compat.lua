@@ -65,13 +65,15 @@ function Private.ExecEnv.EANotSecret(value)
   end
 end
 
--- The family filter compares with ==, which throws on a secret value.
+-- The family and type filters compare with ==, which throws on a secret value.
 for _, arg in ipairs(Private.event_prototypes["Unit Characteristics"].args) do
   if arg.name == "creatureFamilyIndex" then
     arg.enable, arg.hidden = true, false
     arg.init = "Private.ExecEnv.EANotSecret((select(2, UnitCreatureFamily(unit))))"
   elseif arg.name == "creatureFamily" then
     arg.enable = true
+  elseif arg.name == "creatureTypeIndex" then
+    arg.init = "Private.ExecEnv.EANotSecret((select(2, UnitCreatureType(unit))))"
   end
 end
 

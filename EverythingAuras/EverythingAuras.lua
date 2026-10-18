@@ -4798,9 +4798,9 @@ do
   threads.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
   threads.frame:RegisterEvent("PLAYER_REGEN_DISABLED")
   threads.frame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_REGEN_ENABLED" and self:IsShown() then
+    if event == "PLAYER_REGEN_DISABLED" and self:IsShown() then
       self:Hide()
-    elseif event == "PLAYER_REGEN_DISABLED" and not self:IsShown() and threads.size > 0 then
+    elseif event == "PLAYER_REGEN_ENABLED" and not self:IsShown() and threads.size > 0 then
       self:Show()
     end
   end)

@@ -3,7 +3,7 @@ local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
 
-local reported, warnings, optionsOpen, renameCallback = 0, {}, false, nil
+local reported, warnings, optionsOpen, renameCallback, deleteCallback = 0, {}, false, nil, nil
 local auras = {
   Seal = { id = "Seal", uid = "uidSeal" },
   Text = { id = "Text", uid = "uidText" },
@@ -14,8 +14,13 @@ local private = {
   GetDataByUID = function(uid)
     for _, data in pairs(auras) do if data.uid == uid then return data end end
   end,
+  UIDtoID = function(uid)
+    for _, data in pairs(auras) do if data.uid == uid then return data.id end end
+  end,
   AuraWarnings = { UpdateWarning = function(uid, key, severity, message) warnings[uid .. key] = severity and message end },
-  callbacks = { RegisterCallback = function(_, event, fn) if event == "Rename" then renameCallback = fn end end },
+  callbacks = { RegisterCallback = function(_, event, fn)
+    if event == "Rename" then renameCallback = fn elseif event == "Delete" then deleteCallback = fn end
+  end },
 }
 local addon = {
   IsLibsOK = function() return true end,
@@ -43,6 +48,8 @@ T.expect(reported == 9, "every error still reaches BugSack")
 errorFrom(nil, "uidSeal")
 T.expect(private.EACustomCodeOff("uidSeal"), "the 10th error, by uid, switches it off")
 T.expect(sealCode() == nil and sealAnimation() == nil, "its custom code stops, by id and by uid")
+local x, y, sx, sy = sealAnimation(0.5, 1, 1, 2, 3)
+T.expect(x == 1 and y == 1 and sx == 2 and sy == 3, "animation code that is off returns its start values, never nil sizes")
 T.expect(textCode() == "text code", "another aura's code keeps running")
 T.expect(warnings.uidSealEACustomCodeOff and warnings.uidSealEACustomCodeOff:find("10", 1, true), "a warning names the count")
 T.expect(reported == 10, "the 10th error was reported too")
@@ -68,4 +75,13 @@ auras.Renamed.id = "Renamed"
 renameCallback(nil, "uidText", "Text", "Renamed")
 local renamedCode = addon.LoadFunction("text code", "Renamed")
 T.expect(renamedCode() == nil, "code loaded under the new name stays off")
+
+T.section("Deleting clears it")
+deleteCallback(nil, "uidText", "Renamed")
+auras.Renamed = { id = "Renamed", uid = "uidText" }
+local againCode = addon.LoadFunction("new code", "Renamed")
+T.expect(againCode() == "new code", "a new aura with the deleted aura's name runs its code")
+T.expect(not private.EACustomCodeOff("uidText"), "and is not marked off by uid")
+for _ = 1, 9 do errorFrom("Renamed") end
+T.expect(not private.EACustomCodeOff("uidText"), "its count started over")
 T.finish()

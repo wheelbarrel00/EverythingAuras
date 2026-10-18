@@ -604,6 +604,13 @@ function Private.ActivateEvent(id, triggernum, data, state, errorHandler)
     state.autoHide = autoHide;
   elseif (data.durationFunc) then
     local ok, arg1, arg2, arg3, inverse = xpcall(data.durationFunc, errorHandler or Private.GetErrorHandlerId(id, L["Duration Function"]), data.trigger);
+    -- Everything Auras: a secret return cannot be compared below (secret ~= secret throws, probe CMP), so it counts as none.
+    if hasanysecretvalues(arg1, arg2, arg3, inverse) then
+      arg1 = not issecretvalue(arg1) and arg1 or nil
+      arg2 = not issecretvalue(arg2) and arg2 or nil
+      arg3 = not issecretvalue(arg3) and arg3 or nil
+      inverse = not issecretvalue(inverse) and inverse or nil
+    end
     arg1 = ok and type(arg1) == "number" and arg1 or 0;
     arg2 = ok and type(arg2) == "number" and arg2 or 0;
 
@@ -2037,7 +2044,18 @@ do
   local GCD_SPELLID = EverythingAuras.IsForever() and 29515 or 61304
   local GCD_CATEGORY = Constants.SpellCooldownConsts.GLOBAL_RECOVERY_CATEGORY
   local function CheckGCD()
-    if C_Secrets.ShouldSpellCooldownBeSecret(GCD_SPELLID) then return end
+    if C_Secrets.ShouldSpellCooldownBeSecret(GCD_SPELLID) then
+      -- Everything Auras: a GCD running when its timing turns secret would otherwise show for the whole fight.
+      if gcdStart then
+        gcdStart, gcdDuration, gcdModrate = nil, nil, nil
+        gcdSpellName, gcdSpellIcon = nil, nil
+        gcdEndCheck = 0
+        if not EverythingAuras.IsPaused() then
+          Private.ScanEvents("GCD_END")
+        end
+      end
+      return
+    end
     local event;
     local startTime, duration, _, modRate
 

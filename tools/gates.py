@@ -4,6 +4,7 @@
 Usage: py tools/gates.py [--skip-tests]
 """
 import collections
+import fnmatch
 import os
 import re
 import subprocess
@@ -20,7 +21,7 @@ ADDONS = ["EverythingAuras", "EverythingAurasOptions", "EverythingAurasTemplates
 KNOWN_TEST_FAILURES = {"aura_list_async_test.lua", "progress_texture_test.lua"}
 # Shipped code lints clean (M33kAuras m99 started at 309). Known dead code is named in .luacheckrc.
 SHIPPED_WARNING_LIMIT = 0
-TEXT_EXT = {".lua", ".toc", ".xml", ".yml", ".yaml", ".py", ".sh", ".pkgmeta", ".md", ""}
+TEXT_EXT = {".lua", ".toc", ".xml", ".yml", ".yaml", ".py", ".sh", ".pkgmeta", ".md", ".tsv", ""}
 NO_EM_DASH_EXT = {".lua", ".toc", ".xml", ".yml", ".yaml", ".py", ".sh"}
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 
@@ -94,8 +95,52 @@ def gate_tests():
         failed.append("tests")
 
 
+def toc_files(addon):
+    folder = os.path.join(ROOT, addon)
+    todo = []
+    for line in open(os.path.join(folder, addon + "_Camelot.toc"), encoding="utf-8-sig"):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            todo.append(os.path.normpath(os.path.join(folder, line.replace("\\", "/"))))
+    seen = []
+    while todo:
+        path = todo.pop(0)
+        if path in seen:
+            continue
+        seen.append(path)
+        if path.lower().endswith(".xml") and os.path.isfile(path):
+            text = re.sub(r"<!--.*?-->", "", open(path, encoding="utf-8", errors="replace").read(), flags=re.S)
+            for m in re.finditer(r'<(?:Script|Include)\s+file\s*=\s*"([^"]+)"', text):
+                todo.append(os.path.normpath(os.path.join(os.path.dirname(path), m.group(1).replace("\\", "/"))))
+    return seen
+
+
+def pkgmeta_ignores():
+    entries, inside = [], False
+    for line in open(os.path.join(ROOT, ".pkgmeta"), encoding="utf-8"):
+        if re.match(r"^\S", line):
+            inside = line.startswith("ignore:")
+        elif inside and line.strip().startswith("- "):
+            entries.append(line.strip()[2:].strip())
+    return entries
+
+
 def gate_tocs():
     problems = []
+    # An untracked file works in the dev install but the packager leaves it out of the zip.
+    tracked = {os.path.normcase(os.path.normpath(os.path.join(ROOT, p))) for p in git_files("ls-files")}
+    ignores = pkgmeta_ignores()
+    listed = 0
+    for a in ADDONS:
+        for path in toc_files(a):
+            listed += 1
+            rel = os.path.relpath(path, ROOT).replace("\\", "/")
+            if not os.path.isfile(path):
+                problems.append(f"{rel}: listed by the {a} TOC but missing")
+            elif os.path.normcase(path) not in tracked:
+                problems.append(f"{rel}: listed by the {a} TOC but not tracked by git")
+            elif any(rel == e or rel.startswith(e.rstrip("/") + "/") or fnmatch.fnmatch(rel, e) for e in ignores):
+                problems.append(f"{rel}: listed by the {a} TOC but ignored by .pkgmeta")
     interfaces = set()
     for a in ADDONS:
         toc = os.path.join(ROOT, a, a + "_Camelot.toc")
@@ -110,7 +155,7 @@ def gate_tocs():
         problems.append(f"TOC interface lines differ: {sorted(map(str, interfaces))}")
     tokens = [p for p in git_files("grep", "-l", "--", "--@localization") if p.endswith(".lua")]
     problems += [f"{p}: @localization token" for p in tokens]
-    print(f"TOCs and packaging: {len(problems)} problems (interface {', '.join(map(str, interfaces))})")
+    print(f"TOCs and packaging: {len(problems)} problems (interface {', '.join(map(str, interfaces))}, {listed} listed files)")
     for p in problems:
         print("  " + p)
     if problems:

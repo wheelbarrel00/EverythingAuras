@@ -17,6 +17,7 @@ URL = re.compile(r"https?://[^\s\"'\]\)]+")
 TOKENS = [("WeakAurasProg", "EAurasProg"), ("WEAKAURAS", "EVERYTHINGAURAS"), ("WeakAuras", "EverythingAuras"),
           ("weakauras", "everythingauras")]
 SKIP_DIRS = (".github/",)
+AI_FILES = re.compile(r"(?i)(^|/)(c[l]aude[^/]*\.md|agents[^/]*\.md|\.c[l]aude/)")
 
 
 def git(*args, binary=False):
@@ -27,7 +28,7 @@ def git(*args, binary=False):
 
 
 def ea_path(path):
-    if path.endswith(".toc") or path.startswith(SKIP_DIRS):
+    if path.endswith(".toc") or path.startswith(SKIP_DIRS) or AI_FILES.search(path):
         return None
     for old, new in TOKENS[1:]:
         path = path.replace(old, new)

@@ -38,6 +38,7 @@ local function load(forever)
       ["Unit Characteristics"] = { args = {
         { name = "creatureFamilyIndex", enable = false, hidden = true, init = "select(2, UnitCreatureFamily(unit))" },
         { name = "creatureFamily", enable = false, hidden = true, init = "UnitCreatureFamily(unit)" },
+        { name = "creatureTypeIndex", enable = true, hidden = false, init = "select(2, UnitCreatureType(unit))" },
       } },
     },
   }
@@ -79,6 +80,8 @@ T.expect(schoolsRead and has(prototypes, 'name = "resistanceHeader"'),
   "the inherited resistance filters read the second return, the old Classic order")
 T.expect(has(prototypes, 'name = "creatureFamilyIndex"') and has(prototypes, 'init = "select(2, UnitCreatureFamily(unit))"')
   and has(prototypes, 'name = "creatureFamily"'), "the creature family filters keep their names")
+T.expect(has(prototypes, 'name = "creatureTypeIndex"') and has(prototypes, 'init = "select(2, UnitCreatureType(unit))"'),
+  "the creature type filter keeps its name and inherited init")
 T.expect(has(types, '["EverythingAuras"] = {') and has(types, escaped(LOGO_64)) and has(types, escaped(LOGO_256)),
   "the texture picker group still lists WeakAuras' two logos")
 T.expect(has(types, '"worldstate-capturebar-spark-green"') and has(types, '"worldstate-capturebar-spark-yellow"'),
@@ -115,6 +118,11 @@ T.expect(eval(family.init, private, { UnitCreatureFamily = function() return SEC
   "a secret family reads as nothing, so the == test cannot throw")
 T.expect(eval(family.init, private, { UnitCreatureFamily = function() end }) == nil, "no family reads as nothing")
 T.expect(find(private, "Unit Characteristics", "creatureFamily").enable == true, "the family name is stored for texts")
+local creatureType = find(private, "Unit Characteristics", "creatureTypeIndex")
+T.expect(eval(creatureType.init, private, { UnitCreatureType = function() return "Beast", 1 end }) == 1,
+  "a plain creature type reads its ID")
+T.expect(eval(creatureType.init, private, { UnitCreatureType = function() return SECRET, SECRET end }) == nil,
+  "a secret creature type reads as nothing, so the == test cannot throw")
 T.expect(private.creature_family_types[1] == "Wolf" and private.creature_family_types[2] == "Cat",
   "the family list comes from C_CreatureInfo")
 
@@ -128,4 +136,6 @@ T.expect(find(other, "Character Stats", "resistanceholy").enable == false
   "resistances stay as inherited")
 T.expect(other.creature_family_types == nil and find(other, "Unit Characteristics", "creatureFamilyIndex").enable == false,
   "creature family stays as inherited")
+T.expect(find(other, "Unit Characteristics", "creatureTypeIndex").init == "select(2, UnitCreatureType(unit))",
+  "creature type stays as inherited")
 T.finish()

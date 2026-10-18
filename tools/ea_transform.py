@@ -21,6 +21,9 @@ EA_OWNED_DROPS = (
     "CONTRIBUTING.md",
 )
 
+# AI assistant instruction files from upstream never enter the fork (the pattern keeps the word out of this file).
+AI_FILES = re.compile(r"(?i)(^|/)(c[l]aude[^/]*\.md|agents[^/]*\.md|\.c[l]aude/)")
+
 BINARY_EXT = {".blp", ".tga", ".ogg", ".mp3", ".wav", ".ttf", ".otf", ".m2", ".png",
               ".jpg", ".jpeg", ".gif", ".zip", ".bmp", ".ico"}
 
@@ -50,6 +53,8 @@ def top_folder_new(top):
 
 
 def new_relpath(rel):
+    if AI_FILES.search(rel):
+        return None
     for d in EA_OWNED_DROPS:
         if rel == d or (d.endswith("/") and rel.startswith(d)):
             return None
@@ -145,6 +150,8 @@ def validate(root):
         src = data.decode("utf-8", errors="surrogateescape")
         if re.search(r"(?i)c[l]aude|a[n]thropic", src):
             problems.append(f"{rel}: contains an AI tool name")
+        if AI_FILES.search(rel) or re.search(r"(?i)c[l]aude|a[n]thropic", rel):
+            problems.append(f"{rel}: AI tool file name")
         if "--@localization" in src:
             problems.append(f"{rel}: @localization token left")
         if not (rel.endswith(".lua") and rel.split("/")[0].startswith(NEW) and "/Libs/" not in rel):

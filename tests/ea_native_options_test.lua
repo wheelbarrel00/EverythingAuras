@@ -72,6 +72,19 @@ T.expect(table.concat(data.eaNativeIds, ",") == "20154,20287,21082,21084", "seve
 data.triggers[1].trigger.auranames = { "Not Cached Yet" }
 Fire("Add", "Seal", "Seal", data)
 T.expect(#data.eaNativeIds == 4, "a cache with nothing yet keeps the stored list")
+options.savedVars = { odb = { rebuilding = true, needsRebuild = true } }
+data.triggers[1].trigger.auranames = { "Seal of Righteousness" }
+cache["Seal of Righteousness"] = { [20154] = 1 }
+Fire("Add", "Seal", "Seal", data)
+T.expect(#data.eaNativeIds == 4, "while the cache rebuilds, a stored list is not replaced by the ranks scanned so far")
+local fresh = { regionType = "icon", eaNative = true,
+  triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } }
+Fire("Add", "Fresh", "Fresh", fresh)
+T.expect(fresh.eaNativeIds and fresh.eaNativeIds[1] == 20154, "an aura with no stored list still gets what the cache has")
+options.savedVars.odb = { rebuilding = false, needsRebuild = false }
+cache["Seal of Righteousness"] = { [21084] = 1, [20287] = 1, [20154] = 1 }
+Fire("Add", "Seal", "Seal", data)
+T.expect(table.concat(data.eaNativeIds, ",") == "20154,20287,21084", "after the rebuild the full list is stored again")
 local off = { regionType = "icon", triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } }
 Fire("Add", "Off", "Off", off)
 T.expect(off.eaNativeIds == nil, "nothing is stored while the switch is off")

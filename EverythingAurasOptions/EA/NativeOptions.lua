@@ -75,6 +75,11 @@ tinsert(OptionsPrivate.registerRegions, function()
 
   Private.callbacks:RegisterCallback("Add", function(_, _, _, data)
     if data.eaNative and data.regionType == "icon" then
+      -- A rebuilding cache holds only the ranks scanned so far, so a stored list waits for the full one.
+      local odb = OptionsPrivate.savedVars and OptionsPrivate.savedVars.odb
+      if data.eaNativeIds and odb and (odb.needsRebuild or odb.rebuilding) then
+        return
+      end
       local ids = RankIds(data)
       if ids and not SameList(ids, data.eaNativeIds) then
         data.eaNativeIds = ids

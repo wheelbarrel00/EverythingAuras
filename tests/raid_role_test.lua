@@ -187,6 +187,7 @@ for _, flavor in ipairs({ "Forever", "Midnight", "Classic", "Wrath", "Cata", "Mi
     local checked, registered = {}, {}
     local function noop() end
     env.Private = { player_target_events = {}, StartProfileSystem = noop, StopProfileSystem = noop }
+    env.C_Secrets = { ShouldAurasBeSecret = function() return false end }
     env.Buff2Frame = { RegisterEvent = function(_, event) registered[event] = true end, SetScript = noop }
     env.GetTime, env.DeactivateScanFuncs, env.ScanGroupUnit, env.ScanGroupRoleScanFunc = noop, noop, noop, noop
     -- The addon iterator returns a unit as its first value.

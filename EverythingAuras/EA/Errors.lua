@@ -70,9 +70,13 @@ function EverythingAuras.LoadFunction(code, id, ...)
   if type(func) ~= "function" or id == nil then
     return func, err
   end
+  -- Animations pass their start values from the second argument on and use the results outside xpcall.
+  local animation = Private.UIDtoID(id) ~= nil
   return function(...)
     if not codeOff[id] then
       return func(...)
+    elseif animation then
+      return select(2, ...)
     end
   end
 end
@@ -81,4 +85,8 @@ Private.callbacks:RegisterCallback("Rename", function(_, _, oldId, newId)
   if codeOff[oldId] then
     codeOff[newId], codeOff[oldId] = codeOff[oldId], nil
   end
+end)
+
+Private.callbacks:RegisterCallback("Delete", function(_, uid, id)
+  codeOff[id], codeOff[uid], errorCounts[uid] = nil, nil, nil
 end)
