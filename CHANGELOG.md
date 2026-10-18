@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.2-beta] - 2026-10-18
+
+### New Features
+
+- Character Stats triggers can check your Holy, Fire, Nature, Frost, Shadow and Arcane resistances, the same values your character window shows
+- Unit Characteristics triggers can check a unit's creature family
+
+### Improvements
+
+- The options keep their spell list between sessions instead of rebuilding it the first time you open them in each session
+- The Browse never-secret buttons are gone, since WoW Forever has no never-secret auras, cooldowns or casts
+- Power Type lists only Mana, Rage, Focus, Energy and Combo Points
+- The texture picker lists the Everything Auras logo
+- Updated to M33kAuras 5.20.7-rg4-m101
+
+### Bug Fixes
+
+- With Use Display Info Id on, Model auras no longer offer the unit model and the model picker, which do not apply to display IDs
+- Two Blizzard spark textures that WoW Forever does not have are no longer listed
+
 ## [0.3.1-beta] - 2026-10-17
 
 ### Bug Fixes

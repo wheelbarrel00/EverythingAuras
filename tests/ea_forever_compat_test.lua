@@ -60,7 +60,6 @@ local function find(private, prototype, name)
   end
 end
 
--- Runs an init string the way a generated trigger function does.
 local function eval(init, private, globals)
   local env = setmetatable({ Private = private, unit = "target" }, { __index = setmetatable(globals, { __index = _G }) })
   return setfenv(assert(loadstring("return " .. init)), env)()

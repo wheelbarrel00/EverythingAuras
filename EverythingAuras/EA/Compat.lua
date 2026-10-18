@@ -30,7 +30,7 @@ end
 
 if not EverythingAuras.IsForever() then return end
 
--- Vanilla classes have only Mana, Rage, Focus, Energy and Combo Points.
+-- Vanilla players and pets use only Mana, Rage, Focus, Energy and Combo Points.
 local vanillaPowerTypes = { [0] = true, [1] = true, [2] = true, [3] = true, [4] = true }
 for powerType in pairs(Private.power_types) do
   if not vanillaPowerTypes[powerType] then
@@ -38,7 +38,7 @@ for powerType in pairs(Private.power_types) do
   end
 end
 
--- Types.lua adds these for clients before 8.1.5, a check Forever's build 16001 passes.
+-- Types.lua adds these for clients before 8.1.5, a check Forever's interface 16001 passes.
 for _, atlas in ipairs({ "worldstate-capturebar-spark-green", "worldstate-capturebar-spark-yellow" }) do
   if not C_Texture.GetAtlasInfo(atlas) then
     Private.texture_types.Sparks[atlas] = nil
