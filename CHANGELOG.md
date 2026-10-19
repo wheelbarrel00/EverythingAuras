@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.3-beta] - 2026-10-18
+
+### Bug Fixes
+
+- Auras with Show On set to Always no longer stay dimmed after combat when the buff ran out during the fight
+- A change to your group during combat no longer clears the buffs your Player auras show
+- A seal swapped at the very start of a fight replaces the old one right away
+- Hovering the icon of a buff you recast in combat shows that spell's tooltip
+- The Global Cooldown trigger no longer stays on screen for a whole fight
+- Custom triggers whose Duration Info returns secret values, such as UnitHealth, no longer cause Lua errors
+- When Everything Auras switches off an aura's custom code after repeated errors, its custom animations stop erroring too, and a new aura with a deleted aura's name no longer starts with its custom code off
+- Blizzard Draws This Icon keeps all of its spell ranks while the options rebuild their spell list after an update
+
 ## [0.3.2-beta] - 2026-10-18
 
 ### New Features
