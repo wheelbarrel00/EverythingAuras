@@ -17,13 +17,6 @@ desktop.ini
 !/CHANGELOG.md
 !/NOTICE.md
 
-# Dev-only retail TOCs (tools/make-dev-tocs.py), never packaged
-/EverythingAuras/EverythingAuras.toc
-/EverythingAurasOptions/EverythingAurasOptions.toc
-/EverythingAurasTemplates/EverythingAurasTemplates.toc
-/EverythingAurasModelPaths/EverythingAurasModelPaths.toc
-/EverythingAurasArchive/EverythingAurasArchive.toc
-
 # Tool scratch
 .git-blame-ignore-revs.pending
 __pycache__/

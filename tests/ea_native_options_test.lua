@@ -16,6 +16,7 @@ local function Fire(event, ...)
 end
 
 local qualifies = true
+local retail, spellNames = false, {}
 local corePrivate = {
   callbacks = callbacks,
   regionOptions = { icon = { create = function() return { icon = { color = { order = 1 } } } end } },
@@ -30,10 +31,19 @@ local options = {}
 local env = setmetatable({
   EverythingAuras = {
     IsLibsOK = function() return true end,
+    IsRetail = function() return retail end,
+    SafeToNumber = function(input)
+      local nr = tonumber(input)
+      return nr and nr < 2147483648 and nr or nil
+    end,
     L = setmetatable({}, { __index = function(_, k) return k end }),
     doubleWidth = 2,
     spellCache = { GetSpellsMatching = function(name) return cache[name] end },
   },
+  C_Spell = { GetSpellName = function(id)
+    assert(id < 2147483648, "the C API takes only 32-bit values")
+    return spellNames[id]
+  end },
   tinsert = table.insert,
 }, { __index = _G })
 local chunk = assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/EA/NativeOptions.lua"))
@@ -88,4 +98,28 @@ T.expect(table.concat(data.eaNativeIds, ",") == "20154,20287,21084", "after the 
 local off = { regionType = "icon", triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } }
 Fire("Add", "Off", "Off", off)
 T.expect(off.eaNativeIds == nil, "nothing is stored while the switch is off")
+
+T.section("A spell ID in Name(s) on retail")
+cache["Divine Steed"] = { [221885] = 1, [190784] = 1, [221883] = 1 }
+spellNames[190784] = "Divine Steed"
+local function SteedAura(entry)
+  return { regionType = "icon", eaNative = true, triggers = { { trigger = { useName = true, auranames = { entry } } } } }
+end
+local forever = SteedAura("190784")
+Fire("Add", "Forever", "Forever", forever)
+T.expect(forever.eaNativeIds == nil, "Forever: a spell ID stays skipped, the path it shipped with")
+retail = true
+local steed = SteedAura("190784")
+Fire("Add", "Steed", "Steed", steed)
+T.expect(steed.eaNativeIds and table.concat(steed.eaNativeIds, ",") == "190784,221883,221885",
+  "retail: every ID of that spell's name, because the trigger matches the name")
+local byName = SteedAura("Divine Steed")
+Fire("Add", "ByName", "ByName", byName)
+T.expect(table.concat(byName.eaNativeIds, ",") == "190784,221883,221885", "retail: a typed name gives the same list")
+local unknown = SteedAura("999999")
+Fire("Add", "Unknown", "Unknown", unknown)
+T.expect(unknown.eaNativeIds == nil, "retail: a spell ID with no name stores nothing")
+local tooBig = SteedAura("2147483648")
+Fire("Add", "TooBig", "TooBig", tooBig)
+T.expect(tooBig.eaNativeIds == nil, "retail: a number past 32 bits never reaches the C API")
 T.finish()

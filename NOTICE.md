@@ -1,6 +1,6 @@
 # Notice
 
-Everything Auras is a modified fork of WeakAuras for WoW Forever, built on M33kAuras.
+Everything Auras is a modified fork of WeakAuras for Retail and WoW Forever, built on M33kAuras.
 
 - **WeakAuras**, by the WeakAuras Team and its contributors: https://github.com/WeakAuras/WeakAuras2
 - **M33kAuras**, m33shoq's port of WeakAuras to the Midnight engine, by m33shoq and its contributors:
@@ -65,3 +65,14 @@ each change and its date, including the renamed and edited TOC and XML files.
   down to clear the taller header.
 - 2026-10-13: Everything Auras has its own logo in place of the WeakAuras one. A Model aura dimmed in combat returns
   to full alpha afterward.
+- 2026-10-16: Added Blizzard Draws This Icon, which lets Blizzard draw an Icon aura through its AuraContainer, with
+  On Show and On Hide sound files played through Blizzard. Added the Ammo and Ranged item slots on WoW Forever and
+  removed the profession slots it does not have.
+- 2026-10-17: Vendored libraries ship unchanged by the packager. Based on M33kAuras 5.20.7-rg4-m101. On WoW Forever,
+  resistances read the value the character window shows, the Creature Family filter is on, the spell cache keeps
+  between sessions and the Browse never-secret buttons are hidden. Corrected the texture picker's logo labels.
+- 2026-10-18: Fixed unsure Always and Missing states after combat, group changes in combat clearing the player's
+  buffs, restriction timing at the start of a fight, the global cooldown and duration triggers on secret values, and
+  the thread scheduler's combat handling, which ran the spell scan only in combat.
+- 2026-10-30: Added Retail: a base TOC for each addon except Templates, and retail wording in `EA/Retail.lua`, which
+  only the retail TOC lists. Removed three optional dependencies nothing reads.

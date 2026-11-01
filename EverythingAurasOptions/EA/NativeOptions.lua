@@ -10,7 +10,10 @@ local function RankIds(data)
     return nil
   end
   local ids, seen = {}, {}
-  for _, name in ipairs(trigger.auranames) do
+  for _, entry in ipairs(trigger.auranames) do
+    -- The trigger reads a spell ID here as that spell's name, and a retail buff often has another ID than its cast.
+    local spellId = EverythingAuras.IsRetail() and EverythingAuras.SafeToNumber(entry)
+    local name = spellId and C_Spell.GetSpellName(spellId) or entry
     if type(name) == "string" and name ~= "" and not tonumber(name) then
       for id in pairs(EverythingAuras.spellCache.GetSpellsMatching(name) or {}) do
         if not seen[id] then

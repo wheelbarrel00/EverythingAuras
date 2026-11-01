@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 
+import retail_tocs
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LUA_DIR = r"C:\Users\Big Daddy\Documents\Tools\lua-5.1.5"
 LUA = os.path.join(LUA_DIR, "lua5.1.exe")
@@ -98,10 +100,14 @@ def gate_tests():
 def toc_files(addon):
     folder = os.path.join(ROOT, addon)
     todo = []
-    for line in open(os.path.join(folder, addon + "_Camelot.toc"), encoding="utf-8-sig"):
-        line = line.strip()
-        if line and not line.startswith("#"):
-            todo.append(os.path.normpath(os.path.join(folder, line.replace("\\", "/"))))
+    tocs = [addon + "_Camelot.toc"]
+    if addon not in retail_tocs.NO_RETAIL_TOC and os.path.isfile(os.path.join(folder, addon + ".toc")):
+        tocs.append(addon + ".toc")
+    for toc in tocs:
+        for line in open(os.path.join(folder, toc), encoding="utf-8-sig"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                todo.append(os.path.normpath(os.path.join(folder, line.replace("\\", "/"))))
     seen = []
     while todo:
         path = todo.pop(0)
@@ -153,9 +159,24 @@ def gate_tocs():
             problems.append(f"{a}: no LICENSE")
     if len(interfaces) != 1:
         problems.append(f"TOC interface lines differ: {sorted(map(str, interfaces))}")
+    for a in ADDONS:
+        retail = os.path.join(ROOT, a, a + ".toc")
+        if a in retail_tocs.NO_RETAIL_TOC:
+            if os.path.exists(retail):
+                problems.append(f"{a}: must have no retail TOC")
+            continue
+        camelot = retail_tocs.read(os.path.join(ROOT, a, a + "_Camelot.toc"))
+        if not os.path.isfile(retail):
+            problems.append(f"{a}: no retail TOC")
+        elif os.path.normcase(retail) not in tracked:
+            problems.append(f"{a}: retail TOC is not tracked by git")
+        elif (retail_tocs.read(retail).replace("\r\n", "\n")
+              != retail_tocs.retail_toc(camelot, a).replace("\r\n", "\n")):
+            problems.append(f"{a}: retail TOC is out of date, run tools/retail_tocs.py")
     tokens = [p for p in git_files("grep", "-l", "--", "--@localization") if p.endswith(".lua")]
     problems += [f"{p}: @localization token" for p in tokens]
-    print(f"TOCs and packaging: {len(problems)} problems (interface {', '.join(map(str, interfaces))}, {listed} listed files)")
+    print(f"TOCs and packaging: {len(problems)} problems (interface {', '.join(map(str, interfaces))}, "
+          f"retail {retail_tocs.RETAIL_INTERFACE}, {listed} listed files)")
     for p in problems:
         print("  " + p)
     if problems:

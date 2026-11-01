@@ -84,10 +84,11 @@ end
 
 -- Three sample auras: read now, last known and an estimate, the last two drawn as unsure auras are.
 local function Examples(content)
+  local spells = Private.EARetailExampleSpells or { 20289, 19740, 20289 }
   local samples = {
-    { spell = 20289, unsure = false, title = L["Read now"], note = L["exact"] },
-    { spell = 19740, unsure = true, title = L["Last known"], note = L["from before the fight"] },
-    { spell = 20289, unsure = true, title = L["Estimate"], note = L["from your cast"] },
+    { spell = spells[1], unsure = false, title = L["Read now"], note = L["exact"] },
+    { spell = spells[2], unsure = true, title = L["Last known"], note = L["from before the fight"] },
+    { spell = spells[3], unsure = true, title = L["Estimate"], note = L["from your cast"] },
   }
   local f = CreateFrame("Frame", nil, content)
   f:SetSize(EXAMPLE_WIDTH * #samples, EXAMPLE_ICON + 44)

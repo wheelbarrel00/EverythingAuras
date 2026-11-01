@@ -1,9 +1,9 @@
 # Everything Auras
 
-Everything Auras brings WeakAuras to WoW Forever. It is a modified fork of WeakAuras, built on M33kAuras, and it
-keeps WeakAuras' behavior as close to the original as Forever allows.
+Everything Auras brings WeakAuras to Retail and WoW Forever. It is a modified fork of WeakAuras, built on M33kAuras,
+and it keeps WeakAuras' behavior as close to the original as the game allows.
 
-**Status:** beta, WoW Forever only. The first public version is 0.2.0-beta.
+**Status:** beta, on Retail and WoW Forever. The first public version is 0.2.0-beta.
 
 ## Credit
 

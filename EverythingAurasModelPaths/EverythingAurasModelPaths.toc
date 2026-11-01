@@ -1,0 +1,20 @@
+## Interface: 120100, 120105, 120107
+## Title: Everything Auras Model Paths
+## Author: Wheelbarrel00
+## Version: @project-version@
+## X-License: GPL-2.0
+## X-Credits: WeakAuras by the WeakAuras Team and contributors, M33kAuras by m33shoq
+## IconTexture: Interface\AddOns\EverythingAuras\Media\EA\logo.tga
+## Notes: Model paths for Everything Auras
+## Notes-esES: Las rutas de modelos para EverythingAuras
+## Notes-esMX: Las rutas de modelos para EverythingAuras
+## Notes-deDE: 3D-Model Pfade für EverythingAuras
+## Notes-ruRU: Ссылки на файлы моделей EverythingAuras
+## Notes-zhTW: EverythingAuras的模組路徑
+## X-Category: Interface Enhancements
+## Globe-Main: EverythingAuras
+## DefaultState: Enabled
+## LoadOnDemand: 1
+## Dependencies: EverythingAuras, EverythingAurasOptions
+
+ModelPaths.lua

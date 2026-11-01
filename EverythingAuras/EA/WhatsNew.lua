@@ -5,9 +5,9 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = "0.3.0-beta"
+local WHATS_NEW_VERSION = Private.EARetailWhatsNewVersion or "0.3.0-beta"
 
-local ENTRIES = {
+local ENTRIES = Private.EARetailWhatsNew or {
   {
     title = L["Blizzard draws your icons"],
     desc = L["Turn on Blizzard Draws This Icon on an Icon aura, and Blizzard draws its icon, swipe and timer, in combat too, the moment the aura changes. It works for one Aura trigger on Player, Target or Focus, but not for debuffs on you. You find it at the top of the Display tab."],
