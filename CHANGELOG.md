@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0-beta] - 2026-11-01
+
+### New Features
+
+- Everything Auras now runs on Retail as well as WoW Forever
+- On Retail, auras Blizzard never hides stay exact in combat, and Browse never-secret auras on the Trigger tab lists them
+- Retail has its own What's New and its own wording on the In Combat page
+
+### Improvements
+
+- Premade Auras and Apply Template stay off on Retail, because their data predates Midnight
+- Removed three optional dependencies that nothing in Everything Auras uses
+
 ## [0.3.3-beta] - 2026-10-18
 
 ### Bug Fixes
