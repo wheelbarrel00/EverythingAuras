@@ -184,8 +184,8 @@ local function rowsOf(label)
   return out
 end
 T.expect(#rowsOf("What else works in combat") == 5, "five things that work in combat")
-T.expect(hasLine("Turn on Blizzard Draws This Icon") and hasLine("debuffs on you") and not hasLine("stack count"),
-  "In Combat explains icons Blizzard draws, with only what was seen in game (no stack count yet)")
+T.expect(hasLine("Blizzard draws your Icon and Progress Bar auras") and hasLine("debuffs on you, your pet or your group")
+  and hasLine("stack count"), "In Combat explains what Blizzard draws, bars, the new units and the stack count (decision 24)")
 
 local whatsNewBox = rec.checkboxes["Show What's New after an update"]
 T.expect(whatsNewBox.getter() == true, "What's New is on by default")

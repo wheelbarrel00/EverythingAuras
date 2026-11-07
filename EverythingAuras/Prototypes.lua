@@ -4732,7 +4732,7 @@ Private.event_prototypes = {
         local track = %q
         local effectiveSpellId = Private.ExecEnv.GetEffectiveSpellId(spellname, useExact, followoverride)
         local name, _, icon = Private.ExecEnv.GetSpellInfo(effectiveSpellId)
-        local startTime, duration, gcdCooldown, readyTime, modRate, paused = EverythingAuras.GetSpellCooldown(effectiveSpellId, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
+        local startTime, duration, gcdCooldown, readyTime, modRate, paused, eaEstimated = Private.ExecEnv.EAGetSpellCooldown(effectiveSpellId, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
         local charges, maxCharges, spellCount, chargeGainTime, chargeLostTime = EverythingAuras.GetSpellCharges(effectiveSpellId, ignoreSpellKnown)
         local isSecret = C_Secrets.ShouldSpellCooldownBeSecret(effectiveSpellId) or issecretvalue(maxCharges) or issecretvalue(spellCount)
         local stacks
@@ -4809,6 +4809,7 @@ Private.event_prototypes = {
           else
             state.progressType = 'timed';
           end
+          state.eaTimeEstimated = eaEstimated or nil
         ]=])
       else -- Tracking charges
         local trackedCharge = tonumber(trigger.trackcharge) or 1;
@@ -4852,6 +4853,7 @@ Private.event_prototypes = {
       if(trigger.use_remaining and trigger.genericShowOn ~= "showOnReady") then
         table.insert(ret, ([[
           local remaining = 0;
+          state.eaQuiet = isSecret or nil
           if (not paused and expirationTime and expirationTime > 0) then
             remaining = expirationTime - GetTime();
             local remainingModRate = remaining / (modRate or 1);

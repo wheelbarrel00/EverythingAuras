@@ -14,27 +14,36 @@ end
 Private.EAMarkerSize = MarkerSize
 Private.EAMarkerTexture = MARKER
 
--- A trigger state BuffTrigger2 could not confirm while auras are secret carries eaUnsure.
 -- At a hide the hiding state is no longer shown but still marked changed for this update.
-local function UnsureState(region, includeHiding)
+local function FlaggedState(region, key, includeHiding)
   local states = region.states
   if type(states) ~= "table" then
     return nil
   end
   for triggernum, state in pairs(states) do
-    if triggernum > 0 and type(state) == "table" and state.eaUnsure
+    if triggernum > 0 and type(state) == "table" and state[key]
       and (state.show or (includeHiding and state.changed)) then
-      return state.eaUnsure
+      return state[key]
     end
   end
 end
+
+-- A trigger state BuffTrigger2 could not confirm while auras are secret carries eaUnsure.
+local function UnsureState(region, includeHiding)
+  return FlaggedState(region, "eaUnsure", includeHiding)
+end
 Private.EAUnsureState = UnsureState
+
+-- A cooldown shown by a time left estimated in combat carries eaQuiet: it looks normal but fires nothing.
+local function Silenced(region, includeHiding)
+  return UnsureState(region, includeHiding) or FlaggedState(region, "eaQuiet", includeHiding)
+end
 
 -- Only cleanup runs for a guessed state: stopping sounds and hiding glows.
 local PerformActions = Private.PerformActions
 function Private.PerformActions(data, when, region)
   local actions = data.actions and data.actions[when]
-  local unsure = actions and region and UnsureState(region, true)
+  local unsure = actions and region and Silenced(region, true)
   -- Blizzard plays the sound of an aura it draws (EA/Native.lua), so it never plays twice.
   local native = actions and actions.do_sound and Private.EANativeSound and Private.EANativeSound(data, when)
   if not (unsure or native) then
@@ -59,22 +68,22 @@ function Private.regionPrototype.create(region)
   create(region)
   local SoundPlay, SendChat, RunCode, GlowExternal = region.SoundPlay, region.SendChat, region.RunCode, region.GlowExternal
   function region.SoundPlay(self, ...)
-    if not UnsureState(self) then
+    if not Silenced(self) then
       return SoundPlay(self, ...)
     end
   end
   function region.SendChat(self, ...)
-    if not UnsureState(self) then
+    if not Silenced(self) then
       return SendChat(self, ...)
     end
   end
   function region.RunCode(self, ...)
-    if not UnsureState(self) then
+    if not Silenced(self) then
       return RunCode(self, ...)
     end
   end
   function region.GlowExternal(self, options, ...)
-    if not (options and options.glow_action == "show" and UnsureState(self)) then
+    if not (options and options.glow_action == "show" and Silenced(self)) then
       return GlowExternal(self, options, ...)
     end
   end

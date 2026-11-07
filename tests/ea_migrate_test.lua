@@ -88,7 +88,7 @@ warningRuns = 0
 data = { triggers = {}, eaVersion = 3, texture = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square" }
 private.EAModernize(data)
 T.expect(data.texture == "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square", "an aura already at version 3 is not migrated again")
-T.expect(data.eaVersion == 3 and warningRuns == 1, "but its warnings are refreshed at every load")
+T.expect(data.eaVersion == 4 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
 data = { triggers = {}, eaVersion = 7 }
 private.EAModernize(data)
 T.expect(data.eaVersion == 7, "a newer counter from a later build is never lowered")

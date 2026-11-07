@@ -3,7 +3,7 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 3
+local EA_VERSION = 4
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
@@ -170,6 +170,10 @@ function Private.EAModernize(data)
     if type(trigger) == "table" and trigger.eaConvertedFrom == "secretAura" and Private.EANativeQualifies(data) then
       data.eaNative = true
     end
+  end
+  -- On by default (decision 24) for new, imported and existing auras, while a switch already set stays as it is.
+  if version < 4 and data.eaNative == nil and (data.regionType == "icon" or data.regionType == "aurabar") then
+    data.eaNative = true
   end
   data.eaVersion = math.max(version, EA_VERSION)
   Private.EAUpdateWarnings(data)

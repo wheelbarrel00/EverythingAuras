@@ -46,38 +46,58 @@ OptionsPrivate.registerRegions = OptionsPrivate.registerRegions or {}
 tinsert(OptionsPrivate.registerRegions, function()
   local Private = OptionsPrivate.Private
 
-  local iconOptions = Private.regionOptions.icon
-  local create = iconOptions.create
-  iconOptions.create = function(id, data)
-    local result = create(id, data)
-    if result.icon and not data.controlledChildren then
-      -- Never disabled: a disabled checkbox gets no mouse-over on this engine, so its tooltip with the reason would not show.
-      result.icon.eaNative = {
-        type = "toggle",
-        width = EverythingAuras.doubleWidth,
-        name = function()
-          if Private.EANativeQualifies(data) then
-            return L["Blizzard Draws This Icon"]
-          end
-          return "|cff808080" .. L["Blizzard Draws This Icon"] .. " " .. L["(not available)"] .. "|r"
-        end,
-        desc = function()
-          local text = L["Blizzard draws this aura's icon, swipe and timer, in combat too. Everything Auras' own texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."]
-            .. "\n\n" .. L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the icon as usual."]
-          local ok, reason = Private.EANativeQualifies(data)
-          if not ok then
-            text = text .. "\n\n|cffff5555" .. L["Not available:"] .. "|r " .. reason
-          end
-          return text
-        end,
-        order = 0.5,
-      }
+  local SWITCHES = {
+    icon = {
+      label = L["Blizzard Draws This Icon"],
+      text = L["Blizzard draws this aura's icon, swipe and timer, in combat too. Everything Auras' own texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the icon as usual."],
+    },
+    aurabar = {
+      label = L["Blizzard Draws This Bar"],
+      text = L["Blizzard draws this aura's bar and icon, and a text that shows only %n or %p, in combat too. Everything Auras' other texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the bar as usual."],
+    },
+  }
+
+  for regionType, switch in pairs(SWITCHES) do
+    local regionOptions = Private.regionOptions[regionType]
+    local create = regionOptions.create
+    regionOptions.create = function(id, data)
+      local result = create(id, data)
+      local group = result[regionType]
+      if group and not data.controlledChildren then
+        -- Never disabled: a disabled checkbox gets no mouse-over on this engine, so its tooltip with the reason would not show.
+        group.eaNative = {
+          type = "toggle",
+          width = EverythingAuras.doubleWidth,
+          name = function()
+            if Private.EANativeQualifies(data) then
+              return switch.label
+            end
+            return "|cff808080" .. switch.label .. " " .. L["(not available)"] .. "|r"
+          end,
+          desc = function()
+            local text = switch.text .. "\n\n" .. L["A text that shows only %s becomes Blizzard's stack count."]
+              .. "\n\n" .. switch.fallback .. "\n\n" .. L["It is on by default wherever it works."]
+            local ok, reason = Private.EANativeQualifies(data)
+            if not ok then
+              text = text .. "\n\n|cffff5555" .. L["Not available:"] .. "|r " .. reason
+            end
+            return text
+          end,
+          -- On by default even where it cannot work yet, so it shows ticked only where Blizzard really draws.
+          get = function()
+            return data.eaNative and Private.EANativeQualifies(data) and true or false
+          end,
+          order = 0.5,
+        }
+      end
+      return result
     end
-    return result
   end
 
   Private.callbacks:RegisterCallback("Add", function(_, _, _, data)
-    if data.eaNative and data.regionType == "icon" then
+    if data.eaNative and SWITCHES[data.regionType] then
       -- A rebuilding cache holds only the ranks scanned so far, so a stored list waits for the full one.
       local odb = OptionsPrivate.savedVars and OptionsPrivate.savedVars.odb
       if data.eaNativeIds and odb and (odb.needsRebuild or odb.rebuilding) then

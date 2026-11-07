@@ -79,6 +79,9 @@ local function NewContainer()
     button.SetIcon = function(b, texture) b.iconWidget = texture end
     button.SetDurationCooldown = function(b, cooldown) b.cooldownWidget = cooldown end
     button.SetApplicationCount = function(b, count) b.countWidget = count end
+    button.SetDurationBar = function(b, bar, barOptions) b.barWidget, b.barOptions = bar, barOptions end
+    button.SetSpellName = function(b, text) b.nameWidget = text end
+    button.SetDurationText = function(b, text) b.timerWidget = text end
     options.initializeFrame(button)
     self.button = button
     return button
@@ -107,12 +110,20 @@ local auras, regions, errors = {}, {}, {}
 local private = {
   frames = {},
   loaded = {},
-  regionTypes = { icon = { modify = function(_, region, data)
-    region.modified = data.id
-    if region.watchText then
-      region.textShownAtModify = region.watchText.visible
-    end
-  end } },
+  regionTypes = {
+    icon = { modify = function(_, region, data)
+      region.modified = data.id
+      if region.watchText then
+        region.textShownAtModify = region.watchText.visible
+      end
+    end },
+    aurabar = { modify = function(_, region, data)
+      region.modified = data.id
+      if region.watchText then
+        region.textShownAtModify = region.watchText.visible
+      end
+    end },
+  },
   RunConditions = function(region) region.conditionsRun = (region.conditionsRun or 0) + 1 end,
   Pause = function() world.paused = true end,
   callbacks = { events = {} },
@@ -163,7 +174,8 @@ local env = setmetatable({
     end,
     RemoveAuraSound = function(handle) world.sounds[handle] = nil end,
   },
-  Enum = { UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 } },
+  Enum = { UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 },
+    StatusBarTimerDirection = { ElapsedTime = 0, RemainingTime = 1 } },
   CreateFrame = CreateFrame,
   UIParent = NewWidget(nil),
   STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF",
@@ -187,7 +199,7 @@ local events = private.frames["Everything Auras Native Icons"]
 
 local function NewRegion(id)
   local region = NewWidget(nil)
-  region.id, region.cloneId = id, ""
+  region.id, region.cloneId, region.regionType = id, "", "icon"
   region.icon = NewWidget(region)
   region.icon.GetTexCoord = function() return 0.1, 0.1, 0.1, 0.9, 0.9, 0.1, 0.9, 0.9 end
   region.icon.GetDesaturation = function() return 0 end
@@ -332,12 +344,14 @@ data.eaNative = true
 Add(data)
 T.expect(container.shown and #world.created == before, "switched on again: the same container")
 
-T.section("Stack count stays Everything Auras' own")
+T.section("Stack count (0.5.0, decision 24)")
 local text = NewWidget(region)
 region.subRegions = { { type = "subtext", text_text = "%s", text = text } }
 Add(data)
-T.expect(button.countWidget == nil and text.visible, "no Blizzard count until one is seen in game, the aura's %s text untouched")
+T.expect(button.countWidget and button.countWidget.alpha == 1 and not text.visible, "Blizzard's count takes over the aura's %s text")
 region.subRegions = {}
+Add(data)
+T.expect(text.visible and button.countWidget.alpha == 0, "without that text, the aura's own one is back and Blizzard's count is invisible")
 
 T.section("Look")
 private.callbacks:Fire("ScanForLoads")
@@ -550,17 +564,146 @@ local function Imported(trigger)
 end
 local import = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" } })
 private.EAModernize(import)
-T.expect(import.eaNative == true and import.eaVersion == 3, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
+T.expect(import.eaNative == true and import.eaVersion == 4, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
 local mine = NewAura("Mine", base)
 mine.eaVersion, mine.eaNative = 2, nil
 private.EAModernize(mine)
-T.expect(mine.eaNative == nil, "an aura that was never Aura (Modern) is left alone")
+T.expect(mine.eaNative == true, "an icon that was never Aura (Modern) gets it too, on by default (decision 24)")
 local off = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" } })
 off.eaNative = false
 private.EAModernize(off)
 T.expect(off.eaNative == false, "switched off stays off")
 local missing = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" }, matchesShowOn = "showOnMissing" })
 private.EAModernize(missing)
-T.expect(missing.eaNative == nil, "one Blizzard cannot draw is left to Everything Auras")
+T.expect(missing.eaNative == true and not private.EANativeWanted(missing),
+  "one Blizzard cannot draw is switched on, yet Everything Auras draws it until it qualifies")
+local fresh = { id = "Fresh", uid = "Fresh", regionType = "aurabar", triggers = {} }
+private.EAModernize(fresh)
+T.expect(fresh.eaNative == true and fresh.eaVersion == 4, "a new Progress Bar starts with it on")
+local textAura = { id = "Text", uid = "Text", regionType = "text", triggers = {} }
+private.EAModernize(textAura)
+T.expect(textAura.eaNative == nil, "other region types are left alone")
+local kept = { id = "Kept", uid = "Kept", regionType = "icon", eaVersion = 3, eaNative = false, triggers = {} }
+private.EAModernize(kept)
+T.expect(kept.eaNative == false, "an icon switched off before the update stays off")
+
+T.section("More units (0.5.0)")
+T.expect(qualifies(With({ unit = "pet" })), "a buff on your pet qualifies")
+T.expect(qualifies(With({ unit = "member", specificUnit = "party2" })) and qualifies(With({ unit = "member", specificUnit = "Raid40" })),
+  "a party or raid member qualifies")
+T.expect(not qualifies(With({ unit = "member", specificUnit = "raid41" })) and not qualifies(With({ unit = "member", specificUnit = "boss1" }))
+  and not qualifies(With({ unit = "member", specificUnit = "party5" })), "other specific units do not")
+T.expect(not qualifies(With({ unit = "pet", debuffType = "HARMFUL" }))
+  and not qualifies(With({ unit = "member", specificUnit = "party1", debuffType = "HARMFUL" })), "debuffs on your pet or group do not")
+local member = NewAura("Member", { type = "aura2", unit = "member", specificUnit = "Party1", debuffType = "HELPFUL",
+  useName = true, auranames = { "Seal of Righteousness" } })
+private.loaded.Member = true
+local memberRegion = Add(member)
+local memberContainer = world.created[#world.created]
+T.expect(memberContainer.unit == "party1" and memberRegion.eaNativeOn, "the container watches party1 and Blizzard draws it")
+local rosterCalls, targetSlotCalls = Count(memberContainer, "UpdateAllAuras"), Count(exactContainer, "UpdateAllAuras")
+events.scripts.OnEvent(events, "GROUP_ROSTER_UPDATE")
+T.expect(Count(memberContainer, "UpdateAllAuras") == rosterCalls + 1 and Count(exactContainer, "UpdateAllAuras") == targetSlotCalls,
+  "a roster change refreshes group slots only")
+local pet = NewAura("Pet", { type = "aura2", unit = "pet", debuffType = "HELPFUL", useName = true, auranames = { "Seal of Righteousness" } })
+private.loaded.Pet = true
+Add(pet)
+local petContainer = world.created[#world.created]
+local petCalls = Count(petContainer, "UpdateAllAuras")
+events.scripts.OnEvent(events, "UNIT_PET", "player")
+T.expect(petContainer.unit == "pet" and Count(petContainer, "UpdateAllAuras") == petCalls + 1, "a new pet refreshes pet slots")
+
+local function SubText(region, format)
+  local sub = { type = "subtext", text_text = format, color_r = 1, color_g = 0.5, color_b = 0, color_a = 1 }
+  sub.text = NewWidget(region)
+  sub.text.GetFont = function() return "font", 14, "OUTLINE" end
+  sub.text.GetShadowColor = function() return 0, 0, 0, 1 end
+  sub.text.GetShadowOffset = function() return 1, -1 end
+  sub.text.GetJustifyH = function() return "LEFT" end
+  sub.text.GetPoint = function() return "LEFT", region, "LEFT", 2, 0 end
+  return sub
+end
+
+T.section("Stack count (0.5.0)")
+local stacks = NewAura("Stacks", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } })
+private.loaded.Stacks = true
+local stacksRegion = NewRegion("Stacks")
+local stackText = SubText(stacksRegion, "%s")
+stacksRegion.subRegions = { stackText }
+modify(nil, stacksRegion, stacks)
+local stacksButton = world.created[#world.created].button
+T.expect(stacksButton.countWidget and stacksButton.countWidget.alpha == 1 and Last(stacksButton.countWidget, "SetFont")[2] == 14
+  and Last(stacksButton.countWidget, "SetPoint")[1] == "LEFT", "a text that shows only %s becomes Blizzard's count, in its font and place")
+T.expect(not stackText.text.visible, "and the aura's own %s hides while Blizzard draws")
+stacksRegion.watchText = stackText.text
+modify(nil, stacksRegion, stacks)
+T.expect(stacksRegion.textShownAtModify == true, "it is visible again before the region is modified, since texts are pooled")
+stacks.eaNative = false
+modify(nil, stacksRegion, stacks)
+T.expect(stackText.text.visible and not stacksRegion.eaNativeOn, "switched off: the aura's own %s shows again")
+local plain = NewAura("Plain2", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } })
+private.loaded.Plain2 = true
+Add(plain)
+T.expect(world.created[#world.created].button.countWidget.alpha == 0, "without a %s text Blizzard's count stays invisible")
+
+T.section("Progress bars (0.5.0)")
+local barModify = private.regionTypes.aurabar.modify
+local function NewBarRegion(id)
+  local region = NewRegion(id)
+  region.regionType = "aurabar"
+  region.bar = NewWidget(region)
+  region.bar.fg = NewWidget(region.bar)
+  region.bar.fg.GetAtlas = function() return nil end
+  region.bar.fg.GetTexture = function() return "bar-texture" end
+  region.bar.fg:SetVertexColor(0, 0.8, 0, 1)
+  region.bar.bg = NewWidget(region)
+  region.bar.bg:SetVertexColor(0, 0, 0, 0.5)
+  region.iconFrame = NewWidget(region)
+  region.iconVisible = true
+  region.effectiveOrientation = "HORIZONTAL_INVERSE"
+  region.subRegions = { SubText(region, "%n"), SubText(region, "%p"), SubText(region, "%s") }
+  return region
+end
+local bar = NewAura("Bar", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } }, { regionType = "aurabar" })
+T.expect(qualifies(bar), "a Progress Bar on a player buff qualifies")
+private.loaded.Bar = true
+local barRegion = NewBarRegion("Bar")
+local barCount = #world.created
+barModify(nil, barRegion, bar)
+local barContainer = world.created[#world.created]
+local barButton = barContainer.button
+local remaining = env.Enum.StatusBarTimerDirection.RemainingTime
+T.expect(#world.created == barCount + 1 and barButton.barWidget and barButton.barOptions.direction == remaining,
+  "a bar gets its own container, and its fill goes to Blizzard draining")
+T.expect(barButton.iconWidget and barButton.nameWidget and barButton.timerWidget and barButton.countWidget,
+  "icon, name, timer and stack count are handed over")
+T.expect(barRegion.eaNativeOn and not barRegion.bar.visible and not barRegion.bar.bg.visible and not barRegion.iconFrame.visible,
+  "drawn: the bar's own fill, background and icon step aside")
+local fill = barButton.barWidget
+T.expect(Last(fill, "SetOrientation")[1] == "HORIZONTAL" and Last(fill, "SetReverseFill")[1] == true,
+  "it fills from the same side as the bar's own secret bar")
+T.expect(Last(fill, "SetStatusBarTexture")[1] == "bar-texture" and Last(fill, "SetStatusBarColor")[2] == 0.8,
+  "with the bar's texture and color")
+local nameText = barRegion.subRegions[1].text
+T.expect(not nameText.visible and barButton.nameWidget.alpha == 1 and Last(barButton.nameWidget, "SetFont")[2] == 14
+  and not barRegion.subRegions[2].text.visible, "the name and timer texts are Blizzard's, in the bar's font, and the bar's own hide")
+barRegion.bar.fg:SetVertexColor(1, 0, 0, 1)
+T.expect(Last(fill, "SetStatusBarColor")[1] == 1, "a color change on the bar reaches Blizzard's fill out of combat")
+bar.inverse = true
+barModify(nil, barRegion, bar)
+local inverseButton = world.created[#world.created].button
+T.expect(inverseButton ~= barButton and inverseButton.barOptions.direction == env.Enum.StatusBarTimerDirection.ElapsedTime
+  and #world.created == barCount + 2, "Inverse takes a button whose bar fills, since a bar's direction is set once")
+bar.inverse = nil
+barModify(nil, barRegion, bar)
+T.expect(world.created[#world.created].button == inverseButton and barRegion.eaNativeRecord.button == barButton,
+  "back to draining reuses the first button")
+bar.eaNative = false
+barModify(nil, barRegion, bar)
+T.expect(barRegion.bar.visible and barRegion.bar.bg.visible and barRegion.iconFrame.visible and nameText.visible
+  and not barRegion.eaNativeOn and not barContainer.shown, "switched off: the bar draws itself again, texts included")
 T.expect(#errors == 0, "no errors at all" .. (errors[1] and (": " .. tostring(errors[1])) or ""))
 T.finish()

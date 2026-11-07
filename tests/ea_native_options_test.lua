@@ -19,7 +19,10 @@ local qualifies = true
 local retail, spellNames = false, {}
 local corePrivate = {
   callbacks = callbacks,
-  regionOptions = { icon = { create = function() return { icon = { color = { order = 1 } } } end } },
+  regionOptions = {
+    icon = { create = function() return { icon = { color = { order = 1 } } } end },
+    aurabar = { create = function() return { aurabar = { texture = { order = 1 } } } end },
+  },
   EANativeQualifies = function()
     if qualifies then
       return true
@@ -68,6 +71,28 @@ T.expect(option.desc():find("Needs exactly one trigger.", 1, true), "unavailable
 qualifies = true
 local group = corePrivate.regionOptions.icon.create("Group", { controlledChildren = {} })
 T.expect(group.icon.eaNative == nil, "not offered for a selection of several auras")
+
+T.section("On by default, ticked only where it works (0.5.0)")
+data.eaNative = true
+T.expect(option.get() == true, "on and drawable: ticked")
+qualifies = false
+T.expect(option.get() == false, "on but not drawable yet: unticked, so it never looks like Blizzard draws it")
+qualifies = true
+data.eaNative = false
+T.expect(option.get() == false, "switched off: unticked")
+data.eaNative = nil
+T.expect(option.set == nil, "setting it is left to the Display tab's own setter")
+
+T.section("Progress bars (0.5.0)")
+local barData = { regionType = "aurabar", eaNative = true,
+  triggers = { { trigger = { useName = true, auranames = { "Seal of the Crusader" } } } } }
+local barOption = corePrivate.regionOptions.aurabar.create("Bar", barData).aurabar.eaNative
+T.expect(barOption and barOption.name() == "Blizzard Draws This Bar" and barOption.get() == true,
+  "a Progress Bar gets its own switch, on by default")
+T.expect(barOption.desc():find("%n or %p", 1, true) and barOption.desc():find("%s becomes", 1, true)
+  and barOption.desc():find("on by default", 1, true), "its tooltip names the texts Blizzard fills and the default")
+Fire("Add", "Bar", "Bar", barData)
+T.expect(table.concat(barData.eaNativeIds or {}, ",") == "21082", "a bar stores its ranks too")
 
 T.section("Rank IDs from the spell cache")
 data.eaNative = true

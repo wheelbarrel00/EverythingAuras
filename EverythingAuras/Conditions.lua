@@ -266,6 +266,8 @@ function Private.ExecEnv.CallCustomConditionTest(uid, testFunctionNumber, ...)
   end
 end
 
+local eaExactTimers = false
+
 local function CreateTestForCondition(data, input, allConditionsTemplate, usedStates)
   local uid = data.uid
   local trigger = input and input.trigger;
@@ -380,11 +382,13 @@ local function CreateTestForCondition(data, input, allConditionsTemplate, usedSt
       local divideModRate = modRateProperty
             and  " / (state[" .. trigger .. "]" .. string.format("[%q]",  modRateProperty) .. " or 1.0)"
             or ""
+      -- Everything Auras: a time left estimated in combat never plays a sound, sends chat, runs code or shows a glow.
+      local exactCheck = eaExactTimers and ("not " .. triggerState .. ".eaTimeEstimated and ") or ""
 
       if (op == "==") then
-        check = stateCheck .. stateVariableCheck .. varString .. "~= 0 and " .. "abs((" .. remainingTime .. "-" .. value .. ")" .. divideModRate .. ") < 0.05"
+        check = stateCheck .. exactCheck .. stateVariableCheck .. varString .. "~= 0 and " .. "abs((" .. remainingTime .. "-" .. value .. ")" .. divideModRate .. ") < 0.05"
       else
-        check = stateCheck .. stateVariableCheck .. varString .. "~= 0 and " .. remainingTime .. divideModRate .. op .. value
+        check = stateCheck .. exactCheck .. stateVariableCheck .. varString .. "~= 0 and " .. remainingTime .. divideModRate .. op .. value
       end
     elseif (cType == "elapsedTimer" and value and op) then
       if (op == "==") then
@@ -511,7 +515,9 @@ end
 
 local function CreateCheckCondition(data, ret, condition, conditionNumber, allConditionsTemplate, nextIsLinked, debug)
   local usedStates = {};
+  eaExactTimers = Private.EAConditionHasAlert and Private.EAConditionHasAlert(condition) or false
   local check, recheckCode = CreateTestForCondition(data, condition.check, allConditionsTemplate, usedStates);
+  eaExactTimers = false
   if not check then
     check = "false"
   end

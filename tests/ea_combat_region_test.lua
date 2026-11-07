@@ -151,4 +151,24 @@ private.PerformActions(nativeData, "finish", native)
 T.expect(performed[#performed].sound, "a sound Blizzard does not play stays Everything Auras' own")
 T.expect(nativeData.actions.start.do_sound, "the aura's own actions are untouched")
 private.EANativeSound = nil
+
+T.section("Cooldowns shown by an estimated time left (0.5.0)")
+auraData.Quiet = {}
+local quiet = newRegion("Quiet")
+quiet.states = { [1] = { show = true, eaQuiet = true } }
+local quietData = actionsData()
+private.PerformActions(quietData, "start", quiet)
+p = performed[#performed]
+T.expect(not p.sound and not p.message and not p.custom and not p.glow, "a show from an estimated time left fires nothing")
+quiet:SoundPlay()
+quiet:SendChat()
+quiet:RunCode()
+quiet:GlowExternal({ glow_action = "show" })
+quiet:GlowExternal({ glow_action = "hide" })
+T.expect(#quiet.calls == 1 and quiet.calls[1] == "GlowExternalhide", "its sounds, chat, code and glows wait, a glow can still hide")
+private.RunConditions(quiet, "uid")
+T.expect(quiet.shownAlpha == nil and not quiet.eaMarker, "it is not dimmed and carries no marker")
+quiet.states = { [1] = { show = true, eaTimeEstimated = true } }
+quiet:SoundPlay()
+T.expect(#quiet.calls == 2, "an estimate alone does not silence the aura, the conditions compiler handles that")
 T.finish()

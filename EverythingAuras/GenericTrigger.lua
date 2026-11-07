@@ -2608,6 +2608,12 @@ do
       local restricted = C_Secrets.ShouldSpellCooldownBeSecret(effectiveSpellId)
       local changed = restricted or spellDetail.restricted ~= restricted
       spellDetail.restricted = restricted
+      -- Everything Auras: plain reads teach each spell's length, which stands in while combat hides the time.
+      if Private.EAObserveSpellCooldown then
+        Private.EAObserveSpellCooldown(effectiveSpellId, restricted, spellReadiness[effectiveSpellId].ready, maxCharges,
+          startTimeCooldown, durationCooldown, modRate, paused,
+          not restricted and startTimeCooldown == gcdStart and durationCooldown == gcdDuration)
+      end
       changed = self.spellCds:HandleSpell(effectiveSpellId, startTime, duration, unifiedModRate, paused) or changed
       if not unifiedCooldownBecauseRune then
         changed = self.spellCdsRune:HandleSpell(effectiveSpellId, startTime, duration, unifiedModRate, paused) or changed
@@ -2692,10 +2698,19 @@ do
       return spellDetail.charges, spellDetail.chargesMax, spellDetail.count, spellDetail.chargeGainTime, spellDetail.chargeLostTime
     end,
 
-    GetSpellCooldown = function(self, effectiveSpellId, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
-      if C_Secrets.ShouldSpellCooldownBeSecret(effectiveSpellId) then return end
+    GetSpellCooldown = function(self, effectiveSpellId, ignoreRuneCD, showgcd, ignoreSpellKnown, track, eaEstimate)
       if (not (self.data[effectiveSpellId] and self.data[effectiveSpellId].known) and not ignoreSpellKnown) then
         return;
+      end
+      if C_Secrets.ShouldSpellCooldownBeSecret(effectiveSpellId) then
+        -- Everything Auras: charges stay hidden in combat, so only a plain cooldown gets an estimate.
+        if eaEstimate and track ~= "charges" and Private.EASpellCooldownEstimate then
+          local startTime, duration, estimated = Private.EASpellCooldownEstimate(effectiveSpellId)
+          if startTime then
+            return startTime, duration, nil, nil, 1.0, false, estimated
+          end
+        end
+        return
       end
       local startTime, duration, paused, gcdCooldown, readyTime, modRate
       if track == "charges" then
@@ -2998,6 +3013,11 @@ do
   ---@return boolean? paused
   function EverythingAuras.GetSpellCooldown(id, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
     return SpellDetails:GetSpellCooldown(id, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
+  end
+
+  -- Everything Auras: built-in trigger code sees only ExecEnv, and custom code never gets the in-combat estimate.
+  function Private.ExecEnv.EAGetSpellCooldown(id, ignoreRuneCD, showgcd, ignoreSpellKnown, track)
+    return SpellDetails:GetSpellCooldown(id, ignoreRuneCD, showgcd, ignoreSpellKnown, track, true)
   end
 
   ---@param id string
