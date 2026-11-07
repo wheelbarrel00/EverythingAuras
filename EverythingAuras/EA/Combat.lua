@@ -34,7 +34,7 @@ local function UnsureState(region, includeHiding)
 end
 Private.EAUnsureState = UnsureState
 
--- A cooldown shown by a time left estimated in combat carries eaQuiet: it looks normal but fires nothing.
+-- A show decided by a hidden cooldown's time left carries eaQuiet: it looks normal but fires nothing.
 local function Silenced(region, includeHiding)
   return UnsureState(region, includeHiding) or FlaggedState(region, "eaQuiet", includeHiding)
 end

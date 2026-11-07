@@ -31,6 +31,7 @@ local corePrivate = {
   end,
 }
 local options = {}
+local timers, refreshed = {}, 0
 local env = setmetatable({
   EverythingAuras = {
     IsLibsOK = function() return true end,
@@ -48,14 +49,35 @@ local env = setmetatable({
     return spellNames[id]
   end },
   tinsert = table.insert,
+  C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end },
 }, { __index = _G })
 local chunk = assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/EA/NativeOptions.lua"))
 local ok, err = pcall(setfenv(chunk, env), "EverythingAurasOptions", options)
 T.expect(ok, "the file loads before the options have Private" .. (ok and "" or (": " .. tostring(err))))
 options.Private = corePrivate
+options.savedVars = { odb = { rebuilding = true, needsRebuild = true } }
+corePrivate.EANativeRefresh = function() refreshed = refreshed + 1 end
+corePrivate.db = { displays = {
+  Old = { regionType = "icon", eaNative = true, triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } },
+  Kept = { regionType = "icon", eaNative = true, eaNativeIds = { 1 },
+    triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } },
+  Off = { regionType = "icon", eaNative = false, triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } },
+} }
 for _, fn in ipairs(options.registerRegions) do
   fn()
 end
+
+T.section("Ranks for auras switched on by default (0.5.0 scan)")
+local displays = corePrivate.db.displays
+T.expect(#timers == 1 and displays.Old.eaNativeIds == nil, "while the spell list is still building, the pass waits")
+options.savedVars.odb = { rebuilding = false, needsRebuild = false }
+timers[1]()
+T.expect(displays.Old.eaNativeIds and table.concat(displays.Old.eaNativeIds, ",") == "20154,20287,21084",
+  "once it is complete, an aura with no stored ranks gets them")
+T.expect(displays.Kept.eaNativeIds[1] == 1 and #displays.Kept.eaNativeIds == 1 and displays.Off.eaNativeIds == nil,
+  "a stored list and a switched-off aura are left alone")
+T.expect(refreshed == 1, "and the drawing is refreshed once")
+options.savedVars = nil
 
 T.section("The switch")
 local data = { regionType = "icon", triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } }
@@ -124,7 +146,7 @@ local off = { regionType = "icon", triggers = { { trigger = { useName = true, au
 Fire("Add", "Off", "Off", off)
 T.expect(off.eaNativeIds == nil, "nothing is stored while the switch is off")
 
-T.section("A spell ID in Name(s) on retail")
+T.section("A spell ID in Name(s), on both clients since the Forever launch check")
 cache["Divine Steed"] = { [221885] = 1, [190784] = 1, [221883] = 1 }
 spellNames[190784] = "Divine Steed"
 local function SteedAura(entry)
@@ -132,7 +154,8 @@ local function SteedAura(entry)
 end
 local forever = SteedAura("190784")
 Fire("Add", "Forever", "Forever", forever)
-T.expect(forever.eaNativeIds == nil, "Forever: a spell ID stays skipped, the path it shipped with")
+T.expect(forever.eaNativeIds and table.concat(forever.eaNativeIds, ",") == "190784,221883,221885",
+  "Forever: a spell ID now stores every ID of its name as well")
 retail = true
 local steed = SteedAura("190784")
 Fire("Add", "Steed", "Steed", steed)

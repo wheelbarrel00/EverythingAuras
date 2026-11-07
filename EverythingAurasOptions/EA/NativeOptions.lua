@@ -11,8 +11,8 @@ local function RankIds(data)
   end
   local ids, seen = {}, {}
   for _, entry in ipairs(trigger.auranames) do
-    -- The trigger reads a spell ID here as that spell's name, and a retail buff often has another ID than its cast.
-    local spellId = EverythingAuras.IsRetail() and EverythingAuras.SafeToNumber(entry)
+    -- The trigger reads a spell ID here as that spell's name, and a buff often has another ID than its cast or rank.
+    local spellId = EverythingAuras.SafeToNumber(entry)
     local name = spellId and C_Spell.GetSpellName(spellId) or entry
     if type(name) == "string" and name ~= "" and not tonumber(name) then
       for id in pairs(EverythingAuras.spellCache.GetSpellsMatching(name) or {}) do
@@ -95,6 +95,33 @@ tinsert(OptionsPrivate.registerRegions, function()
       return result
     end
   end
+
+  -- Auras switched on by default never had their ranks stored, so they get them once the spell list is complete.
+  local tries = 0
+  local function StoreMissingRanks()
+    local odb = OptionsPrivate.savedVars and OptionsPrivate.savedVars.odb
+    if not odb or odb.needsRebuild or odb.rebuilding then
+      tries = tries + 1
+      if tries < 120 then
+        C_Timer.After(5, StoreMissingRanks)
+      end
+      return
+    end
+    local stored = false
+    for _, data in pairs(Private.db and Private.db.displays or {}) do
+      if type(data) == "table" and data.eaNative and SWITCHES[data.regionType] and not data.eaNativeIds then
+        local ids = RankIds(data)
+        if ids then
+          data.eaNativeIds = ids
+          stored = true
+        end
+      end
+    end
+    if stored and Private.EANativeRefresh then
+      Private.EANativeRefresh()
+    end
+  end
+  StoreMissingRanks()
 
   Private.callbacks:RegisterCallback("Add", function(_, _, _, data)
     if data.eaNative and SWITCHES[data.regionType] then

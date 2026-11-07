@@ -266,6 +266,7 @@ function Private.ExecEnv.CallCustomConditionTest(uid, testFunctionNumber, ...)
   end
 end
 
+-- Everything Auras: a condition with alerts must never fire them from a time left estimated in combat.
 local eaExactTimers = false
 
 local function CreateTestForCondition(data, input, allConditionsTemplate, usedStates)
@@ -345,6 +346,10 @@ local function CreateTestForCondition(data, input, allConditionsTemplate, usedSt
         check = string.format("state and Private.ExecEnv.CallCustomConditionTest(%q, %s, state[%s], %s, %s, %s)",
                               uid, testFunctionNumber, trigger, valueString, (opString or "nil"),
                               preambleString or "nil")
+        -- Everything Auras: On Cooldown reads the time left, which is only estimated in combat.
+        if eaExactTimers and variable == "onCooldown" then
+          check = "not (state[" .. trigger .. "] and state[" .. trigger .. "].eaTimeEstimated) and (" .. check .. ")"
+        end
       end
     elseif (cType == "customcheck") then
       if value then
@@ -515,6 +520,7 @@ end
 
 local function CreateCheckCondition(data, ret, condition, conditionNumber, allConditionsTemplate, nextIsLinked, debug)
   local usedStates = {};
+  -- Everything Auras: a time left estimated in combat never fires a condition's alerts.
   eaExactTimers = Private.EAConditionHasAlert and Private.EAConditionHasAlert(condition) or false
   local check, recheckCode = CreateTestForCondition(data, condition.check, allConditionsTemplate, usedStates);
   eaExactTimers = false

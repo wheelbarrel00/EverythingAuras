@@ -40,7 +40,7 @@ local function Learn(id, length)
   end
 end
 
--- Kept from a plain read, since a read in combat may be secret. A GCD-length or zero value means no real cooldown.
+-- Only a plain read is kept, since it may be secret in combat. A GCD-length or zero value means no real cooldown.
 local function BaseLength(id, entry)
   if entry.base == nil and GetSpellBaseCooldown then
     local ok, ms = pcall(GetSpellBaseCooldown, id)
@@ -62,6 +62,9 @@ function Private.EAObserveSpellCooldown(id, restricted, ready, maxCharges, start
     spells[id] = entry
   end
   local now = GetTime()
+  if now < settleUntil then
+    return
+  end
   entry.charges = HasCharges(maxCharges)
   if not restricted then
     BaseLength(id, entry)
@@ -79,9 +82,6 @@ function Private.EAObserveSpellCooldown(id, restricted, ready, maxCharges, start
     else
       entry.start, entry.length, entry.ready = nil, nil, true
     end
-    return
-  end
-  if now < settleUntil then
     return
   end
   if paused then
@@ -148,6 +148,6 @@ for _, arg in ipairs(prototype and prototype.args or {}) do
       .. "\n\n" .. L["When cooldown is secret, progress can still be displayed. The time left is estimated from the spell's cooldown, learned each time you use it out of combat."]
   elseif arg.name == "remaining" then
     arg.desc = "|cffffd200" .. L["Secret values"] .. "|r\n"
-      .. L["While the cooldown is secret, this uses the estimated time left: the spell's cooldown learned out of combat, or its base cooldown until you have used it once. The aura's sounds, chat messages, custom code and glows wait until the cooldown can be read again. Spells with charges are not estimated."]
+      .. L["While the cooldown is secret, this uses the estimated time left: the spell's cooldown learned out of combat, or for some spells its base cooldown until you have used it once. While the cooldown is secret, the aura plays no sounds, sends no chat, runs no custom code and shows no glows. Spells with charges are not estimated."]
   end
 end

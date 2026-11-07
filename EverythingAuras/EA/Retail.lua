@@ -51,23 +51,3 @@ end
 
 -- Forever's example spells do not exist here: a never-secret buff, then a secret aura, then a buff you recast.
 Private.EARetailExampleSpells = { 21562, 465, 190784 }
-
-Private.EARetailWhatsNewVersion = "0.4.0-beta"
-Private.EARetailWhatsNew = {
-  {
-    title = L["Everything Auras on Retail"],
-    desc = L["Everything Auras now runs on Retail as well as WoW Forever. It is a modified fork of WeakAuras built on M33kAuras, and it is still in beta."],
-  },
-  {
-    title = L["Auras in combat"],
-    desc = L["In combat WoW hides most auras from addons. Everything Auras keeps what it last read, dimmed with a corner marker, and starts your own buffs over when you recast them. Auras Blizzard never hides stay exact."],
-  },
-  {
-    title = L["Blizzard draws your icons"],
-    desc = L["Turn on Blizzard Draws This Icon on an Icon aura, and Blizzard draws its icon, swipe and timer, in combat too, the moment the aura changes. It works for one Aura trigger on Player, Target or Focus, but not for debuffs on you. You find it at the top of the Display tab."],
-  },
-  {
-    title = L["Not tested yet"],
-    desc = L["I have not tested Mythic+, raids or PvP on Retail. If something looks wrong there, please use Report a Bug in the options."],
-  },
-}

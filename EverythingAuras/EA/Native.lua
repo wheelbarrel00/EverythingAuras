@@ -11,11 +11,12 @@ local COOLDOWN_UPDATES = { "UpdateValue", "UpdateTime", "UpdateDuration", "PreSh
 local FLAG_FILTERS = { "useStacks", "useRem", "useTotal", "useNamePattern", "use_debuffClass", "useIgnoreName",
   "useIgnoreExactSpellId" }
 local TRISTATE_FILTERS = { "use_stealable", "use_isBossDebuff", "use_castByPlayer" }
+local LOOK_PROPERTIES = { iconSource = true, displayIcon = true, progressSource = true, adjustedMin = true,
+  adjustedMax = true }
 local SQUARE = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\Square_FullWhite"
 -- The same fill as the bar's own secret bar for each orientation (AuraBar.lua SetOrientation).
 local FILL = { HORIZONTAL = { "HORIZONTAL", false }, HORIZONTAL_INVERSE = { "HORIZONTAL", true },
   VERTICAL = { "VERTICAL", true }, VERTICAL_INVERSE = { "VERTICAL", false } }
--- Texts Blizzard fills in their place: the stack count on both, the bar's name and timer on a bar.
 local TAKEOVERS = {
   { key = "count", format = "%s" },
   { key = "name", format = "%n" },
@@ -101,6 +102,17 @@ function Private.EANativeQualifies(data)
   if (trigger.matchesShowOn or "showOnActive") ~= "showOnActive" then
     return false, L["Needs Show On set to Aura(s) Found."]
   end
+  -- Blizzard shows only the aura's own icon and time, and Everything Auras hides its own while Blizzard draws.
+  local progressSource = type(data.progressSource) == "table" and data.progressSource[1] or -1
+  local changed = data.iconSource == 0 or progressSource ~= -1 or data.useAdjustededMin or data.useAdjustededMax
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
+      changed = changed or type(change) == "table" and LOOK_PROPERTIES[change.property] or false
+    end
+  end
+  if changed then
+    return false, L["Blizzard shows the aura's own icon and time, so it cannot follow a manual icon, Adjust Min or Max, or a progress source other than Automatic, set directly or by a condition."]
+  end
   if trigger.showClones then
     return false, L["Does not work with Auto-Clone."]
   end
@@ -141,7 +153,7 @@ local function AddId(ids, value)
 end
 
 -- A slot with no spell IDs shows any aura of its kind (probe N0), so it is never built without them.
-local function SpellIds(data, record)
+local function SpellIds(data)
   local trigger = data.triggers[1].trigger
   local ids = {}
   if trigger.useExactSpellId and type(trigger.auraspellids) == "table" then
@@ -166,12 +178,34 @@ local function SpellIds(data, record)
       end
     end
   end
-  if record then
-    for id in pairs(record.seen) do
-      ids[id] = true
+  return ids
+end
+
+-- A name gives only its cast's ID, and a buff often carries another, so Blizzard waits for an ID known to be the aura's.
+local function KnownIds(data)
+  local trigger = data.triggers[1].trigger
+  if trigger.useExactSpellId and type(trigger.auraspellids) == "table" then
+    for _, value in ipairs(trigger.auraspellids) do
+      if tonumber(value) then
+        return true
+      end
     end
   end
-  return ids
+  for _, list in ipairs({ data.eaNativeIds or false, trigger.auraRankSpellIDs or false }) do
+    if type(list) == "table" and next(list) ~= nil then
+      return true
+    end
+  end
+  return false
+end
+
+local function HasId(list, id)
+  for _, value in ipairs(type(list) == "table" and list or {}) do
+    if tonumber(value) == id then
+      return true
+    end
+  end
+  return false
 end
 
 local function Key(ids)
@@ -218,8 +252,11 @@ local function NewText(overlay, button)
   return text
 end
 
+local Style
+
 -- Runs once per button, before Blizzard locks it while auras are secret, so all art is handed over here.
 local function BuildButton(record, button)
+  record.button = button
   button:ClearAllPoints()
   button:SetAllPoints(button:GetParent())
   button:EnableMouse(false)
@@ -256,9 +293,12 @@ local function BuildButton(record, button)
     record.texts.timer = NewText(overlay, button)
     button:SetDurationText(record.texts.timer, {})
   end
+  -- A button built while auras are secret cannot be styled until they can be read again, so it is styled now.
+  if record.region then
+    Style(record, record.data, record.region)
+  end
 end
 
--- Blizzard's text takes over one of the aura's own texts in its font, color and place, and that text hides while drawn.
 local function TakeOver(record, region, takeover)
   local widget = record.texts[takeover.key]
   if not widget then
@@ -321,7 +361,7 @@ local function StyleBar(record, region)
   icon:SetVertexColor(region.icon:GetVertexColor())
 end
 
-local function Style(record, data, region)
+function Style(record, data, region)
   local button, icon = record.button, record.icon
   local level = region:GetFrameLevel()
   button:SetFrameLevel(level)
@@ -535,7 +575,7 @@ local function NewRecord(variant)
   end
   container:Hide()
   pcall(container.SetEditModePreviewEnabled, container, false)
-  return { container = container, variant = variant, seen = {}, sounds = {}, soundHandles = {}, hidden = {} }
+  return { container = container, variant = variant, sounds = {}, soundHandles = {}, hidden = {} }
 end
 
 -- Slots and containers cannot be removed (CustomAuraContainer.lua:641), so a freed one is reused out of combat.
@@ -560,7 +600,6 @@ local function Release(uid)
   records[uid] = nil
   record.region, record.unit, record.filter, record.idsKey, record.ids, record.styled = nil, nil, nil, nil, nil, nil
   record.data = nil
-  wipe(record.seen)
   wipe(record.hidden)
   if record.button then
     spare[record.variant] = spare[record.variant] or {}
@@ -584,7 +623,11 @@ local function Configure(data, region)
     return
   end
   pending[uid] = nil
-  if failed[uid] or not (region and Private.EANativeWanted(data)) then
+  local wanted = region and Private.EANativeWanted(data)
+  if region then
+    region.eaNativeWanted = wanted or nil
+  end
+  if failed[uid] or not wanted then
     if record then
       SetActive(record, data, false)
     end
@@ -592,8 +635,8 @@ local function Configure(data, region)
   end
   local trigger = data.triggers[1].trigger
   local unit, filter = UnitOf(trigger), Filter(trigger)
-  local ids = SpellIds(data, record)
-  if not next(ids) then
+  local ids = SpellIds(data)
+  if not next(ids) or not KnownIds(data) then
     pending[uid] = true
     if record then
       SetActive(record, data, false)
@@ -653,6 +696,12 @@ local function Configure(data, region)
   end
   if Secret() then
     record.styled = false
+    for _, takeover in ipairs(TAKEOVERS) do
+      local sub = record.texts and record.texts[takeover.key] and SubText(region, takeover.format)
+      if sub then
+        record.hidden[takeover.key] = sub.text
+      end
+    end
   else
     Style(record, data, region)
   end
@@ -713,26 +762,35 @@ for _, regionType in ipairs({ "icon", "aurabar" }) do
     modify(parent, region, data)
     if data.eaNative or region.eaNativeRecord then
       SafeConfigure(data, region)
+    else
+      region.eaNativeWanted = nil
     end
   end
 end
 
 local RunConditions = Private.RunConditions
 function Private.RunConditions(region, uid, hideRegion)
-  local record = region.eaNativeRecord
-  if record and record.active then
-    -- The spell cache can miss a rank, so a rank read out of combat is added to the slot.
+  if region.eaNativeWanted and not Secret() then
+    -- An ID read out of combat is the aura's own, so it is kept with the aura for every later fight.
     local state = region.states and region.states[1]
     local spellId = state and state.show and not state.eaUnsure and state.spellId
-    if spellId and not issecretvalue(spellId) and not record.ids[spellId] and not Secret() then
-      record.seen[spellId] = true
+    if spellId and not issecretvalue(spellId) and type(spellId) == "number" then
       local data = EverythingAuras.GetData(region.id)
-      if data then
+      local trigger = data and data.triggers[1].trigger
+      if trigger and not HasId(data.eaNativeIds, spellId) and not HasId(trigger.auraspellids, spellId)
+        and not HasId(trigger.auraRankSpellIDs, spellId) then
+        data.eaNativeIds = data.eaNativeIds or {}
+        table.insert(data.eaNativeIds, spellId)
+        table.sort(data.eaNativeIds)
         SafeConfigure(data, region)
       end
     end
   end
   return RunConditions(region, uid, hideRegion)
+end
+
+function Private.EANativeRefresh()
+  RefreshAll()
 end
 
 local Pause = Private.Pause

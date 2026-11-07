@@ -46,15 +46,11 @@ T.expect(keys == 18, "every Forever-only string has retail text, got " .. keys)
 
 -- Every string naming Forever in these files is covered, so none reaches a retail player by accident.
 for key in sources:gmatch('L%["([^"]*WoW Forever[^"]*)"%]') do
-  local onWhatsNew = key:find("profession slots", 1, true) ~= nil
-  T.expect(rawget(L, key) ~= nil or onWhatsNew, "retail text exists for: " .. key:sub(1, 50))
+  T.expect(rawget(L, key) ~= nil, "retail text exists for: " .. key:sub(1, 50))
 end
 
-T.expect(private.EARetailWhatsNewVersion == "0.4.0-beta", "What's New has its own retail version")
-T.expect(#private.EARetailWhatsNew == 4, "four What's New entries")
-for _, entry in ipairs(private.EARetailWhatsNew) do
-  T.expect(type(entry.title) == "string" and type(entry.desc) == "string", "entry has a title and text")
-end
+T.expect(private.EARetailWhatsNewVersion == nil and private.EARetailWhatsNew == nil,
+  "0.5.0: both clients show the same What's New, so Retail hands none over")
 T.expect(#private.EARetailExampleSpells == 3, "three example spells for the In Combat page")
 
 local camelot = read("EverythingAuras/EverythingAuras_Camelot.toc")
@@ -65,8 +61,8 @@ T.expect(retail:find("for WoW Forever", 1, true) == nil, "the retail TOC notes d
 T.expect(retail:match("## Interface: (12%d+)") ~= nil and not retail:find("16001", 1, true), "the retail TOC has only retail numbers")
 
 -- Forever never sets these fields, so these fallbacks are what it runs.
-T.expect(sources:find('Private.EARetailWhatsNewVersion or "0.3.0-beta"', 1, true) ~= nil, "Forever keeps its What's New version")
-T.expect(sources:find("Private.EARetailWhatsNew or {", 1, true) ~= nil, "Forever keeps its What's New entries")
+T.expect(sources:find('local WHATS_NEW_VERSION = "0.5.0-beta"', 1, true) ~= nil and sources:find("local ENTRIES = {", 1, true) ~= nil,
+  "both clients show the shared What's New")
 T.expect(sources:find("Private.EARetailExampleSpells or { 20289, 19740, 20289 }", 1, true) ~= nil, "Forever keeps its example spells")
 
 local templates = io.open(T.repoRoot .. "/EverythingAurasTemplates/EverythingAurasTemplates.toc", "rb")

@@ -271,6 +271,19 @@ f:refresh(402)
 f:send("SPELL_UPDATE_COOLDOWN", 402)
 T.expect(f:estimate(402) == f.now, "the next ready reading and cast start estimates again")
 
+T.section("Right after a loading screen")
+f = fixture()
+f:set(600, false, 0)
+f:watch(600)
+f.eaFrame.OnEvent(f.eaFrame, "PLAYER_ENTERING_WORLD")
+f.cdFrame().inWorld = f.now - 5
+f:set(600, true, 12)
+f:send("SPELL_UPDATE_COOLDOWN", 600)
+T.expect(f:lengths()[600] == nil, "a plain read in the settle window teaches nothing either")
+f.now = f.now + 4
+f:send("SPELL_UPDATE_COOLDOWN", 600)
+T.expect(f:lengths()[600] == 12, "after it, plain reads teach again")
+
 T.section("Lengths per character")
 f = fixture()
 f.env.UnitName = function() return "Other" end
@@ -293,7 +306,7 @@ T.expect(not has({changes = {{property = "alpha"}, {property = "sub.3.text_color
 T.section("Trigger option text")
 local args = private.event_prototypes["Cooldown Progress (Spell)"].args
 T.expect(args[1].text:find("estimated", 1, true) ~= nil, "the trigger's secret-values note says the time left is estimated")
-T.expect(args[2].desc:find("wait until the cooldown can be read again", 1, true) ~= nil
+T.expect(args[2].desc:find("plays no sounds, sends no chat, runs no custom code and shows no glows", 1, true) ~= nil
   and args[2].desc:find("charges", 1, true) ~= nil, "the Remaining Time tooltip names what waits and what is not estimated")
 
 T.section("The conditions compiler")
@@ -304,21 +317,28 @@ local cprivate = {ExecEnv = {conditionHelpers = {}, customConditionsFunctions = 
     alpha = {display = "Alpha", setter = "SetAlpha", type = "number"},
   }}},
   subRegionTypes = {}, callbacks = {RegisterCallback = noop}, QuotedString = function(text) return ("%q"):format(text) end,
-  GetTriggerConditions = function() return {[1] = {expirationTime = {type = "timer"}}} end,
+  GetTriggerConditions = function() return {[1] = {expirationTime = {type = "timer"}, onCooldown = {type = "bool",
+    test = function(state, needle) return state and state.show and (state.expirationTime > 1000) == (needle == 1) end}}} end,
+  GetErrorHandlerUid = function() return function(err) error(err) end end,
   GetProgressSourceFor = function() return {} end,
   LoadFunction = function(code) compiled = code; return nil end,
   EAConditionHasAlert = private.EAConditionHasAlert,
 }
 local cenv = setmetatable({EverythingAuras = {IsLibsOK = function() return true end, L = setmetatable({}, {__index = function(_, k) return k end}),
-  timer = {CancelTimer = noop}, newFeatureString = ""}, CopyTable = function(t) local c = {} for k, v in pairs(t) do c[k] = v end return c end},
+  timer = {CancelTimer = noop}, newFeatureString = ""}, tinsert = table.insert,
+  -- WoW's xpcall passes extra arguments on, Lua 5.1's does not.
+  xpcall = function(fn, handler, ...)
+    local args, n = {...}, select("#", ...)
+    return xpcall(function() return fn(unpack(args, 1, n)) end, handler)
+  end, CopyTable = function(t) local c = {} for k, v in pairs(t) do c[k] = v end return c end},
   {__index = _G})
 local cchunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/Conditions.lua"))
 setfenv(cchunk, cenv)("EverythingAuras", cprivate)
 
-local function compile(changes)
+local function compile(changes, check)
   compiled = nil
   cprivate.LoadConditionFunction({id = "CD", uid = "uid", regionType = "icon", conditions = {
-    {check = {trigger = 1, variable = "expirationTime", op = "<", value = "5"}, changes = changes}}})
+    {check = check or {trigger = 1, variable = "expirationTime", op = "<", value = "5"}, changes = changes}}})
   local played, alpha = 0, nil
   local runEnv = setmetatable({Private = cprivate, EverythingAuras = {GetActiveConditions = function() return {} end},
     GetTime = function() return 1000 end, wipe = function(t) for k in pairs(t) do t[k] = nil end return t end,
@@ -346,6 +366,11 @@ run = compile({{property = "alpha", value = 0.4}})
 T.expect(compiled:find("eaTimeEstimated", 1, true) == nil, "a looks-only condition is compiled as before")
 local _, alpha = run(true)
 T.expect(alpha == 0.4, "an estimated time left changes looks")
+run = compile({{property = "sound", value = {sound = "x"}}}, {trigger = 1, variable = "onCooldown", value = 1})
+played = run(true)
+T.expect(played == 0, "On Cooldown, which reads the time left, never plays a sound from an estimate")
+played = run(nil)
+T.expect(played == 1, "and plays it from an exact time as before")
 
 T.section("The trigger uses the private function")
 local prototypes = read("EverythingAuras/Prototypes.lua")

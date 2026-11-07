@@ -171,7 +171,6 @@ function Private.EAModernize(data)
       data.eaNative = true
     end
   end
-  -- On by default (decision 24) for new, imported and existing auras, while a switch already set stays as it is.
   if version < 4 and data.eaNative == nil and (data.regionType == "icon" or data.regionType == "aurabar") then
     data.eaNative = true
   end

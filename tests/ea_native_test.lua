@@ -596,7 +596,7 @@ T.expect(not qualifies(With({ unit = "member", specificUnit = "raid41" })) and n
 T.expect(not qualifies(With({ unit = "pet", debuffType = "HARMFUL" }))
   and not qualifies(With({ unit = "member", specificUnit = "party1", debuffType = "HARMFUL" })), "debuffs on your pet or group do not")
 local member = NewAura("Member", { type = "aura2", unit = "member", specificUnit = "Party1", debuffType = "HELPFUL",
-  useName = true, auranames = { "Seal of Righteousness" } })
+  useName = true, auranames = { "Seal of Righteousness" } }, { eaNativeIds = { 20293 } })
 private.loaded.Member = true
 local memberRegion = Add(member)
 local memberContainer = world.created[#world.created]
@@ -605,7 +605,8 @@ local rosterCalls, targetSlotCalls = Count(memberContainer, "UpdateAllAuras"), C
 events.scripts.OnEvent(events, "GROUP_ROSTER_UPDATE")
 T.expect(Count(memberContainer, "UpdateAllAuras") == rosterCalls + 1 and Count(exactContainer, "UpdateAllAuras") == targetSlotCalls,
   "a roster change refreshes group slots only")
-local pet = NewAura("Pet", { type = "aura2", unit = "pet", debuffType = "HELPFUL", useName = true, auranames = { "Seal of Righteousness" } })
+local pet = NewAura("Pet", { type = "aura2", unit = "pet", debuffType = "HELPFUL", useName = true, auranames = { "Seal of Righteousness" } },
+  { eaNativeIds = { 20293 } })
 private.loaded.Pet = true
 Add(pet)
 local petContainer = world.created[#world.created]
@@ -626,7 +627,7 @@ end
 
 T.section("Stack count (0.5.0)")
 local stacks = NewAura("Stacks", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
-  auranames = { "Seal of Righteousness" } })
+  auranames = { "Seal of Righteousness" } }, { eaNativeIds = { 20293 } })
 private.loaded.Stacks = true
 local stacksRegion = NewRegion("Stacks")
 local stackText = SubText(stacksRegion, "%s")
@@ -643,7 +644,7 @@ stacks.eaNative = false
 modify(nil, stacksRegion, stacks)
 T.expect(stackText.text.visible and not stacksRegion.eaNativeOn, "switched off: the aura's own %s shows again")
 local plain = NewAura("Plain2", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
-  auranames = { "Seal of Righteousness" } })
+  auranames = { "Seal of Righteousness" } }, { eaNativeIds = { 20293 } })
 private.loaded.Plain2 = true
 Add(plain)
 T.expect(world.created[#world.created].button.countWidget.alpha == 0, "without a %s text Blizzard's count stays invisible")
@@ -667,7 +668,7 @@ local function NewBarRegion(id)
   return region
 end
 local bar = NewAura("Bar", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
-  auranames = { "Seal of Righteousness" } }, { regionType = "aurabar" })
+  auranames = { "Seal of Righteousness" } }, { regionType = "aurabar", eaNativeIds = { 20293 } })
 T.expect(qualifies(bar), "a Progress Bar on a player buff qualifies")
 private.loaded.Bar = true
 local barRegion = NewBarRegion("Bar")
@@ -701,9 +702,64 @@ bar.inverse = nil
 barModify(nil, barRegion, bar)
 T.expect(world.created[#world.created].button == inverseButton and barRegion.eaNativeRecord.button == barButton,
   "back to draining reuses the first button")
+world.secret = true
+barModify(nil, barRegion, bar)
+T.expect(barRegion.eaNativeOn and not nameText.visible, "an edit while auras are secret still hides the texts Blizzard fills")
+world.secret = false
 bar.eaNative = false
 barModify(nil, barRegion, bar)
 T.expect(barRegion.bar.visible and barRegion.bar.bg.visible and barRegion.iconFrame.visible and nameText.visible
   and not barRegion.eaNativeOn and not barContainer.shown, "switched off: the bar draws itself again, texts included")
+world.secret = true
+local secretBar = NewAura("SecretBar", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } }, { regionType = "aurabar", eaNativeIds = { 20293 } })
+private.loaded.SecretBar = true
+barModify(nil, NewBarRegion("SecretBar"), secretBar)
+local secretFill = world.created[#world.created].button.barWidget
+T.expect(Last(secretFill, "SetStatusBarTexture")[1] == "bar-texture" and Last(secretFill, "SetStatusBarColor")[2] == 0.8,
+  "a bar built while auras are secret is styled as it is built, not left white until combat ends")
+world.secret = false
+
+T.section("Settings Blizzard cannot follow (0.5.0 scan)")
+local function WithData(extra)
+  local aura = With({})
+  for key, value in pairs(extra) do
+    aura[key] = value
+  end
+  return aura
+end
+T.expect(not qualifies(WithData({ iconSource = 0 })) and qualifies(WithData({ iconSource = 1 })),
+  "a manual icon does not qualify, the trigger's own icon does")
+T.expect(not qualifies(WithData({ progressSource = { 1, "stacks" } })) and qualifies(WithData({ progressSource = { -1, "" } })),
+  "a progress source other than Automatic does not")
+T.expect(not qualifies(WithData({ useAdjustededMax = true })) and not qualifies(WithData({ useAdjustededMin = true })),
+  "Adjust Min or Max does not")
+local conditioned = true
+for _, property in ipairs({ "iconSource", "displayIcon", "progressSource", "adjustedMin", "adjustedMax" }) do
+  conditioned = conditioned and not qualifies(WithData({ conditions = { { changes = { { property = property } } } } }))
+end
+T.expect(conditioned and qualifies(WithData({ conditions = { { changes = { { property = "color" } } } } })),
+  "a condition that changes the icon source, progress source or Adjust Min or Max does not, a color change does")
+
+T.section("A name alone waits for a known ID (0.5.0 scan)")
+local named = NewAura("Named", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } })
+private.loaded.Named = true
+local namedCount = #world.created
+local namedRegion = Add(named)
+T.expect(#world.created == namedCount and not namedRegion.eaNativeOn and namedRegion.icon.visible,
+  "only the cast's ID from a name: Everything Auras keeps drawing it, as before")
+world.secret = true
+namedRegion.states = { [1] = { show = true, spellId = 30000 } }
+private.RunConditions(namedRegion, "Named")
+T.expect(named.eaNativeIds == nil, "nothing is learned while auras are secret")
+world.secret = false
+namedRegion.states = { [1] = { show = true, spellId = 20293 } }
+private.RunConditions(namedRegion, "Named")
+T.expect(named.eaNativeIds and named.eaNativeIds[1] == 20293 and namedRegion.eaNativeOn,
+  "an ID read out of combat is kept with the aura, and Blizzard draws from then on")
+namedRegion.states = { [1] = { show = true, spellId = 20293 } }
+private.RunConditions(namedRegion, "Named")
+T.expect(#named.eaNativeIds == 1, "an ID already kept is not added twice")
 T.expect(#errors == 0, "no errors at all" .. (errors[1] and (": " .. tostring(errors[1])) or ""))
 T.finish()

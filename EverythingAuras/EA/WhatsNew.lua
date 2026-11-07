@@ -5,24 +5,20 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = Private.EARetailWhatsNewVersion or "0.3.0-beta"
+local WHATS_NEW_VERSION = "0.5.0-beta"
 
-local ENTRIES = Private.EARetailWhatsNew or {
+local ENTRIES = {
   {
-    title = L["Blizzard draws your icons"],
-    desc = L["Turn on Blizzard Draws This Icon on an Icon aura, and Blizzard draws its icon, swipe and timer, in combat too, the moment the aura changes. It works for one Aura trigger on Player, Target or Focus, but not for debuffs on you. You find it at the top of the Display tab."],
+    title = L["Cooldowns keep count in combat"],
+    desc = L["Spell cooldown auras keep a time left in combat, learned the last time you used the spell out of combat. Conditions such as turning red under 10 seconds, the trigger's Remaining Time and sorting by time left now work mid-fight. The estimate changes only looks and never plays sounds, sends chat, runs custom code or shows glows."],
   },
   {
-    title = L["Sounds in combat"],
-    desc = L["When Blizzard draws an icon, its On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+    title = L["Blizzard draws your auras"],
+    desc = L["Blizzard Draws This Icon is now on by default, also for the auras you already have, unless you turned it off. A buff you gain in combat shows the moment it appears, with its timer. An aura you already had starts once Everything Auras knows its spell IDs: open the options once, or let it see the buff out of combat."],
   },
   {
-    title = L["ForeverAuras imports"],
-    desc = L["Aura (Modern) icons that Blizzard can draw have it switched on, also the ones you imported before, and their note says so."],
-  },
-  {
-    title = L["Equipment slots"],
-    desc = L["Item triggers list the Ammo and Ranged slots, and no longer list profession slots WoW Forever doesn't have."],
+    title = L["Bars and stack counts"],
+    desc = L["Progress Bars get Blizzard Draws This Bar, so Blizzard draws the bar, its icon, its name and its time in combat too. A text that shows only %s becomes Blizzard's stack count."],
   },
 }
 
