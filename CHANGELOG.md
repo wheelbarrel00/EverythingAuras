@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0-beta] - 2026-11-07
+
+### New Features
+
+- Spell cooldown auras keep a time left in combat, learned the last time you used the spell out of combat. Conditions, the trigger's Remaining Time and sorting by time left work mid-fight, and the estimate never plays sounds, sends chat, runs custom code or shows glows
+- Blizzard Draws This Bar on Progress Bars: Blizzard draws the bar, its icon, its name and its time in combat too
+- A text that shows only %s becomes Blizzard's stack count on auras Blizzard draws
+- Blizzard can draw buffs on your pet and on a party or raid member set as a Specific Unit (not yet tested in game)
+
+### Improvements
+
+- Blizzard Draws This Icon and Blizzard Draws This Bar are on by default, also for auras you already have, unless you turned them off. An existing aura starts once Everything Auras knows its spell IDs, from the options or from seeing the buff out of combat
+- A spell ID typed in Name(s) gives Blizzard every rank of that spell on WoW Forever too
+
 ## [0.4.0-beta] - 2026-11-01
 
 ### New Features

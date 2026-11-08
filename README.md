@@ -10,8 +10,10 @@ and it keeps WeakAuras' behavior as close to the original as the game allows.
 In combat, WoW hides most aura details from addons. That is the hard part of running WeakAuras on Retail and WoW
 Forever, and it is what Everything Auras is built to handle.
 
-- **Blizzard draws your icons:** turn on Blizzard Draws This Icon on an Icon aura and Blizzard itself draws its icon,
-  swipe and timer mid-fight, and plays its On Show and On Hide sounds.
+- **Blizzard draws your auras:** on by default, Blizzard itself draws many of your Icon and Progress Bar auras
+  mid-fight, with their timers and stack counts, and plays their On Show and On Hide sounds.
+- **Cooldowns keep count:** each spell's cooldown length is learned out of combat, so cooldown auras change color and
+  sort by time left mid-fight.
 - **Honest in combat:** an aura the game hides stays on screen as last known, dimmed with a small corner marker, and
   nothing unsure ever plays a sound, glows or sends chat.
 - **Your own buffs keep up:** cast one of your own buffs on yourself mid-fight and it starts over from your cast.
