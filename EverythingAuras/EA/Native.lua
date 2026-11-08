@@ -111,7 +111,7 @@ function Private.EANativeQualifies(data)
     end
   end
   if changed then
-    return false, L["Blizzard shows the aura's own icon and time, so it cannot follow a manual icon, Adjust Min or Max, or a progress source other than Automatic, set directly or by a condition."]
+    return false, L["Blizzard shows the aura's own icon and time, so it cannot follow a manual icon, Set Minimum or Maximum Progress, or a progress source other than Automatic, set directly or by a condition."]
   end
   if trigger.showClones then
     return false, L["Does not work with Auto-Clone."]

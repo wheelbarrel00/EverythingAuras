@@ -761,5 +761,15 @@ T.expect(named.eaNativeIds and named.eaNativeIds[1] == 20293 and namedRegion.eaN
 namedRegion.states = { [1] = { show = true, spellId = 20293 } }
 private.RunConditions(namedRegion, "Named")
 T.expect(#named.eaNativeIds == 1, "an ID already kept is not added twice")
+local waiting = NewAura("Waiting", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" } })
+private.loaded.Waiting = true
+local waitingRegion = Add(waiting)
+waiting.eaNative = false
+modify(nil, waitingRegion, waiting)
+waitingRegion.states = { [1] = { show = true, spellId = 20293 } }
+private.RunConditions(waitingRegion, "Waiting")
+T.expect(waiting.eaNativeIds == nil and not waitingRegion.eaNativeWanted,
+  "switched off while still waiting for an ID: nothing is learned for it any more")
 T.expect(#errors == 0, "no errors at all" .. (errors[1] and (": " .. tostring(errors[1])) or ""))
 T.finish()

@@ -148,6 +148,6 @@ for _, arg in ipairs(prototype and prototype.args or {}) do
       .. "\n\n" .. L["When cooldown is secret, progress can still be displayed. The time left is estimated from the spell's cooldown, learned each time you use it out of combat."]
   elseif arg.name == "remaining" then
     arg.desc = "|cffffd200" .. L["Secret values"] .. "|r\n"
-      .. L["While the cooldown is secret, this uses the estimated time left: the spell's cooldown learned out of combat, or for some spells its base cooldown until you have used it once. While the cooldown is secret, the aura plays no sounds, sends no chat, runs no custom code and shows no glows. Spells with charges are not estimated."]
+      .. L["While the cooldown is secret, this uses the estimated time left: the spell's cooldown learned out of combat. While the cooldown is secret, the aura plays no sounds, sends no chat, runs no custom code and shows no glows. Spells with charges are not estimated."]
   end
 end

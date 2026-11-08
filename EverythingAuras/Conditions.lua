@@ -520,7 +520,6 @@ end
 
 local function CreateCheckCondition(data, ret, condition, conditionNumber, allConditionsTemplate, nextIsLinked, debug)
   local usedStates = {};
-  -- Everything Auras: a time left estimated in combat never fires a condition's alerts.
   eaExactTimers = Private.EAConditionHasAlert and Private.EAConditionHasAlert(condition) or false
   local check, recheckCode = CreateTestForCondition(data, condition.check, allConditionsTemplate, usedStates);
   eaExactTimers = false

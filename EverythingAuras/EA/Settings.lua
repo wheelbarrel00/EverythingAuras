@@ -138,7 +138,7 @@ local function CombatPage(_, content)
 
   local works = stack(ui:CreateGroup(content, L["What else works in combat"]))
   for _, row in ipairs({
-    { L["Spell cooldowns"], L["The swipe, and whether the spell is ready. The time left is estimated from the cooldown Everything Auras learned the last time you used the spell out of combat, or for some spells from its base cooldown until then. The estimate changes only looks, such as colors, size and sort order, never sounds, chat, custom code or glows. A cooldown shortened partway, for example by a proc, shows a little too long, but it still turns ready on time. Spells with charges show no time left."] },
+    { L["Spell cooldowns"], L["The swipe, and whether the spell is ready. The time left is estimated from the cooldown Everything Auras learned the last time you used the spell out of combat. The estimate changes only looks, such as colors, size and sort order, never sounds, chat, custom code or glows. A cooldown shortened partway, for example by a proc, shows a little too long, but it still turns ready on time. Spells with charges show no time left."] },
     { L["Item cooldowns"], L["Everything, including the time left."] },
     { L["Your casts"], L["Which spell you cast."] },
     { L["Health"], L["Bars draw, but the numbers can't be compared or used in math. Your maximum health can, a target's can't."] },

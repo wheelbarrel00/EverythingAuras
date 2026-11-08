@@ -14,7 +14,7 @@ local ENTRIES = {
   },
   {
     title = L["Blizzard draws your auras"],
-    desc = L["Blizzard Draws This Icon is now on by default, also for the auras you already have, unless you turned it off. A buff you gain in combat shows the moment it appears, with its timer. An aura you already had starts once Everything Auras knows its spell IDs: open the options once, or let it see the buff out of combat."],
+    desc = L["Blizzard Draws This Icon and Blizzard Draws This Bar are now on by default, also for the auras you already have, unless you turned them off. A buff you gain in combat shows the moment it appears, with its timer. An aura you already had starts once Everything Auras knows its spell IDs: open the options once, or let it see the buff out of combat."],
   },
   {
     title = L["Bars and stack counts"],
