@@ -8,8 +8,7 @@ local UNITS = { player = true, target = true, focus = true, pet = true }
 local UNIT_EVENTS = { PLAYER_TARGET_CHANGED = "target", PLAYER_FOCUS_CHANGED = "focus" }
 local SOUND_ACTIONS = { { when = "start", trigger = "Added" }, { when = "finish", trigger = "Removed" } }
 local COOLDOWN_UPDATES = { "UpdateValue", "UpdateTime", "UpdateDuration", "PreShow" }
-local FLAG_FILTERS = { "useStacks", "useRem", "useTotal", "useNamePattern", "use_debuffClass", "useIgnoreName",
-  "useIgnoreExactSpellId" }
+local FLAG_FILTERS = { "useStacks", "useRem", "useTotal", "useNamePattern", "use_debuffClass", "useIgnoreName" }
 local TRISTATE_FILTERS = { "use_stealable", "use_isBossDebuff", "use_castByPlayer" }
 local LOOK_PROPERTIES = { iconSource = true, displayIcon = true, progressSource = true, adjustedMin = true,
   adjustedMax = true }
@@ -178,6 +177,15 @@ local function SpellIds(data)
       end
     end
   end
+  -- The slot only ever matches the IDs listed here, so leaving one out ignores it exactly.
+  if trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" then
+    for _, value in ipairs(trigger.ignoreAuraSpellids) do
+      local id = tonumber(value)
+      if id then
+        ids[id] = nil
+      end
+    end
+  end
   return ids
 end
 
@@ -192,8 +200,10 @@ local function KnownIds(data)
     end
   end
   for _, list in ipairs({ data.eaNativeIds or false, trigger.auraRankSpellIDs or false }) do
-    if type(list) == "table" and next(list) ~= nil then
-      return true
+    for _, value in ipairs(type(list) == "table" and list or {}) do
+      if tonumber(value) then
+        return true
+      end
     end
   end
   return false

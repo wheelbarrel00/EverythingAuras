@@ -310,6 +310,27 @@ private.loaded.FA = true
 Add(fa)
 local faIds = world.created[#world.created].slot.options.candidateFilters.includeSpellIDs
 T.expect(faIds[111] and faIds[222], "ForeverAuras' rank lists count")
+local ignored = NewAura("Ignored", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Unknown Spell" }, auraRankSpellIDs = { 111, 222, 333 }, useIgnoreExactSpellId = true,
+  ignoreAuraSpellids = { "222" } })
+T.expect(qualifies(ignored), "an ignore list of exact IDs still lets Blizzard draw")
+T.expect(not qualifies(With({ useIgnoreName = true, ignoreAuranames = { "Seal" } })), "an ignore list by name does not")
+private.loaded.Ignored = true
+Add(ignored)
+local ignoredIds = world.created[#world.created].slot.options.candidateFilters.includeSpellIDs
+T.expect(ignoredIds[111] and ignoredIds[333] and not ignoredIds[222], "an ignored ID is left out of the slot's list")
+local allIgnored = NewAura("AllIgnored", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Unknown Spell" }, auraRankSpellIDs = { 444 }, useIgnoreExactSpellId = true, ignoreAuraSpellids = { "444" } })
+private.loaded.AllIgnored = true
+local beforeIgnored = #world.created
+local allIgnoredRegion = Add(allIgnored)
+T.expect(#world.created == beforeIgnored and not allIgnoredRegion.eaNativeOn, "every ID ignored: no slot, Everything Auras draws it")
+local typedOnly = NewAura("TypedOnly", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
+  auranames = { "Seal of Righteousness" }, auraRankSpellIDs = { "Seal of Righteousness" } })
+private.loaded.TypedOnly = true
+local beforeTyped = #world.created
+local typedRegion = Add(typedOnly)
+T.expect(#world.created == beforeTyped and not typedRegion.eaNativeOn, "a typed name in a rank list is not a known ID, so it waits")
 local before = #world.created
 local none = NewAura("None", { type = "aura2", unit = "player", debuffType = "HELPFUL", useName = true,
   auranames = { "Nothing Known" } })
@@ -564,7 +585,7 @@ local function Imported(trigger)
 end
 local import = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" } })
 private.EAModernize(import)
-T.expect(import.eaNative == true and import.eaVersion == 4, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
+T.expect(import.eaNative == true and import.eaVersion == 5, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
 local mine = NewAura("Mine", base)
 mine.eaVersion, mine.eaNative = 2, nil
 private.EAModernize(mine)
@@ -579,7 +600,7 @@ T.expect(missing.eaNative == true and not private.EANativeWanted(missing),
   "one Blizzard cannot draw is switched on, yet Everything Auras draws it until it qualifies")
 local fresh = { id = "Fresh", uid = "Fresh", regionType = "aurabar", triggers = {} }
 private.EAModernize(fresh)
-T.expect(fresh.eaNative == true and fresh.eaVersion == 4, "a new Progress Bar starts with it on")
+T.expect(fresh.eaNative == true and fresh.eaVersion == 5, "a new Progress Bar starts with it on")
 local textAura = { id = "Text", uid = "Text", regionType = "text", triggers = {} }
 private.EAModernize(textAura)
 T.expect(textAura.eaNative == nil, "other region types are left alone")

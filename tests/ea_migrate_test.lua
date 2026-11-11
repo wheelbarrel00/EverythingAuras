@@ -83,12 +83,95 @@ data = { triggers = {}, load = { use_class = true, class = { single = "MAGE" }, 
 private.EAModernize(data)
 T.expect(data.load.class.single == "MAGE", "an existing class load is kept")
 
+T.section("Aura (Modern) settings the first conversion missed (0.5.1)")
+local fresh = { type = "secretAura", debuffType = "Debuff", unit = "target",
+  secretUseTotal = true, secretTotalOperator = "=", secretTotal = "30",
+  secretUseStacks = true, secretStacksOperator = "=", secretStacks = "3",
+  nativeFilters = { PLAYER = true }, secretUseRankSpellIDs = true, auraRankSpellIDs = { 20154, " Demon Skin " },
+  secretUseExcludedSpellIDs = true, excludedAuraSpellIDs = { "408498", "409946" } }
+data = { triggers = { { trigger = fresh } }, regionType = "icon" }
+private.EAModernize(data)
+T.expect(fresh.totalOperator == "==" and fresh.stacksOperator == "==", "an equals filter gets the operator Lua compiles")
+local compiles = loadstring("return function(m) return not(m.duration / m.modRate " .. fresh.totalOperator .. " 30) end")
+T.expect(compiles ~= nil and loadstring("return function(m) return not(m.duration / m.modRate = 30) end") == nil,
+  "the old operator did not compile, the new one does")
+T.expect(fresh.ownOnly == true, "Own Only comes from the saved PLAYER filter")
+T.expect(fresh.useName and fresh.auranames[1] == "Seal of Righteousness" and fresh.auranames[2] == "Demon Skin",
+  "a typed name is kept beside the names its IDs give")
+T.expect(not fresh.useExactSpellId, "no exact IDs appear from a name")
+T.expect(fresh.useIgnoreExactSpellId and fresh.ignoreAuraSpellids[1] == "408498" and fresh.ignoreAuraSpellids[2] == "409946",
+  "excluded IDs become the ignore list")
+T.expect(fresh.secretTotalOperator == "=" and fresh.nativeFilters.PLAYER == true, "ForeverAuras' own fields stay")
+
+local notMine = { type = "secretAura", debuffType = "Buff", nativeFilters = { PLAYER = false }, ownOnly = nil,
+  auraspellids = { "1" } }
+private.EAModernize({ triggers = { { trigger = notMine } } })
+T.expect(notMine.ownOnly == false, "a false PLAYER filter means not mine")
+local kept = { type = "secretAura", debuffType = "Buff", nativeFilters = { PLAYER = true }, ownOnly = false,
+  auraspellids = { "1" } }
+private.EAModernize({ triggers = { { trigger = kept } } })
+T.expect(kept.ownOnly == false, "an Own Only the aura already has is kept")
+
+local names = { type = "secretAura", debuffType = "Buff", secretUseRankSpellIDs = true, auraRankSpellIDs = { "Well Fed" } }
+private.EAModernize({ triggers = { { trigger = names } } })
+T.expect(names.useName and names.auranames[1] == "Well Fed" and not names.useExactSpellId,
+  "a list of typed names matches by name, not as text spell IDs")
+
+-- The shape the old conversion left behind, saved by 0.5.0.
+local saved = { type = "aura2", eaConvertedFrom = "secretAura", debuffType = "HARMFUL", unit = "target",
+  useTotal = true, totalOperator = "=", total = "30", secretUseRankSpellIDs = true, auraRankSpellIDs = { "Demon Skin" },
+  useExactSpellId = true, auraspellids = { "Demon Skin" }, nativeFilters = { PLAYER = true } }
+data = { triggers = { { trigger = saved } }, eaVersion = 4 }
+private.EAModernize(data)
+T.expect(saved.totalOperator == "==" and saved.ownOnly == true, "auras imported before 0.5.1 are fixed too")
+T.expect(saved.useName and saved.auranames[1] == "Demon Skin" and not saved.useExactSpellId and #saved.auraspellids == 0,
+  "a name stored as an exact ID moves to the names")
+T.expect(data.eaVersion == 5, "and they reach the new counter")
+
+local dispel = { type = "secretAura", debuffType = "Debuff", auraspellids = { "1" }, includeDispelTypes = { Magic = true } }
+private.EAModernize({ triggers = { { trigger = dispel } } })
+T.expect(dispel.use_debuffClass and dispel.debuffClass.magic and not dispel.debuffClass.curse, "included dispel types")
+local undispel = { type = "secretAura", debuffType = "Debuff", auraspellids = { "1" },
+  excludeDispelTypes = { Bleed = true, Curse = true, Disease = true, Magic = true, Poison = true } }
+private.EAModernize({ triggers = { { trigger = undispel } } })
+T.expect(undispel.use_debuffClass and undispel.debuffClass.none and undispel.debuffClass.enrage
+  and not undispel.debuffClass.magic, "excluded dispel types leave the others")
+
+local units = { type = "secretAura", debuffType = "Buff", unit = "group", auraspellids = { "1" },
+  useUnitClass = true, unitClass = { ROGUE = true }, useUnitRoles = true, unitRoles = { HEALER = true },
+  useUnitNames = true, unitNames = { "Bob", "Ann" }, useIncludePets = true }
+private.EAModernize({ triggers = { { trigger = units } } })
+T.expect(units.useClass and units.class.ROGUE and units.useGroupRole and units.group_role.HEALER,
+  "class and role filters carry over")
+T.expect(units.useUnitName and units.unitName == "Ann, Bob" and units.use_includePets and units.includePets == "PlayersAndPets",
+  "names and pets carry over")
+
+local list = { type = "secretAura", debuffType = "Buff", secretSpellList = "my_list" }
+private.EAModernize({ triggers = { { trigger = list } } })
+T.expect(list.useName == true and type(list.auranames) == "table" and #list.auranames == 0,
+  "a spell list it cannot read matches nothing instead of every aura")
+
+T.section("Swing timers keep their hand (0.5.1)")
+local hands = {}
+for swingType, expected in pairs({ [0] = "main", [1] = "off", [2] = "ranged" }) do
+  local swing = { type = "unit", event = "Swing Timer", swingType = swingType, hand = "main" }
+  private.EAModernize({ triggers = { { trigger = swing } }, eaVersion = 4 })
+  hands[#hands + 1] = swing.hand == expected
+end
+T.expect(hands[1] and hands[2] and hands[3], "off hand and ranged follow the saved weapon")
+local own = { type = "unit", event = "Swing Timer", hand = "off" }
+private.EAModernize({ triggers = { { trigger = own } }, eaVersion = 4 })
+T.expect(own.hand == "off", "a swing timer made here keeps its hand")
+local later = { type = "unit", event = "Swing Timer", swingType = 2, hand = "main" }
+private.EAModernize({ triggers = { { trigger = later } }, eaVersion = 5 })
+T.expect(later.hand == "main", "the step runs once, so a hand changed afterwards stays")
+
 T.section("Each step runs once")
 warningRuns = 0
 data = { triggers = {}, eaVersion = 3, texture = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square" }
 private.EAModernize(data)
 T.expect(data.texture == "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square", "an aura already at version 3 is not migrated again")
-T.expect(data.eaVersion == 4 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
+T.expect(data.eaVersion == 5 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
 data = { triggers = {}, eaVersion = 7 }
 private.EAModernize(data)
 T.expect(data.eaVersion == 7, "a newer counter from a later build is never lowered")

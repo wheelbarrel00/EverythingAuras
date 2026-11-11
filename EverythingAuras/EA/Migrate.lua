@@ -3,11 +3,16 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 4
+local EA_VERSION = 5
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
 local FA_CLASSIFICATION = { Buff = "HELPFUL", Debuff = "HARMFUL", Dispel = "HARMFUL" }
+-- A lone "=" pasted into the aura trigger's generated test would not compile.
+local OPERATORS = { ["="] = "==" }
+local OPERATOR_KEYS = { "remOperator", "stacksOperator", "totalOperator" }
+local SWING_HANDS = { [0] = "main", [1] = "off", [2] = "ranged" }
+local DISPEL_CLASSES = { "magic", "curse", "disease", "poison", "enrage", "none" }
 
 -- Forever has one class tree per class, so each of its spec IDs names a class (GetSpecializationInfoByID).
 local FOREVER_SPEC_CLASS = {
@@ -62,6 +67,135 @@ local function HasEntries(list)
   return type(list) == "table" and next(list) ~= nil
 end
 
+local function TypedName(value)
+  if type(value) == "string" and not tonumber(value) then
+    local name = value:match("^%s*(.-)%s*$")
+    return name ~= "" and name or nil
+  end
+end
+
+local function AddName(trigger, name)
+  trigger.useName = true
+  trigger.auranames = type(trigger.auranames) == "table" and trigger.auranames or {}
+  for _, existing in ipairs(trigger.auranames) do
+    if existing == name then
+      return
+    end
+  end
+  trigger.auranames[#trigger.auranames + 1] = name
+end
+
+local function HasSpells(trigger)
+  return (trigger.useName and HasEntries(trigger.auranames))
+    or (trigger.useExactSpellId and HasEntries(trigger.auraspellids))
+end
+
+local function Strings(list)
+  local out = {}
+  for key, value in pairs(type(list) == "table" and list or {}) do
+    if type(value) == "string" and value ~= "" then
+      out[#out + 1] = value
+    elseif value == true and type(key) == "string" then
+      out[#out + 1] = key
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+local function DispelClasses(trigger)
+  local classes = {}
+  if HasEntries(trigger.includeDispelTypes) then
+    for kind, on in pairs(trigger.includeDispelTypes) do
+      if on and type(kind) == "string" then
+        classes[kind:lower()] = true
+      end
+    end
+  elseif HasEntries(trigger.excludeDispelTypes) then
+    for _, kind in ipairs(DISPEL_CLASSES) do
+      classes[kind] = true
+    end
+    for kind, on in pairs(trigger.excludeDispelTypes) do
+      if on and type(kind) == "string" then
+        classes[kind:lower()] = nil
+      end
+    end
+  end
+  return next(classes) and classes or nil
+end
+
+-- Also runs on auras saved before it, so it only fills settings the aura does not have yet.
+local function CompleteSecretAura(trigger)
+  for _, key in ipairs(OPERATOR_KEYS) do
+    trigger[key] = OPERATORS[trigger[key]] or trigger[key]
+  end
+
+  local native = type(trigger.nativeFilters) == "table" and trigger.nativeFilters or {}
+  if trigger.ownOnly == nil and type(native.PLAYER) == "boolean" then
+    trigger.ownOnly = native.PLAYER
+  end
+
+  if trigger.secretUseRankSpellIDs == true and type(trigger.auraRankSpellIDs) == "table" then
+    for _, value in ipairs(trigger.auraRankSpellIDs) do
+      local name = TypedName(value)
+      if name then
+        AddName(trigger, name)
+      end
+    end
+  end
+  if trigger.useExactSpellId and type(trigger.auraspellids) == "table" then
+    local ids = {}
+    for _, value in ipairs(trigger.auraspellids) do
+      if tonumber(value) then
+        ids[#ids + 1] = value
+      end
+    end
+    if #ids < #trigger.auraspellids then
+      trigger.auraspellids = ids
+      trigger.useExactSpellId = #ids > 0
+    end
+  end
+
+  if trigger.useIgnoreExactSpellId == nil and trigger.secretUseExcludedSpellIDs == true
+    and HasEntries(trigger.excludedAuraSpellIDs) then
+    trigger.useIgnoreExactSpellId = true
+    trigger.ignoreAuraSpellids = Strings(trigger.excludedAuraSpellIDs)
+  end
+
+  if trigger.use_debuffClass ~= true then
+    local classes = DispelClasses(trigger)
+    if classes then
+      trigger.use_debuffClass = true
+      trigger.debuffClass = classes
+    end
+  end
+
+  if trigger.useClass == nil and trigger.useUnitClass == true and HasEntries(trigger.unitClass) then
+    trigger.useClass, trigger.class = true, CopyTable(trigger.unitClass)
+  end
+  if trigger.useGroupRole == nil and trigger.useUnitRoles == true and HasEntries(trigger.unitRoles) then
+    trigger.useGroupRole, trigger.group_role = true, CopyTable(trigger.unitRoles)
+  end
+  if trigger.useUnitName == nil and trigger.useUnitNames == true and HasEntries(trigger.unitNames) then
+    trigger.useUnitName, trigger.unitName = true, table.concat(Strings(trigger.unitNames), ", ")
+  end
+  if trigger.use_includePets == nil and trigger.useIncludePets == true then
+    trigger.use_includePets, trigger.includePets = true, "PlayersAndPets"
+  end
+
+  -- With no names or IDs the aura trigger matches every aura on the unit, so a list it cannot read matches none.
+  if type(trigger.secretSpellList) == "string" and trigger.secretSpellList ~= "" and not HasSpells(trigger) then
+    trigger.useName, trigger.auranames = true, {}
+  end
+end
+
+local function CompleteSwingTimer(trigger)
+  local hand = SWING_HANDS[tonumber(trigger.swingType)]
+  if hand then
+    trigger.hand = hand
+  end
+end
+
 -- FA's "Aura (Modern)" keeps the standard aura fields and mirrors a few under secret* names, so this maps them
 -- back and leaves every FA field in place.
 local function ConvertSecretAura(trigger)
@@ -98,7 +232,7 @@ local function ConvertSecretAura(trigger)
   if trigger.secretUseRankSpellIDs == true and HasEntries(trigger.auraRankSpellIDs) then
     local names, seen = {}, {}
     for _, id in ipairs(trigger.auraRankSpellIDs) do
-      local name = C_Spell.GetSpellName(tonumber(id) or 0)
+      local name = tonumber(id) and C_Spell.GetSpellName(tonumber(id)) or TypedName(id)
       if name and not seen[name] then
         seen[name] = true
         names[#names + 1] = name
@@ -173,6 +307,16 @@ function Private.EAModernize(data)
   end
   if version < 4 and data.eaNative == nil and (data.regionType == "icon" or data.regionType == "aurabar") then
     data.eaNative = true
+  end
+  if version < 5 and type(data.triggers) == "table" then
+    for _, triggerData in ipairs(data.triggers) do
+      local trigger = type(triggerData) == "table" and triggerData.trigger
+      if type(trigger) == "table" and trigger.eaConvertedFrom == "secretAura" then
+        CompleteSecretAura(trigger)
+      elseif type(trigger) == "table" and trigger.event == "Swing Timer" and trigger.swingType ~= nil then
+        CompleteSwingTimer(trigger)
+      end
+    end
   end
   data.eaVersion = math.max(version, EA_VERSION)
   Private.EAUpdateWarnings(data)
