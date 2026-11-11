@@ -219,7 +219,7 @@ local function AddConvertedLosses(data, trigger, list, seen)
   end
 end
 
--- Custom code reaches this table plus the sandbox's own helpers under each fork's name (AuraEnvironment.lua:600-634).
+-- Custom code sees this table plus the sandbox's own helpers and blocked no-ops under each fork's name (AuraEnvironment.lua).
 local function MissingAddonFunctions(code)
   local missing, seen = {}, {}
   local extras, blocked = Private.EAAddonTableOverrides or {}, Private.EAAddonTableBlocked or {}

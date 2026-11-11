@@ -44,7 +44,7 @@ local plain = Check({ triggers = { { trigger = { type = "aura2", unit = "player"
   load = {} })
 T.expect(next(plain) == nil, "no warnings at all")
 
-T.section("ForeverAuras settings that are not here yet")
+T.section("Settings that are not here yet")
 local group = Check({ regionType = "group", blizzardFlow = true })
 T.expect(Has(group.EANotHereYet, "Modern Aura Group layout"), "a Modern Aura Group says its layout is lost")
 local flagged = Check({ load = { use_loadFlag = true, loadFlag = "x" } })

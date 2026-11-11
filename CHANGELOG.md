@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.1-beta] - 2026-11-10
+
+### Improvements
+
+- An ignore list of exact spell IDs no longer stops Blizzard from drawing the icon
+- Imported auras now name what Everything Auras cannot do yet, such as functions their custom code calls or a Load Flag, and Health filters it has to ignore because health is secret, instead of dropping them silently
+
+### Bug Fixes
+
+- Imported ForeverAuras Aura (Modern) triggers with Total Time set to "=" now keep that filter
+- Imported Aura (Modern) triggers keep Own Only
+- Spell names typed into an imported Aura (Modern) trigger are kept, and its ignored spell IDs carry over
+- Auras you imported before this update get these fixes at your next login
+- Imported swing timers keep their off hand or ranged setting (ranged not yet tested in game)
+- Updated the bundled LibRangeCheck-3.0 to its newest version, which adds a fix for WoW Forever
+
 ## [0.5.0-beta] - 2026-11-07
 
 ### New Features
