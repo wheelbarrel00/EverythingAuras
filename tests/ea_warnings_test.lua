@@ -12,11 +12,14 @@ local private = {
   EAStandIns = {},
   EANativeWanted = function() return false end,
   category_event_prototype = { unit = true, item = true, spell = true },
+  EAAddonTableOverrides = { GetBossStage = function() end },
+  EAAddonTableBlocked = { ShowOptions = true },
   event_prototypes = { ["Stance/Form/Aura"] = {}, ["Weapon Enchant"] = {}, ["Health"] = {}, ["Swing Timer"] = {},
     ["Money"] = {}, ["Character Stats"] = {}, ["Cooldown Progress (Spell)"] = {} },
 }
 local L = setmetatable({}, { __index = function(_, key) return key end })
-local addon = { IsLibsOK = function() return true end, L = L, ScanEvents = function() end, GetData = function() end }
+local addon = { IsLibsOK = function() return true end, L = L, ScanEvents = function() end, GetData = function() end,
+  SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end }
 local env = setmetatable({
   EverythingAuras = addon,
   C_Spell = { GetSpellName = function(id) return ({ [1] = "One", [2] = "Two" })[id] end },
@@ -90,5 +93,20 @@ local guarded = CodeAura("function() if ForeverAuras.AuraOverlay then ForeverAur
 T.expect(guarded.EAMissingAddonFunctions == nil, "code that tests for the function first is fine")
 local commented = CodeAura("function()\n-- ForeverAuras.AuraOverlay(f)\nreturn true end")
 T.expect(commented.EAMissingAddonFunctions == nil, "a call in a comment is ignored")
+local boss = CodeAura("function() return WeakAuras.GetBossStage() == 2 end")
+T.expect(boss.EAMissingAddonFunctions == nil, "a helper only the sandbox adds, such as GetBossStage, is fine")
+local opener = CodeAura("function() WeakAuras.ShowOptions() return false end")
+T.expect(opener.EAMissingAddonFunctions == nil, "a function the sandbox blocks never errors, so it is not named")
+local f = assert(io.open(T.repoRoot .. "/EverythingAuras/AuraEnvironment.lua", "rb"))
+local source = f:read("*a")
+f:close()
+T.expect(source:find("Private.EAAddonTableOverrides = FakeEverythingAurasMixin.override", 1, true) ~= nil
+  and source:find("Private.EAAddonTableBlocked = FakeEverythingAurasMixin.blockedFunctions", 1, true) ~= nil,
+  "the warning reads the sandbox's own helper and blocked lists")
+
+T.section("A setting WeakAuras has too")
+local heal = Check({ triggers = { { trigger = { type = "unit", event = "Health", use_showIncomingHeal = true } } } })
+T.expect(Has(heal.EANotHereYet, "Incoming Heal display") and not Has(heal.EANotHereYet, "ForeverAuras"),
+  "named without blaming ForeverAuras")
 
 T.finish()

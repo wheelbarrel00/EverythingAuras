@@ -153,6 +153,7 @@ end
 local env = setmetatable({
   EverythingAuras = {
     IsLibsOK = function() return true end,
+    SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end,
     L = setmetatable({}, { __index = function(_, key) return key end }),
     GetData = function(id) return auras[id] end,
     GetRegion = function(id) return regions[id] end,

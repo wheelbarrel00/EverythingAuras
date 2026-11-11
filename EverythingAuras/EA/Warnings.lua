@@ -39,7 +39,7 @@ local SECRET_HEALTH_FILTERS = {
 
 local ADDON_TABLES = { "EverythingAuras", "WeakAuras", "M33kAuras", "ForeverAuras" }
 local GROUP_UNITS = { group = true, party = true, raid = true }
--- Aura flags that only mean something on buffs, or only on debuffs, so an export applies them to that kind only.
+-- These flags exist only on buffs or only on debuffs, so on the other kind they filter nothing.
 local BUFF_ONLY_FLAGS = { CANCELABLE = true, EXTERNAL_DEFENSIVE = true, BIG_DEFENSIVE = true, IMPORTANT = true }
 local DEBUFF_ONLY_FLAGS = { CROWD_CONTROL = true }
 
@@ -177,7 +177,8 @@ local function CountNames(trigger)
   end
   if trigger.useExactSpellId and type(trigger.auraspellids) == "table" then
     for _, id in ipairs(trigger.auraspellids) do
-      local name = tonumber(id) and C_Spell.GetSpellName(tonumber(id))
+      local number = EverythingAuras.SafeToNumber(id)
+      local name = number and C_Spell.GetSpellName(number)
       names[name or id] = true
     end
   end
@@ -188,7 +189,6 @@ local function CountNames(trigger)
   return count
 end
 
--- Settings a converted trigger saved that the standard aura trigger cannot apply.
 local function AddConvertedLosses(data, trigger, list, seen)
   if type(trigger.secretSpellList) == "string" and trigger.secretSpellList ~= "" then
     Add(list, seen, L["Spell List"])
@@ -219,18 +219,21 @@ local function AddConvertedLosses(data, trigger, list, seen)
   end
 end
 
--- The sandbox hands custom code this addon's table under each fork's name (AuraEnvironment.lua:628-631).
+-- Custom code reaches this table plus the sandbox's own helpers under each fork's name (AuraEnvironment.lua:600-634).
 local function MissingAddonFunctions(code)
   local missing, seen = {}, {}
+  local extras, blocked = Private.EAAddonTableOverrides or {}, Private.EAAddonTableBlocked or {}
   for _, tableName in ipairs(ADDON_TABLES) do
     for name in code:gmatch("[^%w_]" .. tableName .. "%s*[%.:]%s*([%a_][%w_]*)%s*%(") do
       local full = tableName .. "." .. name
-      local qualified = tableName .. "%." .. name
-      local guarded = code:find(qualified .. "%s+then") or code:find(qualified .. "%s+and[^%w_]")
-        or code:find("not%s+" .. qualified .. "[^%w_%(]")
-      if EverythingAuras[name] == nil and not guarded and not seen[full] then
+      if EverythingAuras[name] == nil and extras[name] == nil and not blocked[name] and not seen[full] then
         seen[full] = true
-        missing[#missing + 1] = full
+        local qualified = tableName .. "%." .. name
+        local guarded = code:find(qualified .. "%s+then") or code:find(qualified .. "%s+and[^%w_]")
+          or code:find("not%s+" .. qualified .. "[^%w_%(]")
+        if not guarded then
+          missing[#missing + 1] = full
+        end
       end
     end
   end
@@ -327,7 +330,7 @@ function Private.EAUpdateWarnings(data)
   SetWarning(uid, "EAMissingAddonFunctions", "warning", #missingAddon > 0
     and L["Custom code calls functions Everything Auras does not have yet, so that code will cause errors: %s"]:format(table.concat(missingAddon, ", ")))
   SetWarning(uid, "EANotHereYet", "warning", #notHere > 0
-    and L["Uses ForeverAuras settings Everything Auras does not have yet, so this aura ignores them: %s"]:format(table.concat(notHere, ", ")))
+    and L["Uses settings Everything Auras does not have yet, so this aura ignores them: %s"]:format(table.concat(notHere, ", ")))
   SetWarning(uid, "EASecretHealthFilters", "warning", #secretHealth > 0
     and L["Health is always secret, so the Health trigger ignores these filters and acts as if they pass: %s"]:format(table.concat(secretHealth, ", ")))
   SetWarning(uid, "EASecretHealth", "warning", readsHealth

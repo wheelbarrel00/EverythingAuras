@@ -95,6 +95,8 @@ local function Strings(list)
   for key, value in pairs(type(list) == "table" and list or {}) do
     if type(value) == "string" and value ~= "" then
       out[#out + 1] = value
+    elseif type(value) == "number" then
+      out[#out + 1] = tostring(value)
     elseif value == true and type(key) == "string" then
       out[#out + 1] = key
     end
@@ -124,8 +126,8 @@ local function DispelClasses(trigger)
   return next(classes) and classes or nil
 end
 
--- Also runs on auras saved before it, so it only fills settings the aura does not have yet.
-local function CompleteSecretAura(trigger)
+-- An aura saved before keeps what its owner may have changed since, a fresh import follows the export.
+local function CompleteSecretAura(trigger, fresh)
   for _, key in ipairs(OPERATOR_KEYS) do
     trigger[key] = OPERATORS[trigger[key]] or trigger[key]
   end
@@ -135,24 +137,32 @@ local function CompleteSecretAura(trigger)
     trigger.ownOnly = native.PLAYER
   end
 
+  local addNames = fresh or trigger.useName ~= false
   if trigger.secretUseRankSpellIDs == true and type(trigger.auraRankSpellIDs) == "table" then
     for _, value in ipairs(trigger.auraRankSpellIDs) do
       local name = TypedName(value)
-      if name then
+      if name and addNames then
         AddName(trigger, name)
       end
     end
   end
   if trigger.useExactSpellId and type(trigger.auraspellids) == "table" then
-    local ids = {}
+    local ids, moved = {}, false
     for _, value in ipairs(trigger.auraspellids) do
       if tonumber(value) then
         ids[#ids + 1] = value
+      else
+        moved = true
+        local name = TypedName(value)
+        if name and addNames then
+          AddName(trigger, name)
+        end
       end
     end
-    if #ids < #trigger.auraspellids then
+    -- An empty exact-ID list matches nothing, while no list at all would match every aura.
+    if moved then
       trigger.auraspellids = ids
-      trigger.useExactSpellId = #ids > 0
+      trigger.useExactSpellId = #ids > 0 or not (trigger.useName and HasEntries(trigger.auranames))
     end
   end
 
@@ -162,7 +172,7 @@ local function CompleteSecretAura(trigger)
     trigger.ignoreAuraSpellids = Strings(trigger.excludedAuraSpellIDs)
   end
 
-  if trigger.use_debuffClass ~= true then
+  if trigger.use_debuffClass == nil or (fresh and trigger.use_debuffClass == false) then
     local classes = DispelClasses(trigger)
     if classes then
       trigger.use_debuffClass = true
@@ -189,9 +199,10 @@ local function CompleteSecretAura(trigger)
   end
 end
 
-local function CompleteSwingTimer(trigger)
+-- Exports keep a stale hand beside the weapon they use, while a saved aura's hand may be the owner's own pick.
+local function CompleteSwingTimer(trigger, fresh)
   local hand = SWING_HANDS[tonumber(trigger.swingType)]
-  if hand then
+  if hand and (fresh or trigger.hand == nil or trigger.hand == "main") then
     trigger.hand = hand
   end
 end
@@ -232,7 +243,8 @@ local function ConvertSecretAura(trigger)
   if trigger.secretUseRankSpellIDs == true and HasEntries(trigger.auraRankSpellIDs) then
     local names, seen = {}, {}
     for _, id in ipairs(trigger.auraRankSpellIDs) do
-      local name = tonumber(id) and C_Spell.GetSpellName(tonumber(id)) or TypedName(id)
+      local number = EverythingAuras.SafeToNumber(id)
+      local name = number and C_Spell.GetSpellName(number) or TypedName(id)
       if name and not seen[name] then
         seen[name] = true
         names[#names + 1] = name
@@ -312,9 +324,9 @@ function Private.EAModernize(data)
     for _, triggerData in ipairs(data.triggers) do
       local trigger = type(triggerData) == "table" and triggerData.trigger
       if type(trigger) == "table" and trigger.eaConvertedFrom == "secretAura" then
-        CompleteSecretAura(trigger)
+        CompleteSecretAura(trigger, version < 1)
       elseif type(trigger) == "table" and trigger.event == "Swing Timer" and trigger.swingType ~= nil then
-        CompleteSwingTimer(trigger)
+        CompleteSwingTimer(trigger, version < 1)
       end
     end
   end

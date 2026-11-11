@@ -631,6 +631,8 @@ local overridden = {
   ForeverAuras = FakeEverythingAuras,
 }
 Private.EASandboxOverrides = overridden
+Private.EAAddonTableOverrides = FakeEverythingAurasMixin.override
+Private.EAAddonTableBlocked = FakeEverythingAurasMixin.blockedFunctions
 
 -- Block global function names in namespace API tables
 for name, functions in pairs(blockedNamespaceFunctions) do

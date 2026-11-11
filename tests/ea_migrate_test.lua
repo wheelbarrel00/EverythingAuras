@@ -13,8 +13,12 @@ local function CopyTable(t)
   return c
 end
 local env = setmetatable({
-  EverythingAuras = { IsLibsOK = function() return true end },
-  C_Spell = { GetSpellName = function(id) return SPELLS[id] end },
+  EverythingAuras = { IsLibsOK = function() return true end,
+    SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end },
+  C_Spell = { GetSpellName = function(id)
+    assert(id < 2147483648, "a spell ID past 32 bits reached the client")
+    return SPELLS[id]
+  end },
   CopyTable = CopyTable,
 }, { __index = _G })
 setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Migrate.lua")), env)("EverythingAuras", private)
@@ -151,6 +155,40 @@ private.EAModernize({ triggers = { { trigger = list } } })
 T.expect(list.useName == true and type(list.auranames) == "table" and #list.auranames == 0,
   "a spell list it cannot read matches nothing instead of every aura")
 
+T.section("Pre-ship scan fixes (0.5.1)")
+local numeric = { type = "secretAura", debuffType = "Buff", auraspellids = { "1" }, secretUseExcludedSpellIDs = true,
+  excludedAuraSpellIDs = { 408498 } }
+private.EAModernize({ triggers = { { trigger = numeric } } })
+T.expect(numeric.ignoreAuraSpellids and numeric.ignoreAuraSpellids[1] == "408498", "excluded IDs saved as numbers carry over")
+
+local leftover = { type = "secretAura", debuffType = "Debuff", auraspellids = { "1" }, use_debuffClass = false,
+  includeDispelTypes = { Magic = true } }
+private.EAModernize({ triggers = { { trigger = leftover } } })
+T.expect(leftover.use_debuffClass == true, "on a fresh import the export's own dispel types win over a leftover off")
+local switchedOff = { type = "aura2", eaConvertedFrom = "secretAura", debuffType = "HARMFUL", auraspellids = { "1" },
+  useExactSpellId = true, use_debuffClass = false, includeDispelTypes = { Magic = true } }
+private.EAModernize({ triggers = { { trigger = switchedOff } }, eaVersion = 4 })
+T.expect(switchedOff.use_debuffClass == false, "a dispel filter switched off on an aura saved before stays off")
+local namesOff = { type = "aura2", eaConvertedFrom = "secretAura", debuffType = "HELPFUL", useName = false,
+  secretUseRankSpellIDs = true, auraRankSpellIDs = { "Well Fed" }, useExactSpellId = true, auraspellids = { "Well Fed" } }
+private.EAModernize({ triggers = { { trigger = namesOff } }, eaVersion = 4 })
+T.expect(namesOff.useName == false and namesOff.useExactSpellId == true and #namesOff.auraspellids == 0,
+  "Name(s) switched off stays off, and the trigger keeps matching nothing")
+
+local exactNames = { type = "secretAura", debuffType = "Buff", secretUseSpellIDs = true, auraspellids = { "Well Fed" } }
+private.EAModernize({ triggers = { { trigger = exactNames } } })
+T.expect(exactNames.useName and exactNames.auranames[1] == "Well Fed" and not exactNames.useExactSpellId,
+  "a name in the exact ID list matches by name")
+local junk = { type = "secretAura", debuffType = "Buff", secretUseSpellIDs = true, auraspellids = { "  " } }
+private.EAModernize({ triggers = { { trigger = junk } } })
+T.expect(junk.useExactSpellId == true and #junk.auraspellids == 0 and not junk.useName,
+  "an exact ID list with nothing usable left matches nothing, not every aura")
+
+local huge = { type = "secretAura", debuffType = "Buff", secretUseRankSpellIDs = true,
+  auraRankSpellIDs = { "99999999999", 20154 } }
+local ok = pcall(private.EAModernize, { triggers = { { trigger = huge } } })
+T.expect(ok and huge.auranames and huge.auranames[1] == "Seal of Righteousness", "a spell ID past 32 bits never reaches the client")
+
 T.section("Swing timers keep their hand (0.5.1)")
 local hands = {}
 for swingType, expected in pairs({ [0] = "main", [1] = "off", [2] = "ranged" }) do
@@ -159,6 +197,12 @@ for swingType, expected in pairs({ [0] = "main", [1] = "off", [2] = "ranged" }) 
   hands[#hands + 1] = swing.hand == expected
 end
 T.expect(hands[1] and hands[2] and hands[3], "off hand and ranged follow the saved weapon")
+local stale = { type = "unit", event = "Swing Timer", swingType = 0, hand = "ranged" }
+private.EAModernize({ triggers = { { trigger = stale } } })
+T.expect(stale.hand == "main", "a fresh import follows the saved weapon over a stale hand")
+local picked = { type = "unit", event = "Swing Timer", swingType = 0, hand = "off" }
+private.EAModernize({ triggers = { { trigger = picked } }, eaVersion = 4 })
+T.expect(picked.hand == "off", "a hand picked on an aura saved before is kept")
 local own = { type = "unit", event = "Swing Timer", hand = "off" }
 private.EAModernize({ triggers = { { trigger = own } }, eaVersion = 4 })
 T.expect(own.hand == "off", "a swing timer made here keeps its hand")
