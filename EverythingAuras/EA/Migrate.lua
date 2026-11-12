@@ -3,7 +3,7 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 5
+local EA_VERSION = 6
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
@@ -207,6 +207,15 @@ local function CompleteSwingTimer(trigger, fresh)
   end
 end
 
+-- The options reset a dropdown value that is not one of its choices, so imported values are made valid first.
+local function CompleteItemTrigger(trigger)
+  if trigger.event == "Bag Space" and trigger.bagType == nil then
+    trigger.bagType = trigger.use_includeSpecialty and "all" or "general"
+  elseif trigger.event == "Equipment Durability" then
+    trigger.durabilitySlot = tonumber(trigger.durabilitySlot) or trigger.durabilitySlot
+  end
+end
+
 -- FA's "Aura (Modern)" keeps the standard aura fields and mirrors a few under secret* names, so this maps them
 -- back and leaves every FA field in place.
 local function ConvertSecretAura(trigger)
@@ -327,6 +336,14 @@ function Private.EAModernize(data)
         CompleteSecretAura(trigger, version < 1)
       elseif type(trigger) == "table" and trigger.event == "Swing Timer" and trigger.swingType ~= nil then
         CompleteSwingTimer(trigger, version < 1)
+      end
+    end
+  end
+  if version < 6 and type(data.triggers) == "table" then
+    for _, triggerData in ipairs(data.triggers) do
+      local trigger = type(triggerData) == "table" and triggerData.trigger
+      if type(trigger) == "table" and trigger.type == "item" then
+        CompleteItemTrigger(trigger)
       end
     end
   end

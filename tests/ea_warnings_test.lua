@@ -18,7 +18,8 @@ local private = {
     ["Money"] = {}, ["Character Stats"] = {}, ["Cooldown Progress (Spell)"] = {} },
 }
 local L = setmetatable({}, { __index = function(_, key) return key end })
-local addon = { IsLibsOK = function() return true end, L = L, ScanEvents = function() end, GetData = function() end,
+local addon = { IsLibsOK = function() return true end, IsForever = function() return false end, L = L,
+  ScanEvents = function() end, GetData = function() end,
   SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end }
 local env = setmetatable({
   EverythingAuras = addon,
@@ -108,5 +109,15 @@ T.section("A setting WeakAuras has too")
 local heal = Check({ triggers = { { trigger = { type = "unit", event = "Health", use_showIncomingHeal = true } } } })
 T.expect(Has(heal.EANotHereYet, "Incoming Heal display") and not Has(heal.EANotHereYet, "ForeverAuras"),
   "named without blaming ForeverAuras")
+
+T.section("Money filters (0.6.0)")
+local moneyTrigger = { type = "unit", event = "Money", use_silver = true, use_money = true }
+local stock = Check({ triggers = { { trigger = moneyTrigger } } })
+T.expect(Has(stock.EANotHereYet, "Silver filter") and Has(stock.EANotHereYet, "Money filter"),
+  "Retail still names the Money filters it ignores")
+addon.IsForever = function() return true end
+setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Warnings.lua")), env)("EverythingAuras", private)
+local forever = Check({ triggers = { { trigger = moneyTrigger } } })
+T.expect(forever.EANotHereYet == nil, "WoW Forever reads them, so nothing is named")
 
 T.finish()

@@ -19596,6 +19596,7 @@ local everythingAuras = {
 		"issecrettable",
 		"issecretvalue",
 		"NineSliceUtil",
+		"NUM_TOTAL_EQUIPPED_BAG_SLOTS",
 		"PixelUtil",
 		"ScrollBoxConstants",
 		"SECONDS_PER_DAY",

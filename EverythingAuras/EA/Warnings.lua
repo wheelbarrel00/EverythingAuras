@@ -30,6 +30,10 @@ local UNREAD_FILTERS = {
     { "use_bonushealing", L["Bonus Healing filter"] }, { "use_expertisepercent", L["Expertise filter"] },
   },
 }
+-- EA/Triggers.lua makes these Money filters on WoW Forever.
+if EverythingAuras.IsForever() then
+  UNREAD_FILTERS["Money"] = nil
+end
 
 -- Health is always secret, so the Health trigger hides these filters and lets them pass (Prototypes.lua Health).
 local SECRET_HEALTH_FILTERS = {

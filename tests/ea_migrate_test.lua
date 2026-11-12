@@ -130,7 +130,7 @@ private.EAModernize(data)
 T.expect(saved.totalOperator == "==" and saved.ownOnly == true, "auras imported before 0.5.1 are fixed too")
 T.expect(saved.useName and saved.auranames[1] == "Demon Skin" and not saved.useExactSpellId and #saved.auraspellids == 0,
   "a name stored as an exact ID moves to the names")
-T.expect(data.eaVersion == 5, "and they reach the new counter")
+T.expect(data.eaVersion == 6, "and they reach the new counter")
 
 local dispel = { type = "secretAura", debuffType = "Debuff", auraspellids = { "1" }, includeDispelTypes = { Magic = true } }
 private.EAModernize({ triggers = { { trigger = dispel } } })
@@ -210,12 +210,31 @@ local later = { type = "unit", event = "Swing Timer", swingType = 2, hand = "mai
 private.EAModernize({ triggers = { { trigger = later } }, eaVersion = 5 })
 T.expect(later.hand == "main", "the step runs once, so a hand changed afterwards stays")
 
+T.section("Bag Space and Durability settings become dropdown values (0.6.0)")
+local function migrated(item, version)
+  private.EAModernize({ triggers = { { trigger = item } }, eaVersion = version })
+  return item
+end
+T.expect(migrated({ type = "item", event = "Bag Space", use_includeSpecialty = true }).bagType == "all",
+  "Include Specialty Bags on becomes All Bags")
+T.expect(migrated({ type = "item", event = "Bag Space", use_includeSpecialty = false }).bagType == "general"
+  and migrated({ type = "item", event = "Bag Space" }).bagType == "general", "off or unset becomes General Bags")
+T.expect(migrated({ type = "item", event = "Bag Space", use_includeSpecialty = true }, 5).bagType == "all",
+  "a Bag Space aura imported before 0.6.0 gets it too")
+T.expect(migrated({ type = "item", event = "Bag Space", bagType = "specialty", use_includeSpecialty = true }).bagType
+  == "specialty", "a bag choice already made stays")
+T.expect(migrated({ type = "item", event = "Equipment Durability", durabilitySlot = "3" }).durabilitySlot == 3,
+  "a slot saved as text becomes a number")
+T.expect(migrated({ type = "item", event = "Equipment Durability" }).durabilitySlot == nil, "no slot stays unset")
+T.expect(migrated({ type = "unit", event = "Bag Space" }).bagType == nil, "only item triggers are touched")
+T.expect(migrated({ type = "item", event = "Bag Space" }, 6).bagType == nil, "the step runs once")
+
 T.section("Each step runs once")
 warningRuns = 0
 data = { triggers = {}, eaVersion = 3, texture = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square" }
 private.EAModernize(data)
 T.expect(data.texture == "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square", "an aura already at version 3 is not migrated again")
-T.expect(data.eaVersion == 5 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
+T.expect(data.eaVersion == 6 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
 data = { triggers = {}, eaVersion = 7 }
 private.EAModernize(data)
 T.expect(data.eaVersion == 7, "a newer counter from a later build is never lowered")
