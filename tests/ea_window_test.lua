@@ -250,6 +250,35 @@ T.expect(private.db.eaShowWhatsNew == true, "its own box turns it back on")
 rec.buttons["What Works in Combat"].onClick()
 T.expect(not whatsNewWindow.shown and rec.selected[#rec.selected] == "combat", "What Works in Combat opens that page")
 
+T.section("Forever's In Combat page and What's New")
+local foreverEA = { IsLibsOK = function() return true end, IsForever = function() return true end, L = L }
+local texts = {}
+local stockCreateText = ctx.CreateText
+function ctx.CreateText(_, _, text) texts[#texts + 1] = text return Stub({ text = text }) end
+local retailEA = env.EverythingAuras
+env.EverythingAuras = foreverEA
+rec.rows, rec.lines = {}, {}
+rec.tabs[1].build(ctx, Stub({ _controls = {} }))
+ctx.CreateText = stockCreateText
+env.EverythingAuras = retailEA
+T.expect(#rowsOf("What else works in combat") == 6, "Forever lists six things that work in combat")
+local rangeAt
+for i, text in ipairs(texts) do
+  if text == "Range" then rangeAt = i end
+end
+T.expect(rangeAt and texts[rangeAt - 2] == "Your casts" and texts[rangeAt + 2] == "Health"
+  and texts[rangeAt + 1]:find("Range Check and Spell in Range", 1, true), "Range sits between Your casts and Health")
+T.expect(hasLine("its Cooldown Manager triggers become standard triggers") and hasLine("its Load Flags work"),
+  "the Imports paragraph names the new conversions")
+local seenBefore = private.db.eaSeenWhatsNew
+local whatsNewChunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/WhatsNew.lua"))
+setfenv(whatsNewChunk, setmetatable({ EverythingAuras = foreverEA }, { __index = env }))("EverythingAuras", private)
+private.EAShowWhatsNew()
+T.expect(whatsNewWindow.section == "Everything Auras 0.6.0-beta" and hasLine("Bag Space, Equipment Durability")
+  and not hasLine("Cooldowns keep count in combat"), "Forever shows the 0.6.0 notes")
+rec.buttons["Got it"].onClick()
+T.expect(private.db.eaSeenWhatsNew == "0.6.0-beta" and seenBefore == "0.5.0-beta", "and marks 0.6.0 seen, where Retail marks 0.5.0")
+
 T.section("Slash commands on Forever")
 local foreverFrames, foreverPrinted = {}, {}
 local foreverPrivate = {}

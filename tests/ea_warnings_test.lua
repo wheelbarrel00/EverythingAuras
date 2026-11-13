@@ -38,7 +38,9 @@ local env = setmetatable({
   EverythingAuras = addon,
   C_Spell = { GetSpellName = function(id) return ({ [1] = "One", [2] = "Two" })[id] end },
 }, { __index = _G })
+local stockGetAllWarnings = private.AuraWarnings.GetAllWarnings
 setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Warnings.lua")), env)("EverythingAuras", private)
+T.expect(private.AuraWarnings.GetAllWarnings == stockGetAllWarnings, "Retail keeps the stock warnings list for groups")
 
 local count = 0
 local function Check(data)

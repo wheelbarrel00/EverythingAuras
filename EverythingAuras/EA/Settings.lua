@@ -137,19 +137,23 @@ local function CombatPage(_, content)
   }), { fitHeight = true })
 
   local works = stack(ui:CreateGroup(content, L["What else works in combat"]))
-  for _, row in ipairs({
+  local rows = {
     { L["Spell cooldowns"], L["The swipe, and whether the spell is ready. The time left is estimated from the cooldown Everything Auras learned the last time you used the spell out of combat. The estimate changes only looks, such as colors, size and sort order, never sounds, chat, custom code or glows. A cooldown shortened partway, for example by a proc, shows a little too long, but it still turns ready on time. Spells with charges show no time left."] },
     { L["Item cooldowns"], L["Everything, including the time left."] },
     { L["Your casts"], L["Which spell you cast."] },
     { L["Health"], L["Bars draw, but the numbers can't be compared or used in math. Your maximum health can, a target's can't."] },
     { L["Combat log"], L["Closed to addons on WoW Forever. Auras that need it stay off and carry a warning."] },
-  }) do
+  }
+  if EverythingAuras.IsForever() then
+    table.insert(rows, 4, { L["Range"], L["Range Check and Spell in Range, including whether your target is in range of a spell."] })
+  end
+  for _, row in ipairs(rows) do
     works:Add(KeyValue(content, row[1], row[2]), { fitHeight = true })
   end
 
   local imports = stack(ui:CreateGroup(content, L["Imports"]))
   imports:Add(TextBlock(content, {
-    L["Strings from WeakAuras, M33kAuras and ForeverAuras import. ForeverAuras' Aura (Modern) triggers become standard Aura triggers matched by spell name, its spec restrictions become class restrictions, and its media paths point at the same files here. Each converted aura carries a note."],
+    L["Strings from WeakAuras, M33kAuras and ForeverAuras import. ForeverAuras' Aura (Modern) triggers become standard Aura triggers matched by spell name, its Cooldown Manager triggers become standard triggers, its Modern Aura Groups become a fixed row, its Class and Specialization settings become class restrictions, its talent spec settings use the Specialization load option, its Load Flags work, and its media paths point at the same files here. Each converted aura carries a note, and a summary after the import lists what was converted."],
     L["An aura that uses something WoW Forever lacks, such as the combat log, secret health values or an old function with no stand-in, carries a warning icon that says what won't work."],
   }), { fitHeight = true })
 

@@ -37,7 +37,7 @@ jobs:
           for toc in */*_Camelot.toc; do
             grep -q '^## Version: @project-version@' "$toc" || { echo "::error::$toc does not use @project-version@"; exit 1; }
           done
-          if grep -rl -- '--@localization' --include='*.lua' .; then
+          if grep -rl --include='*.lua' -- '--@localization' .; then
             echo "::error::@localization tokens must not ship"; exit 1
           fi
 

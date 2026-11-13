@@ -23,7 +23,7 @@ for key, value in pairs({
     = "The aura's own texts, borders and glows hide while Everything Auras is unsure in combat. Its On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds.",
   ["Closed to addons on WoW Forever. Auras that need it stay off and carry a warning."]
     = "Closed to addons. Auras that need it stay off and carry a warning.",
-  ["Strings from WeakAuras, M33kAuras and ForeverAuras import. ForeverAuras' Aura (Modern) triggers become standard Aura triggers matched by spell name, its spec restrictions become class restrictions, and its media paths point at the same files here. Each converted aura carries a note."]
+  ["Strings from WeakAuras, M33kAuras and ForeverAuras import. ForeverAuras' Aura (Modern) triggers become standard Aura triggers matched by spell name, its Cooldown Manager triggers become standard triggers, its Modern Aura Groups become a fixed row, its Class and Specialization settings become class restrictions, its talent spec settings use the Specialization load option, its Load Flags work, and its media paths point at the same files here. Each converted aura carries a note, and a summary after the import lists what was converted."]
     = "Strings from WeakAuras and M33kAuras import.",
   ["An aura that uses something WoW Forever lacks, such as the combat log, secret health values or an old function with no stand-in, carries a warning icon that says what won't work."]
     = "An aura that uses something addons can no longer do, such as the combat log, math on secret health values or an old function with no stand-in, carries a warning icon that says what won't work.",

@@ -60,9 +60,10 @@ T.expect(retail:find("EA\\Names.lua%s+EA\\Retail.lua") ~= nil, "the retail TOC l
 T.expect(retail:find("for WoW Forever", 1, true) == nil, "the retail TOC notes do not name Forever")
 T.expect(retail:match("## Interface: (12%d+)") ~= nil and not retail:find("16001", 1, true), "the retail TOC has only retail numbers")
 
+T.expect(sources:find('local WHATS_NEW_VERSION = "0.5.0-beta"', 1, true) ~= nil and sources:find("local ENTRIES = {", 1, true) ~= nil
+  and sources:find('if EverythingAuras.IsForever() then\n  WHATS_NEW_VERSION = "0.6.0-beta"', 1, true) ~= nil,
+  "Retail keeps the 0.5.0 What's New and only Forever moves to 0.6.0")
 -- Forever never sets these fields, so these fallbacks are what it runs.
-T.expect(sources:find('local WHATS_NEW_VERSION = "0.5.0-beta"', 1, true) ~= nil and sources:find("local ENTRIES = {", 1, true) ~= nil,
-  "both clients show the shared What's New")
 T.expect(sources:find("Private.EARetailExampleSpells or { 20289, 19740, 20289 }", 1, true) ~= nil, "Forever keeps its example spells")
 
 local templates = io.open(T.repoRoot .. "/EverythingAurasTemplates/EverythingAurasTemplates.toc", "rb")

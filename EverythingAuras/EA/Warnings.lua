@@ -413,16 +413,18 @@ local SEVERITY_BY_TITLE = { [L["Information"]] = "info", [L["Sound"]] = "sound",
 local LEVEL = { info = 0, sound = 1, tts = 2, warning = 3, error = 4 }
 
 -- The stock list shows a group only its children's warnings (AuraWarnings.lua GetAllWarnings), so its own are added.
-local GetAllWarnings = Private.AuraWarnings.GetAllWarnings
-function Private.AuraWarnings.GetAllWarnings(uid)
-  local results = GetAllWarnings(uid)
-  local data = Private.GetDataByUID(uid)
-  if data and (data.regionType == "group" or data.regionType == "dynamicgroup") then
-    local icon, title, message = Private.AuraWarnings.FormatWarnings(uid)
-    local severity = title and SEVERITY_BY_TITLE[title]
-    if severity then
-      results[severity] = { icon = icon, prio = 5 + LEVEL[severity], title = title, message = message, auraId = data.id }
+if FOREVER then
+  local GetAllWarnings = Private.AuraWarnings.GetAllWarnings
+  function Private.AuraWarnings.GetAllWarnings(uid)
+    local results = GetAllWarnings(uid)
+    local data = Private.GetDataByUID(uid)
+    if data and (data.regionType == "group" or data.regionType == "dynamicgroup") then
+      local icon, title, message = Private.AuraWarnings.FormatWarnings(uid)
+      local severity = title and SEVERITY_BY_TITLE[title]
+      if severity then
+        results[severity] = { icon = icon, prio = 5 + LEVEL[severity], title = title, message = message, auraId = data.id }
+      end
     end
+    return results
   end
-  return results
 end

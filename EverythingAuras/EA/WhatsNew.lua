@@ -22,6 +22,25 @@ local ENTRIES = {
   },
 }
 
+-- 0.6.0 changed only WoW Forever, so Retail keeps the 0.5.0 notes and shows nothing new.
+if EverythingAuras.IsForever() then
+  WHATS_NEW_VERSION = "0.6.0-beta"
+  ENTRIES = {
+    {
+      title = L["New triggers"],
+      desc = L["Bag Space, Equipment Durability, Ammo, Range Check, Spell in Range, Spell in Range (Action Bar) and Tracking are new triggers, and Money can check gold, silver and copper. Range Check and Spell in Range keep working in combat."],
+    },
+    {
+      title = L["Talent spec, form and weapon oil"],
+      desc = L["The new Specialization load option loads an aura for the talent tree with the most points, once a tree has 21 or more. Until then, an aura set to load for a spec stays unloaded. Loading at 21 points is new and not yet tested in game. Click a tree once to load for it, twice to never load for it. Stance/Form/Aura can check a form by its ID, and Weapon Enchant has an Enchant Type, so an aura can watch for your weapon oil."],
+    },
+    {
+      title = L["ForeverAuras imports"],
+      desc = L["Load Flags, Cooldown Manager triggers and Modern Aura Groups now come over, and custom code that calls AuraOverlay, WatchSwingTimer or GetSwingTimerInfo works. After you import a ForeverAuras string, a summary lists what was converted and which auras still have a warning. /fa opens Everything Auras when no other addon uses it at login."],
+    },
+  }
+end
+
 local WIDTH, HEIGHT = 600, 560
 local PAD_TOP, PAD_SIDE, PAD_BOTTOM = 20, 24, 24
 local HEAD_GAP, SECTION_GAP = 4, 16
