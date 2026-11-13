@@ -45,10 +45,22 @@ local ITEMS = {
 }
 
 local function fixture(forever)
-  local f = { bags = {}, items = {}, durability = {}, equipped = {}, events = {}, requests = {}, frames = {} }
+  local f = { bags = {}, items = {}, durability = {}, equipped = {}, events = {}, requests = {}, frames = {},
+    tickers = {}, units = { target = true }, range = { 25, 30 }, inRange = {}, asked = {}, enabled = {}, slots = {},
+    known = {} }
   local addon = { IsLibsOK = function() return true end, IsForever = function() return forever end,
-    newFeatureString = "*", L = setmetatable({}, { __index = function(_, key) return key end }) }
-  local private = { ExecEnv = {}, category_event_prototype = { item = {}, unit = {} },
+    newFeatureString = "*", L = setmetatable({}, { __index = function(_, key) return key end }),
+    GetRange = function()
+      if f.range == "error" then error("range library error") end
+      return f.range[1], f.range[2]
+    end,
+    IsSpellInRange = function()
+      if f.spellRange == "error" then error("spell range error") end
+      return f.spellRange
+    end,
+    IsSpellKnownIncludingPet = function(spell) return f.known[spell] == true end }
+  f.rawGetRange, f.rawSpellInRange = addon.GetRange, addon.IsSpellInRange
+  local private = { ExecEnv = {}, category_event_prototype = { item = {}, unit = {}, spell = {} },
     event_prototypes = { Money = { args = {} } },
     item_slot_types = { [0] = "Ammo", [1] = "Head", [2] = "Neck", [3] = "Shoulder", [5] = "Chest", [6] = "Waist",
       [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Finger", [12] = "Finger", [13] = "Trinket",
@@ -100,9 +112,33 @@ local function fixture(forever)
     GetInventoryItemID = function(_, slot) return f.equipped[slot] and f.equipped[slot].id end,
     GetInventoryItemCount = function(_, slot) return f.equipped[slot] and f.equipped[slot].count or 0 end,
     GetInventoryItemTexture = function(_, slot) return f.equipped[slot] and f.equipped[slot].icon end,
+    C_Timer = { NewTicker = function(interval, fn)
+      local ticker = { interval = interval, fn = fn }
+      f.tickers[#f.tickers + 1] = ticker
+      return ticker
+    end },
+    UnitExists = function(unit) return f.units[unit] == true end,
+    LibStub = function()
+      local function iterate(list) return function() local i = 0 return function() i = i + 1 return list[i] end end end
+      return { GetFriendCheckers = iterate({ 30, 5 }), GetHarmCheckers = iterate({ 10, 40 }), GetMiscCheckers = iterate({}) }
+    end,
+    C_ActionBar = { FindSpellActionButtons = function(id) return f.slots[id] end },
   }, { __index = _G })
+  env.C_Spell = {
+    GetSpellName = function(id) return ({ [20271] = "Judgement", [853] = "Hammer of Justice" })[id] end,
+    GetSpellInfo = function(spell)
+      if spell == 20271 or spell == "Judgement" then return { name = "Judgement", iconID = 135959, spellID = 20271 } end
+      if spell == 133 or spell == "Fireball" then return { name = "Fireball", iconID = 135812, spellID = 133 } end
+    end,
+    IsSpellInRange = function(spell, unit)
+      f.asked[#f.asked + 1] = spell
+      if not env.C_Spell.GetSpellInfo(spell) then return nil end
+      return f.inRange[unit]
+    end,
+    EnableSpellRangeCheck = function(spell, on) f.enabled[#f.enabled + 1] = { spell, on } end,
+  }
   setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Triggers.lua")), env)("EverythingAuras", private)
-  f.private, f.env = private, env
+  f.private, f.env, f.addon = private, env, addon
   return f
 end
 
@@ -277,5 +313,127 @@ T.expect(money[3].hidden == nil and money[3].conditionType == "number" and money
 local code = ConstructFunction(f.private.event_prototypes.Money,
   { use_silver = true, silver = "50", silver_operator = ">=", use_money = true, money = "100", money_operator = ">" })
 T.expect(code:find("silver>=50", 1, true) and code:find("money>100", 1, true), "both become tests")
+
+T.section("Range functions for custom code (0.6.0 round 2)")
+T.expect(retail.addon.GetRange == retail.rawGetRange, "Retail keeps the library calls as they are")
+local r = fixture(true)
+local minR, maxR = r.addon.GetRange("target", true)
+T.expect(minR == 25 and maxR == 30, "a readable range passes through")
+r.range = { secret, 30 }
+T.expect(r.addon.GetRange("target", true) == nil, "a hidden reading is unknown")
+r.range = "error"
+T.expect(r.addon.GetRange("target", true) == nil and r.addon.CheckRange("target", 10, "<=") == false,
+  "a library error is unknown, and CheckRange treats unknown as out of range")
+r.range = { 25, 30 }
+T.expect(r.addon.CheckRange("target", 30, "<=") == true and r.addon.CheckRange("target", 20, ">=") == true
+  and r.addon.CheckRange("target", "x", "<=") == nil, "CheckRange with a readable range")
+r.spellRange = secret
+T.expect(r.addon.IsSpellInRange(20271, "target") == nil, "a hidden spell range is unknown")
+r.spellRange = "error"
+T.expect(r.addon.IsSpellInRange(20271, "target") == nil, "and so is an error")
+r.spellRange = 1
+T.expect(r.addon.IsSpellInRange(20271, "target") == 1, "a readable answer passes through")
+
+T.section("Range Check")
+local rc = fixture(true)
+shown, state = run(rc, { type = "unit", event = "Range Check", unit = "target" })
+T.expect(shown and state.minRange == 25 and state.maxRange == 30 and state.unit == "target", "no filter: shows the estimate")
+T.expect(#rc.tickers == 1 and rc.tickers[1].interval == 0.1, "checked 10 times a second")
+rc.tickers[1].fn()
+T.expect(rc.events[#rc.events].event == "EA_RANGE_UPDATE", "each tick scans the range triggers")
+run(rc, { type = "unit", event = "Range Check" })
+T.expect(#rc.tickers == 1, "one timer for every range trigger")
+shown = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "5", range_operator = "<=" })
+T.expect(shown == false, "within 5 yards fails at 25-30")
+shown = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "30", range_operator = "<=" })
+T.expect(shown == true, "within 30 yards passes")
+shown = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "20" })
+T.expect(shown == true, "no operator means at least 20 yards")
+shown = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "", range_operator = "<=" })
+T.expect(shown == false, "a blank distance counts as 8 yards")
+rc.range = { 0, 5 }
+shown = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "", range_operator = "<=" })
+T.expect(shown == true, "so a target within 5 yards passes it")
+rc.range = { 25, 30 }
+rc.range = { secret, secret }
+shown, state = run(rc, { type = "unit", event = "Range Check", use_range = true, range = "40", range_operator = "<=" })
+T.expect(shown == false, "an unknown range fails a distance filter")
+shown, state = run(rc, { type = "unit", event = "Range Check" })
+T.expect(shown and state.minRange == 0 and state.maxRange == 999, "and reads 0 to 999 without one")
+rc.units.target = nil
+shown = run(rc, { type = "unit", event = "Range Check" })
+T.expect(shown == false, "no target: hidden")
+local rangeArg = rc.private.event_prototypes["Range Check"].args[5]
+rc.units.target, rc.range = true, { 25, 30 }
+T.expect(rangeArg.name == "range" and rangeArg.conditionTest({ unit = "target" }, 30, "<=") == true,
+  "the Distance condition asks the guarded range")
+T.expect(rc.private.event_prototypes["Range Check"].args[1].text():find("30", 1, true) ~= nil,
+  "the note lists the ranges this character can measure")
+
+T.section("Spell in Range")
+local sr = fixture(true)
+sr.inRange.target = true
+shown, state = run(sr, { type = "spell", event = "Spell in Range", spellName = 20271, unit = "target" })
+T.expect(shown and state.name == "Judgement" and state.icon == 135959 and state.unit == "target", "in range: shown")
+T.expect(sr.asked[#sr.asked] == "Judgement", "asked by name, which covers every rank")
+T.expect(#sr.enabled == 1 and sr.enabled[1][1] == 20271 and sr.enabled[1][2] == true, "the range event is switched on once")
+T.expect(#sr.tickers == 0, "the current target needs no timer")
+local watch = sr.frames[1]
+T.expect(watch.events.SPELL_RANGE_CHECK_UPDATE and watch.events.PLAYER_TARGET_CHANGED, "range and target changes are heard")
+watch.OnEvent(watch, "SPELL_RANGE_CHECK_UPDATE", 853, true, true)
+T.expect(#sr.events == 0, "another addon's spell starts no scan")
+watch.OnEvent(watch, "SPELL_RANGE_CHECK_UPDATE", 20271, false, true)
+watch.OnEvent(watch, "PLAYER_TARGET_CHANGED")
+watch.OnEvent(watch, "SPELL_RANGE_CHECK_UPDATE", secret, false, true)
+T.expect(#sr.events == 3 and sr.events[1].event == "EA_SPELL_RANGE_UPDATE", "a watched spell, a new target or a hidden ID does")
+sr.inRange.target = false
+shown = run(sr, { type = "spell", event = "Spell in Range", spellName = 20271 })
+T.expect(shown == false, "out of range: hidden")
+shown = run(sr, { type = "spell", event = "Spell in Range", spellName = 20271, use_inverse = true })
+T.expect(shown == true, "Inverse shows it out of range")
+sr.inRange.target = nil
+T.expect(run(sr, { type = "spell", event = "Spell in Range", spellName = 20271 }) == false
+  and run(sr, { type = "spell", event = "Spell in Range", spellName = 20271, use_inverse = true }) == false,
+  "no answer hides it either way")
+sr.inRange.target = secret
+T.expect(run(sr, { type = "spell", event = "Spell in Range", spellName = 20271, use_inverse = true }) == false,
+  "a hidden answer too")
+sr.inRange.target = true
+shown = run(sr, { type = "spell", event = "Spell in Range", spellName = 20271, use_exact_spellName = true })
+T.expect(shown and sr.asked[#sr.asked] == 20271, "Exact Spell Match asks by ID")
+shown = run(sr, { type = "spell", event = "Spell in Range", spellName = "Judgement", use_exact_spellName = true })
+T.expect(shown == false, "an exact match on a name is no spell")
+sr.units.focus, sr.inRange.focus = true, true
+shown = run(sr, { type = "spell", event = "Spell in Range", spellName = "Judgement", unit = "focus" })
+T.expect(shown and #sr.tickers == 1, "focus is checked 10 times a second")
+T.expect(#sr.enabled == 1, "the range event was switched on once over every load")
+T.expect(sr.private.event_prototypes["Spell in Range"].internal_events({ unit = "focus" })[1] == "EA_RANGE_UPDATE"
+  and sr.private.event_prototypes["Spell in Range"].internal_events({})[1] == "EA_SPELL_RANGE_UPDATE",
+  "the target listens to the range event, other units to the timer")
+
+T.section("Spell in Range (Action Bar)")
+local ab = fixture(true)
+ab.known.Judgement, ab.slots[20271], ab.inRange.target = true, { 7, 19 }, true
+local bar = { type = "spell", event = "Spell in Range (Action Bar)", spellName = 20271 }
+shown, state = run(ab, bar)
+T.expect(shown and state.rangeState == "inRange" and state.inRange == true and state.slot == 7, "in range, slot 7")
+ab.inRange.target = false
+shown, state = run(ab, bar)
+T.expect(shown and state.rangeState == "outOfRange" and state.inRange == false, "out of range still shows without Show On")
+ab.inRange.target = nil
+shown, state = run(ab, bar)
+T.expect(shown and state.rangeState == "noTarget", "no target")
+ab.inRange.target = true
+shown = run(ab, { type = "spell", event = "Spell in Range (Action Bar)", spellName = 20271, use_rangeState = true,
+  rangeState = "outOfRange" })
+T.expect(shown == false, "Show On Out of Range hides it in range")
+shown = run(ab, { type = "spell", event = "Spell in Range (Action Bar)", spellName = 20271, use_rangeState = false,
+  rangeState = "inRange" })
+T.expect(shown == true, "a Show On left unticked is no filter")
+ab.slots[20271] = nil
+shown, state = run(ab, bar)
+T.expect(shown and state.slot == nil, "not on any bar: still shown, no slot")
+shown = run(ab, { type = "spell", event = "Spell in Range (Action Bar)", spellName = "Fireball" })
+T.expect(shown == false, "a spell you do not know never shows")
 
 T.finish()
