@@ -183,14 +183,18 @@ local function GeneralPage(_, content)
     L["A left-click on the minimap button opens the options. The same as /eauras minimap."]))
 
   local commands = stack(ui:CreateGroup(content, L["Commands"]))
-  local shortTip = L["/wa and /ea are taken at login only when no other addon uses them."]
-  for _, row in ipairs({
+  local forever = EverythingAuras.IsForever()
+  local shortTip = forever and L["/wa, /ea and /fa are taken at login only when no other addon uses them."]
+    or L["/wa and /ea are taken at login only when no other addon uses them."]
+  local rows = {
     { "/eauras", L["Open or close the options. Also /everythingauras."] },
     { "/eauras settings", L["Open this window."] },
     { "/eauras help", L["List every command in chat."] },
-    { "/wa", Private.EAShortCommands["/wa"] and "Everything Auras" or L["Used by another addon"], shortTip },
-    { "/ea", Private.EAShortCommands["/ea"] and "Everything Auras" or L["Used by another addon"], shortTip },
-  }) do
+  }
+  for _, short in ipairs(forever and { "/wa", "/ea", "/fa" } or { "/wa", "/ea" }) do
+    rows[#rows + 1] = { short, Private.EAShortCommands[short] and "Everything Auras" or L["Used by another addon"], shortTip }
+  end
+  for _, row in ipairs(rows) do
     local line = ui:CreateTextRow(content, row[1], row[2])
     line.label:SetTextColor(ui:Color("text"))
     if row[3] then ui:AttachTooltip(line, row[1], row[3]) end

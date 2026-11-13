@@ -82,7 +82,8 @@ end
 -- The same code fields the options' custom code list shows, enabled ones only.
 local function CollectCode(data)
   local list = {}
-  for _, triggerData in ipairs(data.triggers) do
+  local triggers = type(data.triggers) == "table" and data.triggers or {}
+  for _, triggerData in ipairs(triggers) do
     local trigger = type(triggerData) == "table" and triggerData.trigger
     local untrigger = type(triggerData) == "table" and triggerData.untrigger
     if type(trigger) == "table" and trigger.type == "custom" then
@@ -102,7 +103,7 @@ local function CollectCode(data)
       end
     end
   end
-  AddCode(list, data.triggers.customTriggerLogic, data.triggers.disjunctive == "custom")
+  AddCode(list, triggers.customTriggerLogic, triggers.disjunctive == "custom")
   AddCode(list, data.customText)
   AddCode(list, data.customAnchor, data.anchorFrameType == "CUSTOM")
   local actions = type(data.actions) == "table" and data.actions or {}
@@ -156,8 +157,20 @@ local function ChecksGlobal(code, name)
     or code:find("not%s+" .. name .. "[^%w_%(]") ~= nil
 end
 
+local warned = {}
+
 local function SetWarning(uid, key, severity, message)
   Private.AuraWarnings.UpdateWarning(uid, key, message and severity or nil, message)
+  if message and severity == "warning" then
+    warned[uid] = warned[uid] or {}
+    warned[uid][key] = true
+  elseif warned[uid] then
+    warned[uid][key] = nil
+  end
+end
+
+function Private.EAHasWarning(uid)
+  return warned[uid] ~= nil and next(warned[uid]) ~= nil
 end
 
 local function Add(list, seen, label)
@@ -249,21 +262,25 @@ end
 
 function Private.EAUpdateWarnings(data)
   local uid = data.uid
-  if not uid or type(data.triggers) ~= "table" then
+  if not uid then
     return
   end
+  -- A group imported without a triggers table gets one from the data stub only after this runs.
+  local triggers = type(data.triggers) == "table" and data.triggers or {}
 
-  local converted, cooldownManager, combatLog
+  local converted, cooldownManager, combatLog, cdmConverted, cdmOthers
   local unknownEvents = {}
   local notHere, notHereSeen = {}, {}
   local secretHealth, secretHealthSeen = {}, {}
-  if data.blizzardFlow == true then
-    Add(notHere, notHereSeen, L["Modern Aura Group layout"])
+  local flowFrames = data.blizzardFlowFrames == "UNITFRAME" or data.blizzardFlowFrames == "NAMEPLATE"
+  if data.blizzardFlow == true and (not FOREVER or flowFrames or not data.eaFlowLaidOut) then
+    Add(notHere, notHereSeen, flowFrames and L["Modern Aura Group on unit frames or nameplates"]
+      or L["Modern Aura Group layout"])
   end
-  if type(data.load) == "table" and data.load.use_loadFlag == true then
+  if not FOREVER and type(data.load) == "table" and data.load.use_loadFlag == true then
     Add(notHere, notHereSeen, L["Load Flag"])
   end
-  for _, triggerData in ipairs(data.triggers) do
+  for _, triggerData in ipairs(triggers) do
     local trigger = type(triggerData) == "table" and triggerData.trigger
     if type(trigger) == "table" then
       if trigger.eaConvertedFrom == "secretAura" then
@@ -288,7 +305,17 @@ function Private.EAUpdateWarnings(data)
         end
       end
       converted = converted or trigger.eaConvertedFrom == "secretAura"
-      cooldownManager = cooldownManager or trigger.type == "cdm"
+      local legacyCdm = trigger.type == "spell" and trigger.event == "Blizzard Cooldown Manager"
+      cooldownManager = cooldownManager or trigger.type == "cdm" or legacyCdm
+      if trigger.eaConvertedFrom == "cdm" then
+        cdmConverted = true
+        if type(trigger.eaCdmOthers) == "table" and #trigger.eaCdmOthers > 0 then
+          cdmOthers = table.concat(trigger.eaCdmOthers, ", ")
+        end
+        if trigger.cdmUseElapsed then
+          Add(notHere, notHereSeen, L["Elapsed Time filter"])
+        end
+      end
       if trigger.type == "combatlog" then
         combatLog = true
       elseif trigger.type == "custom" and type(trigger.events) == "string" then
@@ -297,7 +324,7 @@ function Private.EAUpdateWarnings(data)
           or events:find("%f[%w_]CLEU%f[^%w_]") ~= nil
       end
       if Private.category_event_prototype[trigger.type] and type(trigger.event) == "string"
-        and not Private.event_prototypes[trigger.event] then
+        and not Private.event_prototypes[trigger.event] and not legacyCdm then
         unknownEvents[#unknownEvents + 1] = trigger.event
       end
     end
@@ -326,7 +353,13 @@ function Private.EAUpdateWarnings(data)
       and L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. Blizzard draws its icon where it can, so the icon stays accurate in combat. You can turn this off under Display, Blizzard Draws This Icon."]
       or L["Imported from ForeverAuras' Aura (Modern) and converted to a standard Aura trigger. In combat it can only show what Blizzard lets addons read."]))
   SetWarning(uid, "EACooldownManagerTrigger", "warning", cooldownManager
-    and L["Uses ForeverAuras' Cooldown Manager trigger, which Everything Auras does not support yet. That trigger never activates."])
+    and (FOREVER and L["Uses ForeverAuras' Cooldown Manager trigger, and this client could not tell which spell it watches. That trigger never activates."]
+      or L["Uses ForeverAuras' Cooldown Manager trigger, which Everything Auras does not support yet. That trigger never activates."]))
+  SetWarning(uid, "EAConvertedCooldownManager", "info", cdmConverted
+    and (cdmOthers and L["Imported from ForeverAuras' Cooldown Manager trigger and converted to a standard trigger. It listed several spells, and this one watches only the first. Also listed: %s"]:format(cdmOthers)
+      or L["Imported from ForeverAuras' Cooldown Manager trigger and converted to a standard trigger."]))
+  SetWarning(uid, "EAModernGroupRow", "info", FOREVER and data.blizzardFlow == true and data.eaFlowLaidOut == true
+    and not flowFrames and L["Imported from a ForeverAuras Modern Aura Group. Its auras sit in a fixed row, so a missing one leaves a gap, and the group's sort and limit are not used."])
   SetWarning(uid, "EACombatLog", "warning", combatLog
     and L["Uses the combat log, which WoW Forever closes to addons. That part never fires."])
   SetWarning(uid, "EAUnknownEvent", "warning", #unknownEvents > 0
@@ -345,4 +378,23 @@ function Private.EAUpdateWarnings(data)
     and L["Uses ForeverAuras' talent spec load option, which Everything Auras does not have. The aura loads regardless of talent spec."])
   SetWarning(uid, "EAAuraReads", "info", auraReads
     and L["Custom code reads auras with UnitAura, UnitBuff or UnitDebuff. On WoW Forever these return nothing while Blizzard keeps auras secret, for example in combat."])
+end
+
+local SEVERITY_BY_TITLE = { [L["Information"]] = "info", [L["Sound"]] = "sound", [L["Text To Speech"]] = "tts",
+  [L["Warning"]] = "warning", [L["Error"]] = "error" }
+local LEVEL = { info = 0, sound = 1, tts = 2, warning = 3, error = 4 }
+
+-- The stock list shows a group only its children's warnings (AuraWarnings.lua GetAllWarnings), so its own are added.
+local GetAllWarnings = Private.AuraWarnings.GetAllWarnings
+function Private.AuraWarnings.GetAllWarnings(uid)
+  local results = GetAllWarnings(uid)
+  local data = Private.GetDataByUID(uid)
+  if data and (data.regionType == "group" or data.regionType == "dynamicgroup") then
+    local icon, title, message = Private.AuraWarnings.FormatWarnings(uid)
+    local severity = title and SEVERITY_BY_TITLE[title]
+    if severity then
+      results[severity] = { icon = icon, prio = 5 + LEVEL[severity], title = title, message = message, auraId = data.id }
+    end
+  end
+  return results
 end

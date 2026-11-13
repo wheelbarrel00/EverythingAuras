@@ -127,3 +127,5 @@ EA\CombatOptions.lua
 EA\NativeOptions.lua
 EA\ErrorOptions.lua
 EA\OptionsWindow.lua
+EA\ImportSummary.lua
+EA\TristateList.lua

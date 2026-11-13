@@ -16,14 +16,17 @@ local function Texture()
   return Stub({ SetTexCoord = function(self, l, r, t, b) self.coords = { l, r, t, b } end })
 end
 
-local rec = { links = {}, opened = {}, painted = nil, buttons = {} }
+local rec = { links = {}, opened = {}, painted = nil, buttons = {}, queued = {}, scanned = {} }
 local window
 local ui = Stub()
 function ui.CreateWindow(_, spec)
   window = Stub({ spec = spec, hooks = {}, header = Stub({ hooks = {} }), headerButtons = {} })
   function window.SetToplevel(self, on) self.toplevel = on end
   function window.ClearAllPoints(self) self.cleared = true end
-  function window.HookScript(self, script, f) self.hooks[script] = f end
+  function window.HookScript(self, script, f)
+    local before = self.hooks[script]
+    self.hooks[script] = before and function() before() f() end or f
+  end
   function window.SetSize(self, w, h) self.w, self.h = w, h end
   function window.header.HookScript(self, script, f) self.hooks[script] = f end
   function window.AddHeaderButton(self, icon, title, body, onClick)
@@ -52,7 +55,8 @@ local private = {
 local options = { Private = private }
 local L = setmetatable({}, { __index = function(_, key) return key end })
 local env = setmetatable({
-  EverythingAuras = { IsLibsOK = function() return true end, L = L },
+  EverythingAuras = { IsLibsOK = function() return true end, IsForever = function() return rec.forever end, L = L,
+    ScanEvents = function(event) rec.queued[#rec.queued + 1] = event end },
 }, { __index = _G })
 local chunk = assert(loadfile(T.repoRoot .. "/EverythingAurasOptions/EA/OptionsWindow.lua"))
 setfenv(chunk, env)("EverythingAurasOptions", options)
@@ -124,4 +128,14 @@ bar.hooks.OnShow()
 local refit = true
 for _, b in ipairs(rec.buttons) do refit = refit and b.fits == 1 end
 T.expect(refit, "the labels are measured again when the bar shows")
+
+T.section("Options events on Forever")
+T.expect(#rec.queued == 0, "off Forever the window sends no events")
+rec.forever = true
+private.ScanEvents = function(event) rec.scanned[#rec.scanned + 1] = event end
+local ff = options.EACreateOptionsWindow({}, 830, 665, 750, 240)
+ff.hooks.OnShow()
+T.expect(rec.queued[1] == "FA_OPTIONS_OPENED" and #rec.scanned == 0, "showing queues the opened event")
+ff.hooks.OnHide()
+T.expect(rec.scanned[1] == "FA_OPTIONS_CLOSED" and #rec.queued == 1, "hiding sends the closed event at once")
 T.finish()

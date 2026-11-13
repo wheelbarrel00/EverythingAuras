@@ -3,12 +3,25 @@ local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
 
-local warnings = {}
+local warnings, severities, byUid = {}, {}, {}
 local private = {
-  AuraWarnings = { UpdateWarning = function(uid, key, severity, message)
-    warnings[uid] = warnings[uid] or {}
-    warnings[uid][key] = severity and message or nil
-  end },
+  AuraWarnings = {
+    UpdateWarning = function(uid, key, severity, message)
+      warnings[uid] = warnings[uid] or {}
+      warnings[uid][key] = severity and message or nil
+      severities[uid] = severities[uid] or {}
+      severities[uid][key] = severity
+    end,
+    GetAllWarnings = function() return {} end,
+    FormatWarnings = function(uid)
+      local key, message = next(warnings[uid] or {})
+      if key then
+        local severity = severities[uid][key]
+        return "icon-" .. severity, severity == "info" and "Information" or "Warning", message
+      end
+    end,
+  },
+  GetDataByUID = function(uid) return byUid[uid] end,
   EAStandIns = {},
   EANativeWanted = function() return false end,
   category_event_prototype = { unit = true, item = true, spell = true },
@@ -130,5 +143,56 @@ T.expect(forever.EANotHereYet == nil, "WoW Forever reads them, so nothing is nam
 local foreverThree = Check(roundThree)
 T.expect(foreverThree.EANotHereYet == nil and foreverThree.EAForeverSpec == nil,
   "WoW Forever reads Form ID, Enchant Type and the talent spec load option (0.6.0 round 3)")
+
+T.section("Import pieces on WoW Forever (0.6.0 round 4)")
+T.expect(Check({ load = { use_loadFlag = true, loadFlag = "x" } }).EANotHereYet == nil, "Load Flag works here")
+local laidOut = Check({ regionType = "group", blizzardFlow = true, eaFlowLaidOut = true })
+T.expect(laidOut.EANotHereYet == nil and Has(laidOut.EAModernGroupRow, "fixed row"),
+  "a Modern Aura Group laid out as a row gets a note, not a warning")
+T.expect(Has(Check({ regionType = "group", blizzardFlow = true }).EANotHereYet, "Modern Aura Group layout"),
+  "one left as it was is still named")
+local bare = { uid = "bare", regionType = "group", blizzardFlow = true, eaFlowLaidOut = true }
+private.EAUpdateWarnings(bare)
+T.expect(warnings.bare and Has(warnings.bare.EAModernGroupRow, "fixed row"),
+  "a group imported without a triggers table gets its note at once")
+local onFrames = Check({ regionType = "group", blizzardFlow = true, eaFlowLaidOut = true, blizzardFlowFrames = "UNITFRAME" })
+T.expect(Has(onFrames.EANotHereYet, "on unit frames or nameplates") and onFrames.EAModernGroupRow == nil,
+  "auras drawn on unit frames or nameplates are named")
+local unread = { type = "cdm", event = "Blizzard Cooldown Manager" }
+local unreadAura = { triggers = { { trigger = unread } } }
+local cdmWarned = Check(unreadAura)
+T.expect(Has(cdmWarned.EACooldownManagerTrigger, "could not tell which spell"), "an unconverted Cooldown Manager trigger says why")
+T.expect(private.EAHasWarning(unreadAura.uid) == true, "and counts as a warning for the import summary")
+unread.type, unread.eaConvertedFrom = "spell", "cdm"
+unread.event = "Cooldown Progress (Spell)"
+private.EAUpdateWarnings(unreadAura)
+T.expect(private.EAHasWarning(unreadAura.uid) == false, "a cleared warning stops counting")
+local legacy = Check({ triggers = { { trigger = { type = "spell", event = "Blizzard Cooldown Manager" } } } })
+T.expect(legacy.EACooldownManagerTrigger ~= nil and legacy.EAUnknownEvent == nil,
+  "the oldest saved form gets the same warning, not an unknown trigger")
+local cdmNote = Check({ triggers = { { trigger = { type = "spell", event = "Cooldown Progress (Spell)", eaConvertedFrom = "cdm",
+  eaCdmOthers = { "Hammer of Justice", "Consecration" } } } } })
+T.expect(Has(cdmNote.EAConvertedCooldownManager, "Also listed: Hammer of Justice, Consecration")
+  and cdmNote.EACooldownManagerTrigger == nil, "a converted one names the spells it no longer watches")
+local elapsed = Check({ triggers = { { trigger = { type = "aura2", eaConvertedFrom = "cdm", cdmUseElapsed = true } } } })
+T.expect(Has(elapsed.EANotHereYet, "Elapsed Time filter") and Has(elapsed.EAConvertedCooldownManager, "converted"),
+  "an Elapsed Time filter is named")
+
+
+T.section("A group shows its own notes")
+local rowGroup = { uid = "rowGroup", id = "Row Group", regionType = "group", blizzardFlow = true, eaFlowLaidOut = true }
+byUid.rowGroup = rowGroup
+private.EAUpdateWarnings(rowGroup)
+local shown = private.AuraWarnings.GetAllWarnings("rowGroup")
+T.expect(shown.info and Has(shown.info.message, "fixed row") and shown.info.auraId == "Row Group"
+  and shown.info.prio == 5 and shown.info.title == "Information", "the group row gets its own note")
+local quietGroup = { uid = "quietGroup", id = "Quiet", regionType = "group" }
+byUid.quietGroup = quietGroup
+private.EAUpdateWarnings(quietGroup)
+T.expect(next(private.AuraWarnings.GetAllWarnings("quietGroup")) == nil, "a group without notes gets nothing")
+local leaf = { uid = "leaf", id = "Leaf", regionType = "icon", triggers = { { trigger = { type = "cdm" } } } }
+byUid.leaf = leaf
+private.EAUpdateWarnings(leaf)
+T.expect(next(private.AuraWarnings.GetAllWarnings("leaf")) == nil, "an aura's own warnings stay with the stock list")
 
 T.finish()

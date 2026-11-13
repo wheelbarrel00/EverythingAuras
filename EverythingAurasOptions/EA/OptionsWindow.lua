@@ -43,6 +43,11 @@ function OptionsPrivate.EACreateOptionsWindow(odb, width, height, minWidth, minH
       f:SetSize(OptionsPrivate.EAFoldedWidth, OptionsPrivate.EAFoldedHeight)
     end
   end)
+  if EverythingAuras.IsForever() then
+    -- Queued, so it arrives after the open has finished. Closed runs before the options clear previews.
+    f:HookScript("OnShow", function() EverythingAuras.ScanEvents("FA_OPTIONS_OPENED") end)
+    f:HookScript("OnHide", function() OptionsPrivate.Private.ScanEvents("FA_OPTIONS_CLOSED") end)
+  end
   return f
 end
 

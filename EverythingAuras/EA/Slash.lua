@@ -4,7 +4,7 @@ local Private = select(2, ...)
 
 local L = EverythingAuras.L
 
-local SHORT = { "/wa", "/ea" }
+local SHORT = EverythingAuras.IsForever() and { "/wa", "/ea", "/fa" } or { "/wa", "/ea" }
 Private.EAShortCommands = {}
 
 local function IsClaimed(command)
@@ -46,7 +46,9 @@ function Private.PrintHelp()
     if Private.EAShortCommands[command] then ours[#ours + 1] = command end
   end
   if #ours > 0 then
-    print(L["Also available as %s."]:format(table.concat(ours, L[" and "])))
+    local last = table.remove(ours)
+    local list = #ours > 0 and table.concat(ours, ", ") .. L[" and "] .. last or last
+    print(L["Also available as %s."]:format(list))
   end
   print(L["If you require additional assistance, please open a ticket on GitHub."])
 end

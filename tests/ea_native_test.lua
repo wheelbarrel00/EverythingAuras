@@ -153,6 +153,7 @@ end
 local env = setmetatable({
   EverythingAuras = {
     IsLibsOK = function() return true end,
+    IsForever = function() return false end,
     SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end,
     L = setmetatable({}, { __index = function(_, key) return key end }),
     GetData = function(id) return auras[id] end,
@@ -586,7 +587,7 @@ local function Imported(trigger)
 end
 local import = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" } })
 private.EAModernize(import)
-T.expect(import.eaNative == true and import.eaVersion == 6, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
+T.expect(import.eaNative == true and import.eaVersion == 7, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
 local mine = NewAura("Mine", base)
 mine.eaVersion, mine.eaNative = 2, nil
 private.EAModernize(mine)
@@ -601,7 +602,7 @@ T.expect(missing.eaNative == true and not private.EANativeWanted(missing),
   "one Blizzard cannot draw is switched on, yet Everything Auras draws it until it qualifies")
 local fresh = { id = "Fresh", uid = "Fresh", regionType = "aurabar", triggers = {} }
 private.EAModernize(fresh)
-T.expect(fresh.eaNative == true and fresh.eaVersion == 6, "a new Progress Bar starts with it on")
+T.expect(fresh.eaNative == true and fresh.eaVersion == 7, "a new Progress Bar starts with it on")
 local textAura = { id = "Text", uid = "Text", regionType = "text", triggers = {} }
 private.EAModernize(textAura)
 T.expect(textAura.eaNative == nil, "other region types are left alone")

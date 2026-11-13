@@ -19574,6 +19574,7 @@ local everythingAuras = {
 	},
 	read_globals = {
 		"C_ChatInfo",
+		"C_CooldownViewer",
 		"C_CurveUtil",
 		"C_InstanceEncounter",
 		"C_Minimap",
@@ -19584,6 +19585,7 @@ local everythingAuras = {
 		"C_Secrets",
 		"C_SpellBook",
 		"C_StringUtil",
+		"C_SwingTimer",
 		"C_UI",
 		"ChatFrameUtil",
 		"CreateScrollBoxListTreeListView",

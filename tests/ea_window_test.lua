@@ -76,7 +76,8 @@ local originalSlash = function(input) rec.slashInput = input end
 local private = { db = { minimap = { hide = false } } }
 
 local env = setmetatable({
-  EverythingAuras = { IsLibsOK = function() return true end, L = L, versionString = "v0.1.0-beta" },
+  EverythingAuras = { IsLibsOK = function() return true end, IsForever = function() return false end, L = L,
+    versionString = "v0.1.0-beta" },
   LibStub = function(name) return name == "EverythingUI-1.0" and EUI or LDBIcon end,
   GameTooltip = {},
   C_Spell = { GetSpellTexture = function() return 135000 end },
@@ -248,4 +249,29 @@ rec.checkboxes["Don't show this again"].setter(false)
 T.expect(private.db.eaShowWhatsNew == true, "its own box turns it back on")
 rec.buttons["What Works in Combat"].onClick()
 T.expect(not whatsNewWindow.shown and rec.selected[#rec.selected] == "combat", "What Works in Combat opens that page")
+
+T.section("Slash commands on Forever")
+local foreverFrames, foreverPrinted = {}, {}
+local foreverPrivate = {}
+local foreverEnv = setmetatable({
+  EverythingAuras = { IsLibsOK = function() return true end, IsForever = function() return true end, L = L },
+  CreateFrame = function()
+    local frame = Stub()
+    function frame.RegisterEvent(self) foreverFrames[#foreverFrames + 1] = self end
+    function frame.SetScript(self, _, f) self.handler = f end
+    return frame
+  end,
+  IsSecureCmd = function() return false end,
+  hash_SlashCmdList = {},
+  SlashCmdList = { EverythingAuras = originalSlash, OTHER = function() end },
+  print = function(...) foreverPrinted[#foreverPrinted + 1] = table.concat({ ... }, " ") end,
+}, { __index = _G })
+local slashChunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Slash.lua"))
+setfenv(slashChunk, foreverEnv)("EverythingAuras", foreverPrivate)
+for _, frame in ipairs(foreverFrames) do frame.handler(frame, "PLAYER_LOGIN") end
+T.expect(foreverPrivate.EAShortCommands["/fa"] == true and foreverPrivate.EAShortCommands["/wa"] == true
+  and not foreverPrivate.EAShortCommands["/ea"], "/fa is taken when free, beside /wa")
+T.expect(foreverEnv.SLASH_EverythingAurasShort2 == "/fa", "and registered as the second short command")
+foreverPrivate.PrintHelp()
+T.expect(table.concat(foreverPrinted, "\n"):find("Also available as /wa and /fa.", 1, true), "help names both")
 T.finish()
