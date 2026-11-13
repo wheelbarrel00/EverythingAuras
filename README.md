@@ -19,6 +19,8 @@ Forever, and it is what Everything Auras is built to handle.
 - **Your own buffs keep up:** cast one of your own buffs on yourself mid-fight and it starts over from your cast.
 - **Clear warnings:** auras that need something the game no longer allows are marked before the pull, and one broken
   aura can't flood your errors.
+- **Imports that say what happened:** strings from WeakAuras and M33kAuras import as they are, and on WoW Forever,
+  ForeverAuras strings convert as they import, with a note on each converted aura and a summary of what was converted.
 - **Safe to try:** it keeps its own saved auras and never touches another aura addon's data.
 
 ## Credit

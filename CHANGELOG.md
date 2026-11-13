@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0-beta] - 2026-11-13
+
+Everything in this version is for WoW Forever. Nothing changes on Retail.
+
+### New Features
+
+- Bag Space trigger: free, used and total slots and free space, for all bags or general bags (specialty bags not yet tested in game)
+- Equipment Durability trigger: overall and lowest durability, broken items, and the most worn item's name
+- Ammo trigger: the ammo in your bags, all of it or by item ID (ammo in the ammo slot not yet tested in game)
+- Range Check, Spell in Range and Spell in Range (Action Bar) triggers, in and out of combat
+- Tracking trigger for your tracking spells and map filters, with Any Tracking Spell for when none of your tracking spells is on
+- Role trigger for your assigned group role (not yet tested in game with a role assigned)
+- Specialization load option: an aura loads for the talent tree with 21 or more points and the most points, the tree further left on a tie. Click a tree once to load for it, twice to never load for it (tested in game below 21 points only)
+- Load Flag load option, set and read from custom code with SetLoadFlag, SetLoadFlags and LoadFlag
+- Money triggers can check gold, silver and copper
+- Stance/Form/Aura can check a form by its form ID (shapeshift forms and stances not yet tested in game)
+- Weapon Enchant has an Enchant Type: Any, Imbue, or Oil, Stone or Poison (imbues not yet tested in game)
+
+### Improvements
+
+- Imported auras with a talent spec setting now load by talent tree, as above, instead of loading for every tree. Until a tree has 21 or more points, an aura set to load for a spec stays unloaded
+- Imported Cooldown Manager triggers become standard triggers. The aura's note names any extra spells, and its warning names settings that did not carry over
+- Imported Modern Aura Groups are laid out as a fixed row
+- Imported custom code that calls AuraOverlay, WatchSwingTimer or GetSwingTimerInfo now works, and the options send their open and close events to custom code
+- After you import a ForeverAuras string, a summary lists what was converted and which auras still have a warning
+- /fa opens Everything Auras when no other addon uses it at login
+
 ## [0.5.1-beta] - 2026-11-10
 
 ### Improvements
