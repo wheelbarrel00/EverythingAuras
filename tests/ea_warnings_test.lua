@@ -115,9 +115,20 @@ local moneyTrigger = { type = "unit", event = "Money", use_silver = true, use_mo
 local stock = Check({ triggers = { { trigger = moneyTrigger } } })
 T.expect(Has(stock.EANotHereYet, "Silver filter") and Has(stock.EANotHereYet, "Money filter"),
   "Retail still names the Money filters it ignores")
+local roundThree = {
+  triggers = { { trigger = { type = "unit", event = "Stance/Form/Aura", use_formID = true, formID = { single = 5 } } },
+    { trigger = { type = "item", event = "Weapon Enchant", use_enchantKind = true, enchantKind = "imbue" } } },
+  load = { use_forever_spec = false, forever_spec = { multi = { PALADIN_HOLY = true } } },
+}
+local retailThree = Check(roundThree)
+T.expect(Has(retailThree.EANotHereYet, "Form ID filter") and Has(retailThree.EANotHereYet, "Enchant Type filter")
+  and retailThree.EAForeverSpec ~= nil, "Retail still names Form ID, Enchant Type and the talent spec load option")
 addon.IsForever = function() return true end
 setfenv(assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/Warnings.lua")), env)("EverythingAuras", private)
 local forever = Check({ triggers = { { trigger = moneyTrigger } } })
 T.expect(forever.EANotHereYet == nil, "WoW Forever reads them, so nothing is named")
+local foreverThree = Check(roundThree)
+T.expect(foreverThree.EANotHereYet == nil and foreverThree.EAForeverSpec == nil,
+  "WoW Forever reads Form ID, Enchant Type and the talent spec load option (0.6.0 round 3)")
 
 T.finish()

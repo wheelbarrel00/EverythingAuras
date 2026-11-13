@@ -37,6 +37,46 @@ local MONEY_ARGS = {
   { name = "icon", init = "C_CurrencyInfo.GetCoinIcon(money)", store = true, hidden = true, test = "true" },
 }
 
+local loadSource = read("EverythingAuras/EverythingAuras.lua")
+local loadFirst = assert(loadSource:find("local function EvalBooleanArg", 1, true))
+local loadLast = assert(loadSource:find("function EverythingAuras.GetActiveConditions", loadFirst, true))
+local loadEnv = setmetatable({ tinsert = table.insert,
+  Private = { QuotedString = function(s) return ("%q"):format(s) end } }, { __index = _G })
+local LoadConstruct = setfenv(assert(loadstring(loadSource:sub(loadFirst, loadLast - 1) .. "\nreturn ConstructFunction")),
+  loadEnv)()
+
+-- Stands in for the stock Stance/Form/Aura code: always active, bar position 1.
+local function StanceStub()
+  return { type = "unit", statesParameter = "one", init = function() return "local form = 1\nlocal active = true\n" end, args = {
+    { name = "note", type = "description" },
+    { name = "form", display = "Form", type = "multiselect", values = "form_types", test = "active", store = true,
+      conditionType = "select" },
+    { name = "inverse", display = "Inverse", type = "toggle", test = "true",
+      enable = function(trigger) return type(trigger.use_form) == "boolean" end },
+  } }
+end
+
+-- The stock Weapon Enchant arguments, from Prototypes.lua.
+local function EnchantStub()
+  return { type = "item", statesParameter = "one", init = function() return "" end, args = {
+    { name = "weapon", type = "select", values = "weapon_types", test = "true", default = "main", required = true },
+    { name = "enchant", type = "string", test = "true" },
+    { name = "enchantID", hidden = true, test = "true", store = true, conditionType = "number" },
+    { name = "stacks", display = "Stack Count", type = "number", conditionType = "number", test = "true", store = true },
+    { name = "duration", hidden = true, init = "duration", test = "true", store = true },
+    { name = "expirationTime", init = "expirationTime", hidden = true, test = "true", store = true },
+    { name = "progressType", hidden = true, init = "duration and 'timed'", test = "true", store = true },
+    { name = "name", hidden = true, init = "name", test = "true", store = true },
+    { name = "icon", hidden = true, init = "icon", test = "true", store = true },
+    { name = "enchanted", hidden = true, init = "found == true", test = "true", store = true, conditionType = "bool" },
+    { name = "remaining", type = "number", test = "true" },
+    { name = "showOn", type = "select", values = "weapon_enchant_types", test = "true", default = "showOnActive",
+      required = true },
+    { hidden = true, test = "(triggerShowOn == 'showOnActive' and found) or (triggerShowOn == 'showOnMissing' and not found) "
+      .. "or (triggerShowOn == 'showAlways')" },
+  } }
+end
+
 local ITEMS = {
   [2512] = { name = "Rough Arrow", icon = 1001, class = 6 },
   [2516] = { name = "Light Shot", icon = 1002, class = 6 },
@@ -47,7 +87,8 @@ local ITEMS = {
 local function fixture(forever)
   local f = { bags = {}, items = {}, durability = {}, equipped = {}, events = {}, requests = {}, frames = {},
     tickers = {}, units = { target = true }, range = { 25, 30 }, inRange = {}, asked = {}, enabled = {}, slots = {},
-    known = {} }
+    known = {}, tracking = {}, role = "NONE", enchants = { [0] = {}, [1] = {} }, tooltip = {}, nodes = {}, config = 7,
+    now = 100, loadScans = {} }
   local addon = { IsLibsOK = function() return true end, IsForever = function() return forever end,
     newFeatureString = "*", L = setmetatable({}, { __index = function(_, key) return key end }),
     GetRange = function()
@@ -58,10 +99,14 @@ local function fixture(forever)
       if f.spellRange == "error" then error("spell range error") end
       return f.spellRange
     end,
-    IsSpellKnownIncludingPet = function(spell) return f.known[spell] == true end }
+    IsSpellKnownIncludingPet = function(spell) return f.known[spell] == true end,
+    TenchInit = function() f.tenchInit = true end }
   f.rawGetRange, f.rawSpellInRange = addon.GetRange, addon.IsSpellInRange
   local private = { ExecEnv = {}, category_event_prototype = { item = {}, unit = {}, spell = {} },
-    event_prototypes = { Money = { args = {} } },
+    event_prototypes = { Money = { args = {} }, ["Stance/Form/Aura"] = StanceStub(), ["Weapon Enchant"] = EnchantStub() },
+    load_prototype = { args = { { name = "never" }, { name = "class" }, { name = "talent" } } },
+    form_types = { [0] = "0 - Humanoid", [1] = "1 - Devotion Aura" },
+    ScanForLoads = function(_, event) f.loadScans[#f.loadScans + 1] = event end,
     item_slot_types = { [0] = "Ammo", [1] = "Head", [2] = "Neck", [3] = "Shoulder", [5] = "Chest", [6] = "Waist",
       [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Finger", [12] = "Finger", [13] = "Trinket",
       [14] = "Trinket", [15] = "Back", [16] = "Main Hand", [17] = "Off Hand", [18] = "Ranged", [19] = "Tabard" },
@@ -104,6 +149,33 @@ local function fixture(forever)
       RequestLoadItemDataByID = function(id) f.requests[#f.requests + 1] = id end,
       GetItemNameByID = function(id) return ITEMS[id] and ITEMS[id].name end,
       GetItemIconByID = function(id) return ITEMS[id] and ITEMS[id].icon end,
+      GetWeaponEnchantInfo = function(slot) return f.enchants[slot] end,
+    },
+    C_Minimap = {
+      GetNumTrackingTypes = function() return #f.tracking end,
+      GetTrackingInfo = function(index) return f.tracking[index] end,
+    },
+    UnitGroupRolesAssigned = function() return f.role end,
+    GetShapeshiftFormID = function() return f.formID end,
+    GetShapeshiftForm = function() return f.formPosition or 0 end,
+    C_TooltipInfo = { GetInventoryItem = function()
+      local lines = {}
+      for i, text in ipairs(f.tooltip) do lines[i] = { leftText = text } end
+      return { lines = lines }
+    end },
+    INVSLOT_MAINHAND = 16, INVSLOT_OFFHAND = 17,
+    GetTime = function() return f.now end,
+    UnitClass = function() return "Paladin", "PALADIN" end,
+    C_ClassTalents = { GetActiveConfigID = function() return f.config end },
+    C_Traits = {
+      GetConfigInfo = function() return { treeIDs = { 1100 } } end,
+      GetTreeNodes = function()
+        local ids = {}
+        for id in pairs(f.nodes) do ids[#ids + 1] = id end
+        table.sort(ids)
+        return ids
+      end,
+      GetNodeInfo = function(_, id) return f.nodes[id] end,
     },
     GetInventoryItemDurability = function(slot)
       local d = f.durability[slot]
@@ -143,18 +215,27 @@ local function fixture(forever)
 end
 
 -- Built-in trigger code sees only Private.ExecEnv, so any other global read fails here.
-local function run(f, trigger)
+local function run(f, trigger, globals)
   local prototype = f.private.event_prototypes[trigger.event]
   if prototype.loadFunc then prototype.loadFunc(trigger) end
   local code = ConstructFunction(prototype, trigger)
   local chunk = assert(loadstring(code))
   local runEnv = setmetatable({ Private = { ExecEnv = f.private.ExecEnv }, issecretvalue = issecret,
     hasanysecretvalues = hassecret }, { __index = function(_, key) error("trigger code read global " .. key) end })
+  for key, value in pairs(globals or {}) do rawset(runEnv, key, value) end
   setfenv(chunk, runEnv)
   local state = {}
   local ok, shown = pcall(chunk(), state, "EVENT")
   assert(ok, shown)
   return shown, state
+end
+
+local function framesFor(f, event)
+  local list = {}
+  for _, fr in ipairs(f.frames) do
+    if fr.events[event] then list[#list + 1] = fr end
+  end
+  return list
 end
 
 local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.001 end
@@ -240,14 +321,14 @@ shown, state = run(ammo, { type = "item", event = "Ammo", ammoItemIDs = "", ammo
 T.expect(shown and state.count == 350 and state.stacks == 350 and state.value == 350, "equipped: the larger of slot and bags")
 T.expect(state.name == "Rough Arrow" and state.icon == 1001, "equipped ammo's name and icon")
 T.expect(#ammo.requests == 1 and ammo.requests[1] == 9999, "an item without data is asked for once")
-local watcher = ammo.frames[1]
-T.expect(#ammo.frames == 1 and watcher.events.BAG_UPDATE_DELAYED and watcher.events.GET_ITEM_INFO_RECEIVED
+local watcher = framesFor(ammo, "BAG_UPDATE_DELAYED")[1]
+T.expect(#framesFor(ammo, "BAG_UPDATE_DELAYED") == 1 and watcher.events.BAG_UPDATE_DELAYED and watcher.events.GET_ITEM_INFO_RECEIVED
   and watcher.events.PLAYER_ENTERING_WORLD and watcher.unitEvents.UNIT_INVENTORY_CHANGED == "player",
   "one watcher for bags, item data and the ammo slot")
 shown, state = run(ammo, { type = "item", event = "Ammo", ammoMode = "all" })
 T.expect(shown and state.count == 450 and state.name == "Ammo" and state.icon == 132382,
   "all carried: arrows and shot, two kinds so the plain name")
-T.expect(#ammo.frames == 1 and #ammo.requests == 1, "the watcher and the request are not repeated")
+T.expect(#framesFor(ammo, "BAG_UPDATE_DELAYED") == 1 and #ammo.requests == 1, "the watcher and the request are not repeated")
 shown, state = run(ammo, { type = "item", event = "Ammo", ammoItemIDs = "2516" })
 T.expect(shown and state.count == 100 and state.name == "Light Shot", "one listed ID: that item")
 shown, state = run(ammo, { type = "item", event = "Ammo", ammoItemIDs = " 2512 , 2516, 2516" })
@@ -378,7 +459,7 @@ T.expect(shown and state.name == "Judgement" and state.icon == 135959 and state.
 T.expect(sr.asked[#sr.asked] == "Judgement", "asked by name, which covers every rank")
 T.expect(#sr.enabled == 1 and sr.enabled[1][1] == 20271 and sr.enabled[1][2] == true, "the range event is switched on once")
 T.expect(#sr.tickers == 0, "the current target needs no timer")
-local watch = sr.frames[1]
+local watch = framesFor(sr, "SPELL_RANGE_CHECK_UPDATE")[1]
 T.expect(watch.events.SPELL_RANGE_CHECK_UPDATE and watch.events.PLAYER_TARGET_CHANGED, "range and target changes are heard")
 watch.OnEvent(watch, "SPELL_RANGE_CHECK_UPDATE", 853, true, true)
 T.expect(#sr.events == 0, "another addon's spell starts no scan")
@@ -435,5 +516,179 @@ shown, state = run(ab, bar)
 T.expect(shown and state.slot == nil, "not on any bar: still shown, no slot")
 shown = run(ab, { type = "spell", event = "Spell in Range (Action Bar)", spellName = "Fireball" })
 T.expect(shown == false, "a spell you do not know never shows")
+
+T.section("Tracking (0.6.0 round 3)")
+local tr = fixture(true)
+tr.tracking = { { name = "Sense Undead", spellID = 5502, active = false, texture = 11 },
+  { name = "Flight Master", active = true, texture = 12 }, { name = "Banker", active = false, texture = 13 } }
+local function tracking(key, show) return run(tr, { type = "unit", event = "Tracking", trackingType = key, trackingShow = show }) end
+T.expect(tracking("5502", "active") == false, "Sense Undead off: Active hides")
+shown, state = tracking("5502", "inactive")
+T.expect(shown and state.name == "Sense Undead" and state.active == false and state.icon == 11, "and Inactive shows it")
+T.expect(tracking("Flight Master", "active") == true, "a map filter is picked by name")
+shown, state = tracking("anySpell", "inactive")
+T.expect(shown and state.name == "Any Tracking Spell", "no tracking spell on: Any Tracking Spell, Inactive shows")
+T.expect(tracking("anySpell", "active") == false, "map filters that are on do not count")
+tr.tracking[1].active = true
+shown, state = tracking("anySpell", "active")
+T.expect(shown and state.name == "Sense Undead" and state.icon == 11, "Sense Undead on: Any Tracking Spell is active")
+T.expect(tracking("anySpell", "inactive") == false, "and Inactive hides")
+T.expect(tracking("2580", "always") == false and tracking(nil, "always") == false, "an entry this character lacks never shows")
+T.expect(tracking("Banker", "always") == true, "Always shows an entry either way")
+local values = tr.private.event_prototypes.Tracking.args[1].values({ trackingType = "2580" })
+T.expect(values.anySpell and values["5502"] == "Sense Undead" and values["Flight Master"] and values["2580"] == "2580 (unavailable)",
+  "the list has Any Tracking Spell, spells by ID, filters by name, and a missing saved entry")
+
+T.section("Role")
+local ro = fixture(true)
+local function role(want) return run(ro, { type = "unit", event = "Role", role = want, use_role = true }) end
+T.expect(role("TANK") == false, "no role assigned: hidden")
+ro.role = "TANK"
+shown, state = role("TANK")
+T.expect(shown and state.role == "TANK" and state.name == "TANK", "the chosen role shows, its name is the role")
+T.expect(role("HEALER") == false, "another role hides")
+T.expect(run(ro, { type = "unit", event = "Role" }) == true, "no role chosen: any assigned role shows")
+ro.role = secret
+T.expect(role("TANK") == false and run(ro, { type = "unit", event = "Role" }) == false, "a hidden role hides")
+ro.role = "NONE"
+T.expect(run(ro, { type = "unit", event = "Role" }) == false, "no role chosen still hides while the game reports none")
+
+T.section("Form ID on Stance/Form/Aura")
+local fm = fixture(true)
+local stanceArgs = fm.private.event_prototypes["Stance/Form/Aura"].args
+T.expect(stanceArgs[2].name == "formID" and stanceArgs[3].name == "form" and stanceArgs[3].display == "Form (Bar Position)",
+  "Form comes first, the old option becomes Form (Bar Position)")
+local positions = stanceArgs[3].values()
+T.expect(positions[1] == "1 - Devotion Aura" and positions[0] == "0 - Humanoid" and positions[10]
+  and positions[10]:find("Not known", 1, true), "bar positions 1-10 stay pickable for imported auras")
+T.expect(stanceArgs[3].hidden({ use_formID = true }) == true and stanceArgs[3].hidden({ use_formID = true, use_form = true }) == false
+  and stanceArgs[3].hidden({}) == false, "Bar Position hides while Form is used alone")
+T.expect(stanceArgs[4].enable({ use_formID = false }) == true and stanceArgs[4].enable({}) == false, "Inverse works with Form too")
+local formValues = stanceArgs[2].values()
+T.expect(formValues[0] == "Humanoid" and formValues[5] == "Druid: Bear Form" and formValues[17] == "Warrior: Battle Stance"
+  and formValues[8] == nil, "the form list, with no separate Dire Bear")
+local function form(id, trigger)
+  fm.formID = id
+  trigger.type, trigger.event = "unit", "Stance/Form/Aura"
+  return run(fm, trigger)
+end
+T.expect(form(5, { use_formID = true, formID = { single = 5 } }) == true, "Bear Form matches Bear Form")
+T.expect(form(8, { use_formID = true, formID = { single = 5 } }) == true, "Dire Bear counts as Bear Form")
+T.expect(form(5, { use_formID = true, formID = { single = 8 } }) == true, "a saved Dire Bear matches Bear Form")
+T.expect(form(33, { use_formID = true, formID = { single = 31 } }) == true, "every race's Moonkin ID matches Moonkin Form")
+T.expect(form(18, { use_formID = false, formID = { multi = { [17] = true, ["19"] = true } } }) == false
+  and form(19, { use_formID = false, formID = { multi = { [17] = true, ["19"] = true } } }) == true, "multi, keys as numbers or text")
+T.expect(form(nil, { use_formID = true, formID = { single = 0 } }) == true, "no form, a paladin aura included, is Humanoid")
+T.expect(form(18, { use_formID = true, formID = { single = 18 }, use_inverse = true }) == false, "Inverse flips it")
+T.expect(form(18, { use_formID = false, formID = { multi = {} } }) == false, "an empty multi never shows")
+fm.formPosition = 2
+shown, state = form(18, { use_formID = true, formID = { single = 18 } })
+T.expect(shown and state.form == 2 and state.formID == 18, "Form keeps storing the bar position too")
+shown, state = form(18, { use_form = true, form = { single = 1 } })
+T.expect(shown == true and state.formID == 18, "without Form the stock bar position code runs, and the form ID is stored")
+
+T.section("Weapon Enchant kinds")
+local we = fixture(true)
+local enchantArgs = we.private.event_prototypes["Weapon Enchant"].args
+T.expect(enchantArgs[2].name == "enchantKind" and enchantArgs[2].default == "any" and enchantArgs[5].display == "Charges"
+  and enchantArgs[#enchantArgs].name == "charges", "Enchant Type after Weapon, Stack Count reads Charges, charges stored")
+we.equipped = { [16] = { icon = 999 }, [17] = { icon = 998 } }
+we.enchants[0] = { { enchantType = 2, timeLeft = 1774011, charges = 0, enchantID = 2623, enchantIconID = 0 },
+  { enchantType = 0, timeLeft = 0, charges = 0, enchantID = 0, enchantIconID = 0 } }
+we.tooltip = { "Mace of Testing", "Minor Wizard Oil (29 min)" }
+local G = { GetTime = function() return we.now end, tonumber = tonumber }
+local function weapon(trigger)
+  trigger.type, trigger.event = "item", "Weapon Enchant"
+  return run(we, trigger, G)
+end
+shown, state = weapon({ weapon = "main", enchantKind = "any" })
+T.expect(shown and state.name == "Minor Wizard Oil" and state.icon == 999 and near(state.duration, 1774.011)
+  and near(state.expirationTime, 100 + 1774.011) and state.enchanted == true and state.enchantID == 2623, "the oil, as measured")
+T.expect(we.tenchInit, "the stock enchant events still drive it")
+T.expect(weapon({ weapon = "main", enchantKind = "temporary" }) == true, "Oil, Stone or Poison finds it")
+T.expect(weapon({ weapon = "main", enchantKind = "imbue" }) == false, "Imbue does not")
+shown, state = weapon({ weapon = "main", enchantKind = "imbue", showOn = "showOnMissing" })
+T.expect(shown and state.name == "None" and state.icon == 999, "Show On Missing: None with the weapon's icon")
+we.enchants[0][2] = { enchantType = 3, timeLeft = 600000, charges = 5, enchantID = 5000, enchantIconID = 777 }
+we.tooltip = { "Mace of Testing", "Flametongue 3 (10 min)", "Minor Wizard Oil (29 min)" }
+shown, state = weapon({ weapon = "main", enchantKind = "any" })
+T.expect(shown and state.name == "Flametongue 3" and state.charges == 5 and state.stacks == 5 and state.icon == 777,
+  "both on one weapon: Any shows the imbue, named by its time left")
+shown, state = weapon({ weapon = "main", enchantKind = "temporary" })
+T.expect(shown and state.name == "Minor Wizard Oil", "and the oil apart")
+shown, state = weapon({ weapon = "main", enchantKind = "any", use_enchant = true, enchant = "Minor Wizard Oil" })
+T.expect(shown and state.enchantID == 2623, "Any with a typed name takes the one that carries it")
+T.expect(weapon({ weapon = "main", enchantKind = "imbue", use_stacks = true, stacks = "3", stacks_operator = ">" }) == true
+  and weapon({ weapon = "main", enchantKind = "imbue", use_stacks = true, stacks = "5", stacks_operator = "=" }) == true,
+  "a Charges filter, an imported = included")
+we.now = 160
+we.enchants[0][1].timeLeft = 1714011
+shown, state = weapon({ weapon = "main", enchantKind = "temporary" })
+T.expect(near(state.duration, 1774.011) and near(state.expirationTime, 160 + 1714.011), "the full duration is the longest seen")
+we.enchants[0][1].timeLeft = secret
+shown, state = weapon({ weapon = "main", enchantKind = "temporary" })
+T.expect(shown and near(state.expirationTime, 160 + 1714.011), "a hidden reading keeps the last plain one")
+T.expect(weapon({ weapon = "off", enchantKind = "any" }) == false, "nothing on the off hand")
+local both = fixture(true)
+both.equipped = { [16] = { icon = 999 } }
+both.enchants[0] = { { enchantType = 2, timeLeft = 1774011, charges = 0, enchantID = 2623, enchantIconID = 0 },
+  { enchantType = 3, timeLeft = 600000, charges = 5, enchantID = 5000, enchantIconID = 777 } }
+both.tooltip = { "Minor Wizard Oil (29 min)", "Flametongue 3 (10 min)" }
+shown, state = run(both, { type = "item", event = "Weapon Enchant", weapon = "main", enchantKind = "imbue" },
+  { GetTime = function() return both.now end, tonumber = tonumber })
+T.expect(shown and state.name == "Flametongue 3", "two enchants seen first together are named by time left, not order")
+
+T.section("Talent spec load option")
+local sp = fixture(true)
+local COLUMNS = { 1020, 1620, 2220, 2820, 5020, 5620, 6220, 6820, 9080, 9680, 10280, 10880 }
+local function talents(holy, prot, ret)
+  sp.nodes = {}
+  for i, x in ipairs(COLUMNS) do sp.nodes[i] = { posX = x, ranksPurchased = 0 } end
+  sp.nodes[3].ranksPurchased, sp.nodes[6].ranksPurchased, sp.nodes[10].ranksPurchased = holy, prot, ret
+  sp.now = sp.now + 1
+end
+talents(5, 0, 1)
+T.expect(sp.addon.EAForeverSpec() == nil, "Holy 5, Retribution 1 (the measured level 14 tree): no spec")
+talents(21, 10, 0)
+T.expect(sp.addon.EAForeverSpec() == "PALADIN_HOLY", "Holy at 21: Holy")
+talents(20, 0, 31)
+T.expect(sp.addon.EAForeverSpec() == "PALADIN_RETRIBUTION", "the most points wins")
+talents(21, 0, 21)
+T.expect(sp.addon.EAForeverSpec() == "PALADIN_HOLY", "a tie goes to the tree further left")
+talents(21, 0, 0)
+sp.nodes[13] = { posX = 14000, ranksPurchased = 0 }
+T.expect(sp.addon.EAForeverSpec() == nil, "a fourth column group is unreadable: no spec")
+talents(21, 0, 0)
+sp.nodes[2].posX = secret
+T.expect(sp.addon.EAForeverSpec() == nil, "a hidden reading: no spec")
+local loadArgs = sp.private.load_prototype.args
+T.expect(loadArgs[3].name == "forever_spec" and loadArgs[3].multiTristate and loadArgs[3].values().PALADIN_HOLY == "Paladin: Holy",
+  "Specialization sits right after Player Class, with load and never-load boxes")
+local function loads(load)
+  local code, events = LoadConstruct(sp.private.load_prototype, load)
+  local fn = setfenv(assert(loadstring(code)), setmetatable({ EverythingAuras = sp.addon }, { __index = _G }))()
+  return fn("SCAN_ALL"), events
+end
+talents(31, 0, 20)
+local result, events = loads({ use_forever_spec = true, forever_spec = { single = "PALADIN_HOLY" } })
+T.expect(result == true and events.PLAYER_TALENT_UPDATE and events.SPELLS_CHANGED, "single Holy loads for Holy, on talent events")
+T.expect(loads({ use_forever_spec = true, forever_spec = { single = "PALADIN_RETRIBUTION" } }) == false, "not for Retribution")
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_HOLY = true, WARRIOR_FURY = true } } }) == true,
+  "multi with Holy loads")
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_HOLY = false } } }) == false, "never-load Holy")
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_PROTECTION = false } } }) == true,
+  "only never-load trees: every other tree loads")
+talents(5, 0, 1)
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_PROTECTION = false } } }) == true,
+  "no spec yet loads under only never-load trees")
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_HOLY = true, PALADIN_PROTECTION = false } } })
+  == false, "no spec never loads once a load tree is picked")
+T.expect(loads({ use_forever_spec = true, forever_spec = { single = "PALADIN_HOLY" } }) == false, "nor in single mode")
+T.expect(loads({ use_forever_spec = false, forever_spec = { multi = {} } }) == false, "nothing ticked never loads")
+T.expect(loads({ forever_spec = { single = "PALADIN_HOLY" } }) == true, "the option off is ignored")
+local specFrame = framesFor(sp, "TRAIT_CONFIG_UPDATED")[1]
+specFrame.OnEvent(specFrame, "TRAIT_CONFIG_UPDATED")
+T.expect(specFrame.events.ACTIVE_COMBAT_CONFIG_CHANGED and sp.loadScans[1] == "PLAYER_TALENT_UPDATE",
+  "a talent tree save or a Primary and Secondary swap re-checks the loads")
 
 T.finish()

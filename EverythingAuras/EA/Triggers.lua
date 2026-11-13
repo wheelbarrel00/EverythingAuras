@@ -732,3 +732,610 @@ Private.category_event_prototype.spell = Private.category_event_prototype.spell 
 for _, event in ipairs({ "Spell in Range", "Spell in Range (Action Bar)" }) do
   Private.category_event_prototype.spell[event] = Private.event_prototypes[event].name
 end
+
+local function ClassLabel(classFile, text)
+  local className = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
+    or classFile:sub(1, 1) .. classFile:sub(2):lower()
+  local label = ("%s: %s"):format(className, text)
+  local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+  return color and color.WrapTextInColorCode and color:WrapTextInColorCode(label) or label
+end
+
+local ANY_TRACKING_SPELL = "anySpell"
+local TRACKING_ICON = "Interface\\Icons\\Ability_Tracking"
+
+Private.ea_tracking_show = {
+  active = L["Active"],
+  inactive = L["Inactive"],
+  always = L["Always"],
+}
+
+local function TrackingEntries()
+  local entries = {}
+  for index = 1, C_Minimap.GetNumTrackingTypes() do
+    local info = C_Minimap.GetTrackingInfo(index)
+    if info then
+      entries[#entries + 1] = info
+    end
+  end
+  return entries
+end
+
+-- Town and quest filters have no spell ID, so they are saved by name.
+local function TrackingKey(info)
+  return info.spellID and tostring(info.spellID) or info.name
+end
+
+local function TrackingValues(trigger)
+  local values = { [ANY_TRACKING_SPELL] = L["Any Tracking Spell"] }
+  for _, info in ipairs(TrackingEntries()) do
+    values[TrackingKey(info)] = info.name
+  end
+  local saved = trigger and trigger.trackingType
+  if type(saved) == "string" and not values[saved] then
+    values[saved] = saved .. " " .. L["(unavailable)"]
+  end
+  return values
+end
+
+local lastTracking = {}
+function Private.ExecEnv.EATracking(key)
+  if key == nil then
+    return nil
+  end
+  local found, active, name, icon = key == ANY_TRACKING_SPELL, false, nil, nil
+  for _, info in ipairs(TrackingEntries()) do
+    if hasanysecretvalues(info.active, info.spellID, info.name) then
+      local previous = lastTracking[key]
+      if previous then
+        return unpack(previous, 1, 3)
+      end
+      return nil
+    end
+    if key == ANY_TRACKING_SPELL then
+      if info.spellID and info.active and not active then
+        active, name, icon = true, info.name, info.texture
+      end
+    elseif TrackingKey(info) == key then
+      found, active, name, icon = true, info.active == true, info.name, info.texture
+      break
+    end
+  end
+  if not found then
+    lastTracking[key] = nil
+    return nil
+  end
+  if not name then
+    name, icon = L["Any Tracking Spell"], TRACKING_ICON
+  end
+  lastTracking[key] = { active, name, icon }
+  return active, name, icon
+end
+
+Private.event_prototypes["Tracking"] = {
+  type = "unit",
+  events = { ["events"] = { "MINIMAP_UPDATE_TRACKING", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD" } },
+  force_events = "PLAYER_ENTERING_WORLD",
+  name = EverythingAuras.newFeatureString .. L["Tracking"],
+  init = function(trigger)
+    local show = Private.ea_tracking_show[trigger.trackingShow or ""] and trigger.trackingShow or "active"
+    local hide = show == "active" and " or not active" or show == "inactive" and " or active" or ""
+    return ([[
+local active, name, icon = Private.ExecEnv.EATracking(%s)
+if active == nil%s then return false end
+]]):format(Literal(trigger.trackingType), hide)
+  end,
+  args = {
+    { name = "trackingType", display = L["Tracking Type"], type = "select", values = TrackingValues, required = true,
+      test = "true",
+      desc = L["Any Tracking Spell counts only tracking spells such as Find Herbs or Sense Undead, not the town and quest map filters."] },
+    { name = "trackingShow", display = L["Show On"], type = "select", values = "ea_tracking_show", default = "active",
+      required = true, test = "true" },
+    { name = "active", display = L["Tracking Active"], hidden = true, store = true, test = "true", conditionType = "bool" },
+    { name = "name", hidden = true, store = true, test = "true" },
+    { name = "icon", hidden = true, store = true, test = "true" },
+  },
+  GetNameAndIcon = function(trigger)
+    local _, name, icon = Private.ExecEnv.EATracking(trigger.trackingType)
+    return name or L["Tracking"], icon or TRACKING_ICON
+  end,
+  statesParameter = "one",
+  automaticrequired = true,
+  progressType = "none",
+}
+
+Private.ea_role_types = {
+  TANK = L["Tank"],
+  HEALER = L["Healer"],
+  DAMAGER = L["Damager"],
+}
+
+function Private.ExecEnv.EARole()
+  local role = UnitGroupRolesAssigned("player")
+  if issecretvalue(role) or role == nil or role == "NONE" then
+    return nil
+  end
+  return role
+end
+
+Private.event_prototypes["Role"] = {
+  type = "unit",
+  events = { ["events"] = { "PLAYER_ROLES_ASSIGNED", "ROLE_CHANGED_INFORM", "GROUP_ROSTER_UPDATE",
+    "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED" } },
+  force_events = "PLAYER_ENTERING_WORLD",
+  name = EverythingAuras.newFeatureString .. L["Role"],
+  init = function()
+    return "local role = Private.ExecEnv.EARole()\nif not role then return false end\nlocal name = role\n"
+  end,
+  args = {
+    { name = "role", display = L["Role"], type = "select", values = "ea_role_types", default = "DAMAGER", required = true,
+      store = true, conditionType = "select",
+      desc = L["Your own assigned group role. The aura stays hidden while the game reports no role."] },
+    { name = "name", hidden = true, store = true, test = "true" },
+  },
+  GetNameAndIcon = function(trigger)
+    return Private.ea_role_types[trigger.role or ""] or L["Role"], nil
+  end,
+  statesParameter = "one",
+  automaticrequired = true,
+  progressType = "none",
+}
+
+Private.category_event_prototype.unit["Tracking"] = Private.event_prototypes["Tracking"].name
+Private.category_event_prototype.unit["Role"] = Private.event_prototypes["Role"].name
+
+-- Blizzard's form IDs with the spell that names each form, in the order the list shows them.
+local FORMS = {
+  { 0 },
+  { 5, "DRUID", 5487, "Bear Form" }, { 4, "DRUID", 1066, "Aquatic Form" }, { 1, "DRUID", 768, "Cat Form" },
+  { 3, "DRUID", 783, "Travel Form" }, { 31, "DRUID", 24858, "Moonkin Form" }, { 2, "DRUID", 33891, "Tree of Life" },
+  { 17, "WARRIOR", 2457, "Battle Stance" }, { 18, "WARRIOR", 71, "Defensive Stance" },
+  { 19, "WARRIOR", 2458, "Berserker Stance" }, { 30, "ROGUE", 1784, "Stealth" }, { 28, "PRIEST", 15473, "Shadowform" },
+  { 16, "SHAMAN", 2645, "Ghost Wolf" },
+}
+
+local formValues, formOrder
+local function FormValues()
+  if not formValues then
+    formValues, formOrder = {}, {}
+    for _, form in ipairs(FORMS) do
+      local id, classFile, spellID, english = form[1], form[2], form[3], form[4]
+      formValues[id] = classFile and ClassLabel(classFile, C_Spell.GetSpellName(spellID) or english) or L["Humanoid"]
+      formOrder[#formOrder + 1] = id
+    end
+  end
+  return formValues
+end
+
+-- Moonkin's ID differs by race (31-35) and Dire Bear (8) is Bear Form.
+local function NormalizeFormID(id)
+  id = tonumber(id) or 0
+  if id >= 31 and id <= 35 then
+    return 31
+  elseif id == 8 then
+    return 5
+  end
+  return id
+end
+
+function Private.ExecEnv.EAFormID()
+  local id = GetShapeshiftFormID()
+  if issecretvalue(id) then
+    return nil
+  end
+  return NormalizeFormID(id)
+end
+
+function Private.ExecEnv.EAFormPosition()
+  return GetShapeshiftForm()
+end
+
+local function IndexOfArg(args, name)
+  for index, arg in ipairs(args) do
+    if arg.name == name then
+      return index, arg
+    end
+  end
+end
+
+local stance = Private.event_prototypes["Stance/Form/Aura"]
+if stance then
+  local StockStanceInit = stance.init
+  stance.init = function(trigger)
+    if trigger.use_formID == nil or type(trigger.formID) ~= "table" then
+      return StockStanceInit(trigger)
+    end
+    local checks = {}
+    if trigger.use_formID then
+      if trigger.formID.single ~= nil then
+        checks[1] = "current == " .. NormalizeFormID(trigger.formID.single)
+      end
+    elseif type(trigger.formID.multi) == "table" then
+      for id, selected in pairs(trigger.formID.multi) do
+        if selected then
+          checks[#checks + 1] = "current == " .. NormalizeFormID(id)
+        end
+      end
+    end
+    return ([[
+local form = Private.ExecEnv.EAFormPosition()
+local current = Private.ExecEnv.EAFormID()
+local active = current ~= nil and (%s)
+%s
+]]):format(#checks > 0 and table.concat(checks, " or ") or "false", trigger.use_inverse and "active = not active" or "")
+  end
+
+  local formIndex, formArg = IndexOfArg(stance.args, "form")
+  if formArg then
+    formArg.display = L["Form (Bar Position)"]
+    formArg.desc = L["The form's slot on this character's stance bar. Paladin auras sit here too. Prefer Form for shapeshift forms and stances."]
+    formArg.values = function()
+      local values = {}
+      for position, label in pairs(Private.form_types) do
+        values[position] = label
+      end
+      for position = 1, 10 do
+        values[position] = values[position] or (position .. " - " .. L["Not known on this character"])
+      end
+      return values
+    end
+    formArg.hidden = function(trigger)
+      return trigger.use_formID ~= nil and trigger.use_form == nil
+    end
+    table.insert(stance.args, formIndex, {
+      name = "formID",
+      display = L["Form"],
+      type = "multiselect",
+      values = FormValues,
+      sorted = true,
+      sortOrder = function()
+        FormValues()
+        return formOrder
+      end,
+      init = "Private.ExecEnv.EAFormID()",
+      test = "active",
+      store = true,
+      conditionType = "select",
+      desc = L["Blizzard's own form ID, the same on every character whether the form is learned or not. Paladin auras have none, so use Form (Bar Position) for them."],
+    })
+  end
+  local _, inverseArg = IndexOfArg(stance.args, "inverse")
+  if inverseArg then
+    inverseArg.enable = function(trigger)
+      return type(trigger.use_form) == "boolean" or type(trigger.use_formID) == "boolean"
+    end
+  end
+end
+
+Private.ea_enchant_kinds = {
+  any = L["Any"],
+  imbue = L["Imbue (Firestones, Mage Scrolls, Shaman Imbues)"],
+  temporary = L["Oil, Stone or Poison"],
+}
+
+local ENCHANT_TYPES = { [2] = "temporary", [3] = "imbue" }
+local OPERATORS = { ["<"] = "<", ["<="] = "<=", [">"] = ">", [">="] = ">=", ["=="] = "==", ["~="] = "~=", ["="] = "==" }
+local fullDurations, enchantNames, lastEnchants = {}, {}, {}
+
+local function ReadWeapon(slot)
+  local found = {}
+  for _, entry in ipairs(C_Item.GetWeaponEnchantInfo(slot) or {}) do
+    if hasanysecretvalues(entry.enchantType, entry.timeLeft, entry.charges, entry.enchantID, entry.enchantIconID) then
+      return nil
+    end
+    local kind = ENCHANT_TYPES[entry.enchantType]
+    if kind and entry.timeLeft and entry.timeLeft > 0 then
+      found[kind] = entry
+    end
+  end
+  return found
+end
+
+-- The weapon tooltip names each enchant as "Name (29 min)", and two enchants are told apart by their time left.
+local function TooltipEnchants(invSlot)
+  local lines = {}
+  local data = C_TooltipInfo.GetInventoryItem("player", invSlot)
+  for _, line in ipairs(data and data.lines or {}) do
+    local text = line.leftText
+    if type(text) == "string" and not issecretvalue(text) then
+      local _, _, name, short = text:find("^((.-) ?+?[VI%d]*) ?%(%d+%D.+%)$")
+      if not name then
+        _, _, name, short = text:find("^((.-) ?+?[VI%d]*)%（%d+%D.+%）$")
+      end
+      if name then
+        name, short = (name:gsub("%s+$", "")), short and (short:gsub("%s+$", ""))
+      end
+      if name and name ~= "" then
+        local amount, unit = text:match("%((%d+)%s*(%a*)")
+        local first = (unit or ""):sub(1, 1):lower()
+        local seconds = tonumber(amount) and tonumber(amount) * (first == "h" and 3600 or first == "m" and 60 or 1)
+        lines[#lines + 1] = { name = name, short = short, seconds = seconds }
+      end
+    end
+  end
+  return lines
+end
+
+local function NameEnchants(found, invSlot)
+  local lines
+  for _, entry in pairs(found) do
+    if not enchantNames[entry.enchantID] then
+      lines = lines or TooltipEnchants(invSlot)
+      local best, bestGap
+      for _, line in ipairs(lines) do
+        local gap = line.seconds and math.abs(line.seconds - entry.timeLeft / 1000) or math.huge
+        if not best or gap < bestGap then
+          best, bestGap = line, gap
+        end
+      end
+      if best then
+        enchantNames[entry.enchantID] = { best.name, best.short }
+      end
+    end
+  end
+end
+
+local function NameMatches(entry, wanted)
+  local names = enchantNames[entry.enchantID]
+  return names and (wanted == names[1] or wanted == names[2]) or tonumber(wanted) == entry.enchantID
+end
+
+function Private.ExecEnv.EAWeaponEnchant(hand, kind, wanted)
+  local invSlot = hand == "off" and INVSLOT_OFFHAND or INVSLOT_MAINHAND
+  local key = hand .. "|" .. kind .. "|" .. tostring(wanted)
+  local found = ReadWeapon(hand == "off" and 1 or 0)
+  if not found then
+    local previous = lastEnchants[key]
+    if previous then
+      return unpack(previous, 1, 7)
+    end
+    return nil
+  end
+  NameEnchants(found, invSlot)
+  local entry
+  if kind == "any" then
+    if wanted ~= "" then
+      entry = found.imbue and NameMatches(found.imbue, wanted) and found.imbue
+        or found.temporary and NameMatches(found.temporary, wanted) and found.temporary
+    end
+    entry = entry or found.imbue or found.temporary
+  else
+    entry = found[kind]
+  end
+  local result
+  if entry then
+    local remaining = entry.timeLeft / 1000
+    -- Blizzard gives only the time left, so the longest seen this session stands in for the full duration.
+    local full = math.max(fullDurations[entry.enchantID] or 0, remaining)
+    fullDurations[entry.enchantID] = full
+    local names = enchantNames[entry.enchantID] or {}
+    local icon = entry.enchantIconID and entry.enchantIconID > 0 and entry.enchantIconID
+      or GetInventoryItemTexture("player", invSlot)
+    result = { GetTime() + remaining, full, names[1] or L["Unknown"], names[2] or names[1] or L["Unknown"], icon,
+      entry.charges, entry.enchantID }
+  else
+    result = { nil, nil, L["None"], L["None"], GetInventoryItemTexture("player", invSlot) }
+  end
+  lastEnchants[key] = result
+  return unpack(result, 1, 7)
+end
+
+local enchant = Private.event_prototypes["Weapon Enchant"]
+if enchant then
+  enchant.init = function(trigger)
+    EverythingAuras.TenchInit()
+    local showOnActive = trigger.showOn == "showOnActive" or not trigger.showOn
+    local kind = Private.ea_enchant_kinds[trigger.enchantKind or ""] and trigger.enchantKind or "any"
+    return ([[
+local triggerName = %q
+local triggerStack = %s
+local triggerRemaining = %s
+local triggerShowOn = %q
+local expirationTime, duration, name, shortenedName, icon, stacks, enchantID = Private.ExecEnv.EAWeaponEnchant(%q, %q, triggerName)
+local remaining = expirationTime and expirationTime - GetTime()
+local nameCheck = triggerName == "" or name and triggerName == name or shortenedName and triggerName == shortenedName
+  or tonumber(triggerName) and enchantID and tonumber(triggerName) == enchantID
+local stackCheck = not triggerStack or stacks and stacks %s triggerStack
+local remainingCheck = not triggerRemaining or remaining and remaining %s triggerRemaining
+local found = expirationTime and nameCheck and stackCheck and remainingCheck
+if triggerRemaining and remaining and remaining >= triggerRemaining and remaining > 0 then
+  Private.ExecEnv.ScheduleScan(expirationTime - triggerRemaining, "TENCH_UPDATE")
+end
+if not found then
+  expirationTime, duration, remaining = nil, nil, nil
+end
+local charges = stacks
+]]):format(trigger.use_enchant and tostring(trigger.enchant or "") or "",
+      showOnActive and trigger.use_stacks and tonumber(trigger.stacks or 0) or "nil",
+      showOnActive and trigger.use_remaining and tonumber(trigger.remaining or 0) or "nil",
+      trigger.showOn or "showOnActive", trigger.weapon == "off" and "off" or "main", kind,
+      OPERATORS[trigger.stacks_operator or "<"] or "<", OPERATORS[trigger.remaining_operator or "<"] or "<")
+  end
+  local weaponIndex = IndexOfArg(enchant.args, "weapon")
+  table.insert(enchant.args, (weaponIndex or 0) + 1, {
+    name = "enchantKind",
+    display = L["Enchant Type"],
+    type = "select",
+    values = "ea_enchant_kinds",
+    default = "any",
+    required = true,
+    test = "true",
+    desc = L["Imbues and oils, stones or poisons are read apart, so one aura can watch each on the same weapon. Any shows the imbue when there is one."],
+  })
+  local _, stacksArg = IndexOfArg(enchant.args, "stacks")
+  if stacksArg then
+    stacksArg.display = L["Charges"]
+    stacksArg.desc = L["Charges left, such as poison charges. Texts show them with %s or %charges."]
+  end
+  table.insert(enchant.args, { name = "charges", hidden = true, store = true, test = "true" })
+end
+
+local SPEC_TREES = {
+  WARRIOR = { "WARRIOR_ARMS", "WARRIOR_FURY", "WARRIOR_PROTECTION" },
+  PALADIN = { "PALADIN_HOLY", "PALADIN_PROTECTION", "PALADIN_RETRIBUTION" },
+  HUNTER = { "HUNTER_BEAST_MASTERY", "HUNTER_MARKSMANSHIP", "HUNTER_SURVIVAL" },
+  ROGUE = { "ROGUE_ASSASSINATION", "ROGUE_COMBAT", "ROGUE_SUBTLETY" },
+  PRIEST = { "PRIEST_DISCIPLINE", "PRIEST_HOLY", "PRIEST_SHADOW" },
+  SHAMAN = { "SHAMAN_ELEMENTAL", "SHAMAN_ENHANCEMENT", "SHAMAN_RESTORATION" },
+  MAGE = { "MAGE_ARCANE", "MAGE_FIRE", "MAGE_FROST" },
+  WARLOCK = { "WARLOCK_AFFLICTION", "WARLOCK_DEMONOLOGY", "WARLOCK_DESTRUCTION" },
+  DRUID = { "DRUID_BALANCE", "DRUID_FERAL_COMBAT", "DRUID_RESTORATION" },
+}
+local SPEC_CLASS_ORDER = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" }
+local TREE_NAMES = {
+  WARRIOR_ARMS = "Arms", WARRIOR_FURY = "Fury", WARRIOR_PROTECTION = "Protection",
+  PALADIN_HOLY = "Holy", PALADIN_PROTECTION = "Protection", PALADIN_RETRIBUTION = "Retribution",
+  HUNTER_BEAST_MASTERY = "Beast Mastery", HUNTER_MARKSMANSHIP = "Marksmanship", HUNTER_SURVIVAL = "Survival",
+  ROGUE_ASSASSINATION = "Assassination", ROGUE_COMBAT = "Combat", ROGUE_SUBTLETY = "Subtlety",
+  PRIEST_DISCIPLINE = "Discipline", PRIEST_HOLY = "Holy", PRIEST_SHADOW = "Shadow",
+  SHAMAN_ELEMENTAL = "Elemental", SHAMAN_ENHANCEMENT = "Enhancement", SHAMAN_RESTORATION = "Restoration",
+  MAGE_ARCANE = "Arcane", MAGE_FIRE = "Fire", MAGE_FROST = "Frost",
+  WARLOCK_AFFLICTION = "Affliction", WARLOCK_DEMONOLOGY = "Demonology", WARLOCK_DESTRUCTION = "Destruction",
+  DRUID_BALANCE = "Balance", DRUID_FERAL_COMBAT = "Feral Combat", DRUID_RESTORATION = "Restoration",
+}
+
+local specValues, specOrder
+local function SpecValues()
+  if not specValues then
+    specValues, specOrder = {}, {}
+    for _, classFile in ipairs(SPEC_CLASS_ORDER) do
+      for _, key in ipairs(SPEC_TREES[classFile]) do
+        specValues[key] = ClassLabel(classFile, L[TREE_NAMES[key]])
+        specOrder[#specOrder + 1] = key
+      end
+    end
+  end
+  return specValues
+end
+
+-- One talent tree per class, its node columns in three groups 600 apart inside and over 2200 between (measured).
+local COLUMN_GAP = 1200
+
+local function ComputeSpec()
+  local trees = SPEC_TREES[select(2, UnitClass("player")) or ""]
+  local configID = trees and C_ClassTalents.GetActiveConfigID()
+  local config = configID and C_Traits.GetConfigInfo(configID)
+  local treeID = config and config.treeIDs and config.treeIDs[1]
+  if not treeID then
+    return nil
+  end
+  local columns = {}
+  for _, nodeID in ipairs(C_Traits.GetTreeNodes(treeID)) do
+    local node = C_Traits.GetNodeInfo(configID, nodeID)
+    if node then
+      if hasanysecretvalues(node.posX, node.ranksPurchased) then
+        return nil
+      end
+      columns[node.posX] = (columns[node.posX] or 0) + (node.ranksPurchased or 0)
+    end
+  end
+  local positions = {}
+  for x in pairs(columns) do
+    positions[#positions + 1] = x
+  end
+  table.sort(positions)
+  local points, group, last = {}, 0, nil
+  for _, x in ipairs(positions) do
+    if not last or x - last > COLUMN_GAP then
+      group = group + 1
+      points[group] = 0
+    end
+    points[group] = points[group] + columns[x]
+    last = x
+  end
+  if group ~= 3 then
+    return nil
+  end
+  local best
+  for index = 1, 3 do
+    if points[index] >= 21 and (not best or points[index] > points[best]) then
+      best = index
+    end
+  end
+  return best and trees[best]
+end
+
+local specTime, specKey
+function EverythingAuras.EAForeverSpec()
+  local now = GetTime()
+  if specTime ~= now then
+    specTime = now
+    local ok, key = pcall(ComputeSpec)
+    specKey = ok and key or nil
+  end
+  return specKey
+end
+
+function EverythingAuras.EAForeverSpecIs(key)
+  return key ~= nil and EverythingAuras.EAForeverSpec() == key
+end
+
+-- Only never-load trees means every other tree loads, with no spec yet included.
+function EverythingAuras.EAForeverSpecIn(load, never)
+  local spec = EverythingAuras.EAForeverSpec()
+  if next(load) then
+    return spec ~= nil and load[spec] == true
+  elseif next(never) then
+    return spec == nil or not never[spec]
+  end
+  return false
+end
+
+local function KeyList(keys)
+  local parts = {}
+  for _, key in ipairs(keys) do
+    parts[#parts + 1] = ("[%q]=true"):format(key)
+  end
+  return "{" .. table.concat(parts, ",") .. "}"
+end
+
+local StockLoadInit = Private.load_prototype.init
+Private.load_prototype.init = function(load)
+  local code = StockLoadInit and StockLoadInit(load) or ""
+  local spec = type(load.forever_spec) == "table" and load.forever_spec or {}
+  if load.use_forever_spec == true then
+    code = code .. ("local eaForeverSpec = EverythingAuras.EAForeverSpecIs(%s)\n"):format(Literal(spec.single))
+  elseif load.use_forever_spec == false then
+    local loadKeys, neverKeys = {}, {}
+    for key, value in pairs(type(spec.multi) == "table" and spec.multi or {}) do
+      if type(key) == "string" then
+        if value == true then
+          loadKeys[#loadKeys + 1] = key
+        elseif value == false then
+          neverKeys[#neverKeys + 1] = key
+        end
+      end
+    end
+    table.sort(loadKeys)
+    table.sort(neverKeys)
+    code = code .. ("local eaForeverSpec = EverythingAuras.EAForeverSpecIn(%s, %s)\n"):format(KeyList(loadKeys),
+      KeyList(neverKeys))
+  end
+  return code
+end
+
+local classIndex = IndexOfArg(Private.load_prototype.args, "class")
+table.insert(Private.load_prototype.args, (classIndex or #Private.load_prototype.args) + 1, {
+  name = "forever_spec",
+  display = L["Specialization"],
+  type = "multiselect",
+  values = SpecValues,
+  sorted = true,
+  sortOrder = function()
+    SpecValues()
+    return specOrder
+  end,
+  multiTristate = true,
+  test = "eaForeverSpec",
+  events = { "PLAYER_TALENT_UPDATE", "CHARACTER_POINTS_CHANGED", "SPELLS_CHANGED", "ACTIVE_TALENT_GROUP_CHANGED" },
+  desc = L["Your specialization is the talent tree with 21 or more points, the one with the most if several, and the tree further left on a tie. Click a tree once to load for it, twice to never load for it. With only never-load trees, every other tree loads, no specialization yet included."],
+})
+
+-- The load frame does not hear talent tree saves or Primary and Secondary swaps on this client.
+local specWatcher = CreateFrame("Frame")
+for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "ACTIVE_COMBAT_CONFIG_CHANGED" }) do
+  pcall(specWatcher.RegisterEvent, specWatcher, event)
+end
+specWatcher:SetScript("OnEvent", function()
+  Private.ScanForLoads(nil, "PLAYER_TALENT_UPDATE")
+end)

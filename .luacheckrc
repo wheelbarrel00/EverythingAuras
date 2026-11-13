@@ -19576,6 +19576,7 @@ local everythingAuras = {
 		"C_ChatInfo",
 		"C_CurveUtil",
 		"C_InstanceEncounter",
+		"C_Minimap",
 		"C_PaperDollInfo",
 		"C_PartyInfo",
 		"C_PetInfo",

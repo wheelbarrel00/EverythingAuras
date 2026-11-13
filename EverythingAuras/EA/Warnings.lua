@@ -30,9 +30,11 @@ local UNREAD_FILTERS = {
     { "use_bonushealing", L["Bonus Healing filter"] }, { "use_expertisepercent", L["Expertise filter"] },
   },
 }
--- EA/Triggers.lua makes these Money filters on WoW Forever.
-if EverythingAuras.IsForever() then
+-- EA/Triggers.lua reads these filters, the enchant type and the talent spec load option on WoW Forever.
+local FOREVER = EverythingAuras.IsForever()
+if FOREVER then
   UNREAD_FILTERS["Money"] = nil
+  UNREAD_FILTERS["Stance/Form/Aura"] = nil
 end
 
 -- Health is always secret, so the Health trigger hides these filters and lets them pass (Prototypes.lua Health).
@@ -273,7 +275,7 @@ function Private.EAUpdateWarnings(data)
             Add(notHere, notHereSeen, filter[2])
           end
         end
-        if trigger.event == "Weapon Enchant" and trigger.use_enchantKind == true
+        if not FOREVER and trigger.event == "Weapon Enchant" and trigger.use_enchantKind == true
           and trigger.enchantKind ~= nil and trigger.enchantKind ~= "any" then
           Add(notHere, notHereSeen, L["Enchant Type filter"])
         end
@@ -339,7 +341,7 @@ function Private.EAUpdateWarnings(data)
     and L["Health is always secret, so the Health trigger ignores these filters and acts as if they pass: %s"]:format(table.concat(secretHealth, ", ")))
   SetWarning(uid, "EASecretHealth", "warning", readsHealth
     and L["Custom code reads UnitHealth. Health is a secret value on WoW Forever, so math or comparisons on it cause errors."])
-  SetWarning(uid, "EAForeverSpec", "warning", type(data.load) == "table" and data.load.use_forever_spec ~= nil
+  SetWarning(uid, "EAForeverSpec", "warning", not FOREVER and type(data.load) == "table" and data.load.use_forever_spec ~= nil
     and L["Uses ForeverAuras' talent spec load option, which Everything Auras does not have. The aura loads regardless of talent spec."])
   SetWarning(uid, "EAAuraReads", "info", auraReads
     and L["Custom code reads auras with UnitAura, UnitBuff or UnitDebuff. On WoW Forever these return nothing while Blizzard keeps auras secret, for example in combat."])
