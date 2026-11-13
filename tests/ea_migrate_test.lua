@@ -313,25 +313,39 @@ m[2].xOffset = 99
 private.EANormalizeImport(again, m)
 T.expect(m[2].xOffset == 99, "a group laid out once is not laid out again")
 
+local function saveGroup(group)
+  savedAuras[group.id] = group
+  private.EAModernize(group)
+  return group
+end
 savedAuras = { S1 = { id = "S1" }, S2 = { id = "S2" } }
-local savedGroup = { id = "Saved", regionType = "group", blizzardFlow = true, blizzardFlowOrigin = "group",
-  controlledChildren = { "S1", "S2" }, triggers = {}, eaVersion = 6 }
-private.EAModernize(savedGroup)
+local savedGroup = saveGroup({ id = "Saved", regionType = "group", blizzardFlow = true, blizzardFlowOrigin = "group",
+  controlledChildren = { "S1", "S2" }, triggers = {}, eaVersion = 6 })
 T.expect(at(savedAuras.S1, 16, -16) and at(savedAuras.S2, 50, -16) and savedGroup.eaFlowLaidOut,
   "a group imported before 0.6.0 is laid out at the next login")
 savedAuras = { S1 = { id = "S1" }, S2 = { id = "S2", xOffset = 40 } }
-savedGroup = { id = "Saved", regionType = "group", blizzardFlow = true, controlledChildren = { "S1", "S2" }, triggers = {},
-  eaVersion = 6 }
-private.EAModernize(savedGroup)
+savedGroup = saveGroup({ id = "Saved", regionType = "group", blizzardFlow = true, controlledChildren = { "S1", "S2" },
+  triggers = {}, eaVersion = 6 })
 T.expect(savedAuras.S2.xOffset == 40 and savedAuras.S1.xOffset == nil and not savedGroup.eaFlowLaidOut,
   "one whose auras were moved by hand keeps them where they are")
 savedAuras = { S1 = { id = "S1" }, S2 = { id = "S2" } }
+local incoming = { id = "Incoming", regionType = "group", blizzardFlow = true, blizzardFlowOrigin = "group",
+  controlledChildren = { "S1", "S2" }, triggers = {}, eaVersion = 5 }
+private.EAModernize(incoming)
+T.expect(savedAuras.S1.xOffset == nil and savedAuras.S2.xOffset == nil and not incoming.eaFlowLaidOut,
+  "a group still being imported or sent by chat link never moves my saved auras that share its children's names")
 forever = false
-savedGroup = { id = "Saved", regionType = "group", blizzardFlow = true, controlledChildren = { "S1", "S2" }, triggers = {},
-  eaVersion = 6 }
-private.EAModernize(savedGroup)
+savedGroup = saveGroup({ id = "Saved", regionType = "group", blizzardFlow = true, controlledChildren = { "S1", "S2" },
+  triggers = {}, eaVersion = 6 })
 T.expect(savedAuras.S2.xOffset == nil, "not on Retail")
 forever = true
+m = row({}, { { xOffset = 100, yOffset = 50, selfPoint = "LEFT" }, {} })
+T.expect(at(m[1], 116, 50) and at(m[2], 150, 50), "an old row starts where its first member really is, whatever its anchor")
+m = row({ blizzardFlowOrigin = "group" }, { {}, { xOffset = 5, selfPoint = "LEFT" } })
+T.expect(at(m[2], 55, -16), "a member's own offset is a nudge whatever its anchor")
+local dynamic = { regionType = "dynamicgroup", blizzardFlow = true, blizzardFlowOrigin = "group" }
+m = row(dynamic, { {}, {} })
+T.expect(m[2].xOffset == nil and not dynamic.eaFlowLaidOut, "a dynamic group is never laid out")
 
 T.section("Cooldown Manager triggers become standard triggers (0.6.0)")
 local function cdm(t, version, conditions)
@@ -360,13 +374,14 @@ T.expect(cd.spellName == 853 and cd.use_exact_spellName == false, "a numeric nam
 local _, withConditions = cdm({ event = "Blizzard Cooldown Manager", cdmUseNames = true, cdmNames = { "Judgement" } }, 6, {
   { check = { trigger = 1, variable = "stacks" } },
   { check = { trigger = -2, checks = { { trigger = 1, variable = "inRange" }, { trigger = 2, variable = "stacks" },
-    { trigger = 1, variable = "onCooldown" } } } },
+    { trigger = 1, variable = "onCooldown" }, { trigger = 1, variable = "recharging" } } } },
 })
 local checks = withConditions.conditions
 T.expect(checks[1].check.variable == "charges" and checks[2].check.checks[1].variable == "spellInRange",
   "its conditions get the standard names, nested ones too")
 T.expect(checks[2].check.checks[2].variable == "stacks" and checks[2].check.checks[3].variable == "onCooldown",
   "conditions of other triggers and names already shared stay")
+T.expect(withConditions.triggers[1].trigger.eaCdmLostConditions[1] == "recharging", "Recharging has no match here, so it is named")
 cd = cdm({ event = "Blizzard CDM Utility", cdmUseNames = true, cdmNames = { "Judgement" } })
 T.expect(cd.event == "Cooldown Progress (Spell)", "the old Utility event is a Cooldown too")
 cd = cdm({ type = "spell", event = "Blizzard Cooldown Manager", cdmUseNames = true, cdmNames = { "Judgement" } })
@@ -393,6 +408,39 @@ T.expect(buff.auranames[2] == "Seal of Righteousness" and buff.showClones == tru
   "every name, one display each")
 T.expect(buff.matchesShowOn == "showOnActive" and buff.unitExists == true, "shown while found by default")
 T.expect(buff.useStacks and buff.stacksOperator == "==" and buff.stacks == "3", "the Stack Count filter carries over")
+cd = cdm({ event = "Blizzard Cooldown Manager", cdmUseNames = true, cdmNames = { "Judgement" }, cdmUseRemaining = true,
+  cdmUseCharges = true })
+T.expect(cd.remaining == "10" and cd.charges == "1", "a ticked filter with no value takes the defaults, 10 seconds and 1")
+buff = cdm({ event = "Blizzard CDM Buff", cdmUseNames = true, cdmNames = { "Blessing of Might" }, cdmUseRemaining = true,
+  cdmUseStacks = true })
+T.expect(buff.rem == "10" and buff.stacks == "1", "on Buff/Debuff too")
+local buffAura
+buff, buffAura = cdm({ event = "Blizzard CDM Buff", cdmUseNames = true, cdmNames = { "Blessing of Might" }, cdmBuffShow = "always" },
+  6, { { check = { trigger = 1, variable = "auraActive" } }, { check = { trigger = 1, variable = "show" } },
+  { check = { trigger = 1, variable = "elapsedTime" } }, { check = { trigger = 1, variable = "activationTime" } },
+  { check = { trigger = 1, variable = "elapsedTime" } } })
+T.expect(buffAura.conditions[1].check.variable == "buffed" and buffAura.conditions[2].check.variable == "show"
+  and buffAura.conditions[4].check.variable == "activationTime",
+  "Show On Always: Aura Active becomes Aura(s) Found, Active and Since Active stay")
+local lostKeys = 0
+for _ in pairs(buff.eaCdmLostConditions or {}) do lostKeys = lostKeys + 1 end
+T.expect(buff.eaCdmLostConditions and buff.eaCdmLostConditions[1] == "elapsedTime" and #buff.eaCdmLostConditions == 1
+  and lostKeys == 1,
+  "a condition with no match here is kept for the warning, once, as a plain list")
+buff, buffAura = cdm({ event = "Blizzard CDM Buff", cdmUseNames = true, cdmNames = { "Blessing of Might" } }, 6,
+  { { check = { trigger = 1, variable = "auraActive" } } })
+T.expect(buffAura.conditions[1].check.variable == "show" and buff.eaCdmLostConditions == nil,
+  "Found: Aura Active is the trigger's own state")
+buff, buffAura = cdm({ event = "Blizzard CDM Buff", cdmUseNames = true, cdmNames = { "Blessing of Might" },
+  cdmBuffShow = "missing" }, 6, { { check = { trigger = 1, variable = "auraActive", value = 1 } },
+  { check = { trigger = 1, variable = "auraActive", value = 0 } } })
+T.expect(buffAura.conditions[1].check.variable == "show" and buffAura.conditions[1].check.value == 0
+  and buffAura.conditions[2].check.value == 1 and buff.eaCdmLostConditions == nil,
+  "Missing: Aura Active is the trigger's own state turned around")
+local itemTrigger, itemAura = cdm({ event = "Blizzard CDM Item", cdmUseItemIDs = true, cdmItemIDs = { "6948" } }, 6, {
+  { check = { trigger = 1, variable = "isReady" } }, { check = { trigger = 1, variable = "onCooldown" } } })
+T.expect(itemTrigger.eaCdmLostConditions and itemTrigger.eaCdmLostConditions[1] == "isReady" and itemAura.conditions[2].check.variable
+  == "onCooldown", "the item cooldown has no Is Ready, so that one is named")
 buff = cdm({ event = "Blizzard CDM Buff", cdmUseNames = true, cdmNames = { "Blessing of Might", "20154" },
   cdmBuffShow = "missing" })
 T.expect(buff.showClones == false, "Missing is one display however many names it lists")

@@ -1,4 +1,4 @@
--- Everything Auras 0.6.0: the new item triggers and Money filters, through GenericTrigger.lua's real code builder.
+-- Everything Auras 0.6.0: the new triggers, Form ID, enchant kinds and the spec load option, through the real code builders.
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
@@ -91,6 +91,7 @@ local function fixture(forever)
     now = 100, loadScans = {} }
   local addon = { IsLibsOK = function() return true end, IsForever = function() return forever end,
     newFeatureString = "*", L = setmetatable({}, { __index = function(_, key) return key end }),
+    SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n > -2147483649 and n or nil end,
     GetRange = function()
       if f.range == "error" then error("range library error") end
       return f.range[1], f.range[2]
@@ -338,8 +339,16 @@ T.expect(shown == false, "a broken ID list never shows")
 local idArg = ammo.private.event_prototypes.Ammo.args[1]
 T.expect(idArg.validate(nil, "2512, 2516") == true and type(idArg.validate(nil, "abc")) == "string"
   and idArg.validate(nil, "") == true, "the options refuse a broken ID list")
-T.expect(ammo.private.event_prototypes.Ammo.args[2].hidden({ ammoItemIDs = "2516" }) == true
-  and ammo.private.event_prototypes.Ammo.args[2].hidden({ ammoItemIDs = " " }) == false, "Count hides while IDs are set")
+T.expect(ammo.private.event_prototypes.Ammo.args[2].enable({ ammoItemIDs = "2516" }) == false
+  and ammo.private.event_prototypes.Ammo.args[2].enable({ ammoItemIDs = " " }) == true, "Count shows only while IDs are empty")
+local functionHidden = {}
+for name, prototype in pairs(ammo.private.event_prototypes) do
+  for _, arg in ipairs(prototype.args or {}) do
+    if type(arg.hidden) == "function" then functionHidden[#functionHidden + 1] = name .. "." .. tostring(arg.name) end
+  end
+end
+-- Trigger options drop any arg whose hidden is set at all (LoadOptions.lua ConstructOptions), so it is never a function.
+T.expect(#functionHidden == 0, "no trigger option hides through a function: " .. table.concat(functionHidden, ", "))
 shown = run(ammo, { type = "item", event = "Ammo", use_count = true, count = { "199", "1" }, count_operator = { "<=", ">" } })
 T.expect(shown == false, "two count entries both have to pass")
 shown = run(ammo, { type = "item", event = "Ammo", ammoItemIDs = "2516", use_count = true, count = { "199", "1" },
@@ -358,6 +367,26 @@ shown, state = run(ammo, { type = "item", event = "Ammo", ammoMode = "all" })
 T.expect(state.count == 500, "and it is counted")
 watcher.OnEvent(watcher, "BAG_UPDATE_DELAYED")
 T.expect(#ammo.events == 2 and ammo.events[2].event == "FA_AMMO_UPDATE", "bag changes send it too")
+ITEMS[9999].unloaded = true
+run(ammo, { type = "item", event = "Ammo", ammoMode = "all" })
+T.expect(#ammo.requests == 2, "after a bag change an item still without data is asked for again")
+watcher.OnEvent(watcher, "GET_ITEM_INFO_RECEIVED", 9999, false)
+T.expect(#ammo.events == 2, "a failed load changes nothing")
+watcher.OnEvent(watcher, "GET_ITEM_INFO_RECEIVED", 9999, true)
+run(ammo, { type = "item", event = "Ammo", ammoMode = "all" })
+T.expect(#ammo.events == 3 and #ammo.requests == 2, "data that still does not load is not asked for again before the bags change")
+watcher.OnEvent(watcher, "BAG_UPDATE_DELAYED")
+run(ammo, { type = "item", event = "Ammo", ammoMode = "all" })
+T.expect(#ammo.requests == 3, "and once more after they do")
+ITEMS[9999].unloaded = false
+watcher.OnEvent(watcher, "GET_ITEM_INFO_RECEIVED", 9999, true)
+local early = fixture(true)
+early.bags = { [0] = { slots = 1 } }
+early.items = { [0] = { { 2512, 10 } } }
+T.expect(early.private.ExecEnv.EAAmmo("", "all") == 10, "a read before any Ammo aura loads")
+early.items = { [0] = { { 2512, 40 } } }
+shown, state = run(early, { type = "item", event = "Ammo", ammoMode = "all" })
+T.expect(state.count == 40, "the first watched read does not reuse it")
 
 ammo.equipped = {}
 shown, state = run(ammo, { type = "item", event = "Ammo" })
@@ -492,6 +521,16 @@ T.expect(sr.private.event_prototypes["Spell in Range"].internal_events({ unit = 
   and sr.private.event_prototypes["Spell in Range"].internal_events({})[1] == "EA_SPELL_RANGE_UPDATE",
   "the target listens to the range event, other units to the timer")
 
+local huge = fixture(true)
+run(huge, { type = "spell", event = "Spell in Range", spellName = "99999999999", use_exact_spellName = true, unit = "target" })
+local reached = false
+for _, entry in ipairs(huge.enabled) do reached = reached or (tonumber(entry[1]) or 0) > 2147483647 end
+for _, spell in ipairs(huge.asked) do reached = reached or (tonumber(spell) or 0) > 2147483647 end
+T.expect(not reached, "a spell ID past 32 bits never reaches the client")
+local hugeName = fixture(true)
+run(hugeName, { type = "spell", event = "Spell in Range", spellName = "99999999999", unit = "target" })
+T.expect(#hugeName.asked == 0 and #hugeName.enabled == 0, "not even as text without Exact Spell Match")
+
 T.section("Spell in Range (Action Bar)")
 local ab = fixture(true)
 ab.known.Judgement, ab.slots[20271], ab.inRange.target = true, { 7, 19 }, true
@@ -538,6 +577,16 @@ T.expect(tracking("Banker", "always") == true, "Always shows an entry either way
 local values = tr.private.event_prototypes.Tracking.args[1].values({ trackingType = "2580" })
 T.expect(values.anySpell and values["5502"] == "Sense Undead" and values["Flight Master"] and values["2580"] == "2580 (unavailable)",
   "the list has Any Tracking Spell, spells by ID, filters by name, and a missing saved entry")
+local tr2 = fixture(true)
+local function tracking2(key, show) return run(tr2, { type = "unit", event = "Tracking", trackingType = key, trackingShow = show }) end
+T.expect(tracking2("anySpell", "inactive") == false, "a list not loaded yet is unknown, so no reminder shows")
+tr2.tracking = { { name = "Sense Undead", spellID = 5502, active = false, texture = 11 } }
+T.expect(tracking2("anySpell", "inactive") == true, "once loaded, nothing on shows")
+tr2.tracking = {}
+T.expect(tracking2("anySpell", "inactive") == true, "a list gone empty keeps the last reading")
+tr2.tracking = { { name = "Banker", active = false, texture = 13 }, { name = "Banker", active = true, texture = 14 } }
+shown, state = tracking2("Banker", "active")
+T.expect(shown and state.icon == 14, "a name listed twice is on when either entry is")
 
 T.section("Role")
 local ro = fixture(true)
@@ -561,8 +610,8 @@ T.expect(stanceArgs[2].name == "formID" and stanceArgs[3].name == "form" and sta
 local positions = stanceArgs[3].values()
 T.expect(positions[1] == "1 - Devotion Aura" and positions[0] == "0 - Humanoid" and positions[10]
   and positions[10]:find("Not known", 1, true), "bar positions 1-10 stay pickable for imported auras")
-T.expect(stanceArgs[3].hidden({ use_formID = true }) == true and stanceArgs[3].hidden({ use_formID = true, use_form = true }) == false
-  and stanceArgs[3].hidden({}) == false, "Bar Position hides while Form is used alone")
+T.expect(stanceArgs[3].hidden == nil and stanceArgs[3].desc:find("Not used while Form is set", 1, true),
+  "Bar Position always shows, and its tooltip says Form wins")
 T.expect(stanceArgs[4].enable({ use_formID = false }) == true and stanceArgs[4].enable({}) == false, "Inverse works with Form too")
 local formValues = stanceArgs[2].values()
 T.expect(formValues[0] == "Humanoid" and formValues[5] == "Druid: Bear Form" and formValues[17] == "Warrior: Battle Stance"
@@ -637,6 +686,17 @@ both.tooltip = { "Minor Wizard Oil (29 min)", "Flametongue 3 (10 min)" }
 shown, state = run(both, { type = "item", event = "Weapon Enchant", weapon = "main", enchantKind = "imbue" },
   { GetTime = function() return both.now end, tonumber = tonumber })
 T.expect(shown and state.name == "Flametongue 3", "two enchants seen first together are named by time left, not order")
+local setLine = fixture(true)
+setLine.equipped = { [16] = { icon = 999 } }
+setLine.enchants[0] = { { enchantType = 2, timeLeft = 1774011, charges = 0, enchantID = 2623, enchantIconID = 0 } }
+setLine.tooltip = { "Battlegear of Might (0/8)" }
+local setG = { GetTime = function() return setLine.now end, tonumber = tonumber }
+run(setLine, { type = "item", event = "Weapon Enchant", weapon = "main", enchantKind = "any" }, setG)
+setLine.tooltip = { "Battlegear of Might (0/8)", "Minor Wizard Oil (29 min)" }
+shown, state = run(setLine, { type = "item", event = "Weapon Enchant", weapon = "main", enchantKind = "any" }, setG)
+T.expect(shown and state.name == "Minor Wizard Oil", "a set bonus line read first is not kept as the enchant's name")
+T.expect(run(setLine, { type = "item", event = "Weapon Enchant", weapon = "ranged", enchantKind = "any" }, setG) == false,
+  "a saved ranged weapon shows nothing, as before")
 
 T.section("Talent spec load option")
 local sp = fixture(true)
@@ -686,6 +746,18 @@ T.expect(loads({ use_forever_spec = false, forever_spec = { multi = { PALADIN_HO
 T.expect(loads({ use_forever_spec = true, forever_spec = { single = "PALADIN_HOLY" } }) == false, "nor in single mode")
 T.expect(loads({ use_forever_spec = false, forever_spec = { multi = {} } }) == false, "nothing ticked never loads")
 T.expect(loads({ forever_spec = { single = "PALADIN_HOLY" } }) == true, "the option off is ignored")
+local listCode = LoadConstruct(sp.private.load_prototype, { use_forever_spec = false,
+  forever_spec = { multi = { PALADIN_HOLY = true, WARRIOR_FURY = false } } })
+T.expect(listCode:find('EAForeverSpecIn("PALADIN_HOLY", "WARRIOR_FURY")', 1, true) and not listCode:find("{[", 1, true),
+  "the tree lists are constants, not tables built on every check")
+talents(21, 0, 0)
+T.expect(sp.addon.EAForeverSpec() == "PALADIN_HOLY", "Holy before a respec")
+sp.nodes[3].ranksPurchased, sp.nodes[10].ranksPurchased = 0, 25
+local sameFrame = sp.addon.EAForeverSpec()
+local specWatch = framesFor(sp, "TRAIT_CONFIG_UPDATED")[1]
+specWatch.OnEvent(specWatch, "TRAIT_CONFIG_UPDATED")
+T.expect(sameFrame == "PALADIN_HOLY" and sp.addon.EAForeverSpec() == "PALADIN_RETRIBUTION",
+  "a talent save in the same frame reads the new tree")
 local specFrame = framesFor(sp, "TRAIT_CONFIG_UPDATED")[1]
 specFrame.OnEvent(specFrame, "TRAIT_CONFIG_UPDATED")
 T.expect(specFrame.events.ACTIVE_COMBAT_CONFIG_CHANGED and sp.loadScans[1] == "PLAYER_TALENT_UPDATE",

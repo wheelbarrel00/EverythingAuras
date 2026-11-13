@@ -113,7 +113,6 @@ function Private.ExecEnv.EADurability(slot)
   return unpack(result, 1, 6)
 end
 
--- nil for an empty field, false for one that is not a list of whole item IDs.
 local function ParseAmmoIDs(text)
   if type(text) == "number" then
     text = tostring(text)
@@ -239,16 +238,19 @@ local function WatchAmmo()
   ammoWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
   ammoWatcher:RegisterEvent("GET_ITEM_INFO_RECEIVED")
   ammoWatcher:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
-  ammoWatcher:SetScript("OnEvent", function(_, event, itemID)
+  -- An item that never loads stays marked until the bags change, so it is asked for once per change.
+  ammoWatcher:SetScript("OnEvent", function(_, event, itemID, success)
     if event == "GET_ITEM_INFO_RECEIVED" then
-      if not waitingItems[itemID] then
+      if not waitingItems[itemID] or success == false then
         return
       end
-      waitingItems[itemID] = nil
+    else
+      waitingItems = {}
     end
     ammoBags = nil
     Private.ScanEvents("FA_AMMO_UPDATE")
   end)
+  ammoBags = nil
 end
 
 local function AmmoMode(trigger)
@@ -411,8 +413,8 @@ if not count then return false end
       default = "equipped",
       required = true,
       test = "true",
-      hidden = function(trigger)
-        return ParseAmmoIDs(trigger.ammoItemIDs) ~= nil
+      enable = function(trigger)
+        return ParseAmmoIDs(trigger.ammoItemIDs) == nil
       end,
       desc = L["Equipped Ammo counts the arrows or bullets in your ammo slot, or all you carry when the slot is empty. All Carried Ammo counts every arrow and bullet in your bags."],
     },
@@ -527,10 +529,13 @@ end
 -- With Exact Spell Match the client is asked about that ID, otherwise about the name, which covers every rank.
 local function ResolveSpell(trigger)
   local value = trigger.spellName
-  local id = tonumber(value)
+  local id = EverythingAuras.SafeToNumber(value)
   if trigger.use_exact_spellName then
     id = id or 0
     return id, id
+  end
+  if id == nil and tonumber(value) then
+    return nil
   end
   local spell = id and (C_Spell.GetSpellName(id) or id) or value
   if spell == nil or spell == "" then
@@ -783,22 +788,27 @@ function Private.ExecEnv.EATracking(key)
   if key == nil then
     return nil
   end
-  local found, active, name, icon = key == ANY_TRACKING_SPELL, false, nil, nil
-  for _, info in ipairs(TrackingEntries()) do
-    if hasanysecretvalues(info.active, info.spellID, info.name) then
-      local previous = lastTracking[key]
-      if previous then
-        return unpack(previous, 1, 3)
-      end
-      return nil
+  local entries = TrackingEntries()
+  -- An empty list means it has not loaded yet, so it never reads as no tracking on.
+  local unreadable = #entries == 0
+  for _, info in ipairs(entries) do
+    unreadable = unreadable or hasanysecretvalues(info.active, info.spellID, info.name)
+  end
+  if unreadable then
+    local previous = lastTracking[key]
+    if previous then
+      return unpack(previous, 1, 3)
     end
+    return nil
+  end
+  local found, active, name, icon = key == ANY_TRACKING_SPELL, false, nil, nil
+  for _, info in ipairs(entries) do
     if key == ANY_TRACKING_SPELL then
       if info.spellID and info.active and not active then
         active, name, icon = true, info.name, info.texture
       end
-    elseif TrackingKey(info) == key then
+    elseif TrackingKey(info) == key and (not found or info.active and not active) then
       found, active, name, icon = true, info.active == true, info.name, info.texture
-      break
     end
   end
   if not found then
@@ -968,7 +978,7 @@ local active = current ~= nil and (%s)
   local formIndex, formArg = IndexOfArg(stance.args, "form")
   if formArg then
     formArg.display = L["Form (Bar Position)"]
-    formArg.desc = L["The form's slot on this character's stance bar. Paladin auras sit here too. Prefer Form for shapeshift forms and stances."]
+    formArg.desc = L["The form's slot on this character's stance bar. Paladin auras sit here too. Prefer Form for shapeshift forms and stances. Not used while Form is set."]
     formArg.values = function()
       local values = {}
       for position, label in pairs(Private.form_types) do
@@ -978,9 +988,6 @@ local active = current ~= nil and (%s)
         values[position] = values[position] or (position .. " - " .. L["Not known on this character"])
       end
       return values
-    end
-    formArg.hidden = function(trigger)
-      return trigger.use_formID ~= nil and trigger.use_form == nil
     end
     table.insert(stance.args, formIndex, {
       name = "formID",
@@ -1009,13 +1016,13 @@ end
 
 Private.ea_enchant_kinds = {
   any = L["Any"],
-  imbue = L["Imbue (Firestones, Mage Scrolls, Shaman Imbues)"],
+  imbue = L["Imbue"],
   temporary = L["Oil, Stone or Poison"],
 }
 
 local ENCHANT_TYPES = { [2] = "temporary", [3] = "imbue" }
 local OPERATORS = { ["<"] = "<", ["<="] = "<=", [">"] = ">", [">="] = ">=", ["=="] = "==", ["~="] = "~=", ["="] = "==" }
-local fullDurations, enchantNames, lastEnchants = {}, {}, {}
+local fullDurations, enchantNames, guessedNames, lastEnchants = {}, {}, {}, {}
 
 local function ReadWeapon(slot)
   local found = {}
@@ -1048,8 +1055,9 @@ local function TooltipEnchants(invSlot)
       if name and name ~= "" then
         local amount, unit = text:match("%((%d+)%s*(%a*)")
         local first = (unit or ""):sub(1, 1):lower()
-        local seconds = tonumber(amount) and tonumber(amount) * (first == "h" and 3600 or first == "m" and 60 or 1)
-        lines[#lines + 1] = { name = name, short = short, seconds = seconds }
+        local unitSeconds = first == "h" and 3600 or first == "m" and 60 or 1
+        local seconds = tonumber(amount) and tonumber(amount) * unitSeconds
+        lines[#lines + 1] = { name = name, short = short, seconds = seconds, tolerance = unitSeconds + 5 }
       end
     end
   end
@@ -1068,19 +1076,25 @@ local function NameEnchants(found, invSlot)
           best, bestGap = line, gap
         end
       end
-      if best then
+      -- Set bonus lines like "(0/8)" fit the pattern too, so only a line whose time fits is kept for the session.
+      if best and bestGap <= best.tolerance then
         enchantNames[entry.enchantID] = { best.name, best.short }
+      elseif best then
+        guessedNames[entry.enchantID] = { best.name, best.short }
       end
     end
   end
 end
 
 local function NameMatches(entry, wanted)
-  local names = enchantNames[entry.enchantID]
+  local names = enchantNames[entry.enchantID] or guessedNames[entry.enchantID]
   return names and (wanted == names[1] or wanted == names[2]) or tonumber(wanted) == entry.enchantID
 end
 
 function Private.ExecEnv.EAWeaponEnchant(hand, kind, wanted)
+  if hand ~= "main" and hand ~= "off" then
+    return nil
+  end
   local invSlot = hand == "off" and INVSLOT_OFFHAND or INVSLOT_MAINHAND
   local key = hand .. "|" .. kind .. "|" .. tostring(wanted)
   local found = ReadWeapon(hand == "off" and 1 or 0)
@@ -1108,7 +1122,7 @@ function Private.ExecEnv.EAWeaponEnchant(hand, kind, wanted)
     -- Blizzard gives only the time left, so the longest seen this session stands in for the full duration.
     local full = math.max(fullDurations[entry.enchantID] or 0, remaining)
     fullDurations[entry.enchantID] = full
-    local names = enchantNames[entry.enchantID] or {}
+    local names = enchantNames[entry.enchantID] or guessedNames[entry.enchantID] or {}
     local icon = entry.enchantIconID and entry.enchantIconID > 0 and entry.enchantIconID
       or GetInventoryItemTexture("player", invSlot)
     result = { GetTime() + remaining, full, names[1] or L["Unknown"], names[2] or names[1] or L["Unknown"], icon,
@@ -1148,7 +1162,7 @@ local charges = stacks
 ]]):format(trigger.use_enchant and tostring(trigger.enchant or "") or "",
       showOnActive and trigger.use_stacks and tonumber(trigger.stacks or 0) or "nil",
       showOnActive and trigger.use_remaining and tonumber(trigger.remaining or 0) or "nil",
-      trigger.showOn or "showOnActive", trigger.weapon == "off" and "off" or "main", kind,
+      trigger.showOn or "showOnActive", trigger.weapon == "off" and "off" or trigger.weapon == "ranged" and "ranged" or "main", kind,
       OPERATORS[trigger.stacks_operator or "<"] or "<", OPERATORS[trigger.remaining_operator or "<"] or "<")
   end
   local weaponIndex = IndexOfArg(enchant.args, "weapon")
@@ -1160,7 +1174,7 @@ local charges = stacks
     default = "any",
     required = true,
     test = "true",
-    desc = L["Imbues and oils, stones or poisons are read apart, so one aura can watch each on the same weapon. Any shows the imbue when there is one."],
+    desc = L["Which kind of weapon enchant counts. Any counts either, the imbue first."],
   })
   local _, stacksArg = IndexOfArg(enchant.args, "stacks")
   if stacksArg then
@@ -1270,8 +1284,25 @@ function EverythingAuras.EAForeverSpecIs(key)
   return key ~= nil and EverythingAuras.EAForeverSpec() == key
 end
 
+local specSets = {}
+local function SpecSet(list)
+  if type(list) == "table" then
+    return list
+  end
+  local set = specSets[list]
+  if not set then
+    set = {}
+    for key in tostring(list or ""):gmatch("[^,]+") do
+      set[key] = true
+    end
+    specSets[list] = set
+  end
+  return set
+end
+
 -- Only never-load trees means every other tree loads, with no spec yet included.
 function EverythingAuras.EAForeverSpecIn(load, never)
+  load, never = SpecSet(load), SpecSet(never)
   local spec = EverythingAuras.EAForeverSpec()
   if next(load) then
     return spec ~= nil and load[spec] == true
@@ -1282,11 +1313,7 @@ function EverythingAuras.EAForeverSpecIn(load, never)
 end
 
 local function KeyList(keys)
-  local parts = {}
-  for _, key in ipairs(keys) do
-    parts[#parts + 1] = ("[%q]=true"):format(key)
-  end
-  return "{" .. table.concat(parts, ",") .. "}"
+  return ("%q"):format(table.concat(keys, ","))
 end
 
 local StockLoadInit = Private.load_prototype.init
@@ -1331,11 +1358,12 @@ table.insert(Private.load_prototype.args, (classIndex or #Private.load_prototype
   desc = L["Your specialization is the talent tree with 21 or more points, the one with the most if several, and the tree further left on a tie. Click a tree once to load for it, twice to never load for it. With only never-load trees, every other tree loads, no specialization yet included."],
 })
 
--- The load frame does not hear talent tree saves or Primary and Secondary swaps on this client.
+-- Talent config changes come through these events, which the load frame does not register.
 local specWatcher = CreateFrame("Frame")
 for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "ACTIVE_COMBAT_CONFIG_CHANGED" }) do
   pcall(specWatcher.RegisterEvent, specWatcher, event)
 end
 specWatcher:SetScript("OnEvent", function()
+  specTime = nil
   Private.ScanForLoads(nil, "PLAYER_TALENT_UPDATE")
 end)

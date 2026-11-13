@@ -633,6 +633,7 @@ local overridden = {
 Private.EASandboxOverrides = overridden
 Private.EAAddonTableOverrides = FakeEverythingAurasMixin.override
 Private.EAAddonTableBlocked = FakeEverythingAurasMixin.blockedFunctions
+Private.EACurrentAuraUid = function() return current_uid end
 
 -- Block global function names in namespace API tables
 for name, functions in pairs(blockedNamespaceFunctions) do

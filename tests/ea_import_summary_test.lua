@@ -47,8 +47,8 @@ local function aura(f, id, fields)
   return fields
 end
 
-local function import(f, data, success, id)
-  local result = f.options.OpenUpdate(data, {}, nil, nil, nil, function(...) f.called = { ... } end)
+local function import(f, data, success, id, children)
+  local result = f.options.OpenUpdate(data, children or {}, nil, nil, nil, function(...) f.called = { ... } end)
   f.opened[#f.opened].callback(success, id, "extra")
   local timers = f.timers
   f.timers = {}
@@ -74,7 +74,8 @@ f.warned["uid-Broken"], f.warned["uid-Swing"] = true, true
 -- Import notes the origin, then PreAdd stamps eaVersion, all before the window opens.
 local fromFA = { tocversion = 16001, eaVersion = 7 }
 f.options.Private.EAForeignImports[fromFA] = true
-T.expect(import(f, fromFA, true, "Pack") == "opened", "the import window opens as before")
+local packChildren = { f.auras.Row, f.auras.Seal, f.auras.Might, f.auras.Swing, f.auras.Broken }
+T.expect(import(f, fromFA, true, "Pack", packChildren) == "opened", "the import window opens as before")
 T.expect(f.called[1] == true and f.called[2] == "Pack" and f.called[3] == "extra", "the import's own callback still runs")
 local dialog = f.dialogs[1]
 T.expect(dialog and dialog.title == "Import Summary" and dialog.button1 == "Got it" and dialog.button2 == nil,
@@ -87,6 +88,13 @@ T.expect(text:find("- 1 Cooldown Manager trigger, now a standard trigger", 1, tr
   and text:find("- 1 Swing Timer trigger, now on its hand setting", 1, true), "and the other pieces, in the singular")
 T.expect(text:find("aura list to see what does not work yet:\nBroken, Swing", 1, true), "it names the auras with a warning")
 
+local update = { tocversion = 16001, eaVersion = 7 }
+f.options.Private.EAForeignImports[update] = true
+import(f, update, true, "Pack", { { id = "Seal", triggers = { { trigger = { type = "aura2" } } } } })
+text = f.dialogs[#f.dialogs].text
+T.expect(not text:find("Converted", 1, true) and text:find("Broken, Swing", 1, true),
+  "an update counts only what this string converted, and still names the auras with a warning")
+
 T.section("When it stays quiet")
 local before = #f.dialogs
 import(f, { tocversion = 16001, eaVersion = 7 }, true, "Pack")
@@ -97,7 +105,7 @@ aura(f, "Clean", { triggers = { { trigger = { type = "aura2" } } } })
 import(f, fromFA, true, "Clean")
 T.expect(#f.dialogs == before, "not when nothing was converted or is missing")
 aura(f, "Framed", { regionType = "group", blizzardFlow = true, eaFlowLaidOut = true, blizzardFlowFrames = "NAMEPLATE" })
-import(f, fromFA, true, "Framed")
+import(f, fromFA, true, "Framed", { f.auras.Framed })
 T.expect(#f.dialogs == before, "a group on nameplates was not laid out, so it is not counted")
 
 T.section("Long lists")

@@ -14,23 +14,28 @@ local function Count(lines, count, singular, plural)
   end
 end
 
-function OptionsPrivate.EAImportSummary(root)
+-- Conversions are counted on the incoming string, so an update does not count what the saved auras already had.
+function OptionsPrivate.EAImportSummary(root, incoming)
   local Private = OptionsPrivate.Private
   local modern, cdm, swing, groups = 0, 0, 0, 0
-  local flagged = {}
-  for data in Private.TraverseAll(root) do
-    if data.regionType == "group" and data.blizzardFlow == true and data.eaFlowLaidOut
-      and not FLOW_FRAMES[data.blizzardFlowFrames or ""] then
-      groups = groups + 1
-    end
-    for _, triggerData in ipairs(type(data.triggers) == "table" and data.triggers or {}) do
-      local trigger = type(triggerData) == "table" and triggerData.trigger
-      if type(trigger) == "table" then
-        modern = modern + (trigger.eaConvertedFrom == "secretAura" and 1 or 0)
-        cdm = cdm + (trigger.eaConvertedFrom == "cdm" and 1 or 0)
-        swing = swing + (trigger.event == "Swing Timer" and trigger.swingType ~= nil and 1 or 0)
+  for _, data in ipairs(incoming) do
+    if type(data) == "table" then
+      if data.regionType == "group" and data.blizzardFlow == true and data.eaFlowLaidOut
+        and not FLOW_FRAMES[data.blizzardFlowFrames or ""] then
+        groups = groups + 1
+      end
+      for _, triggerData in ipairs(type(data.triggers) == "table" and data.triggers or {}) do
+        local trigger = type(triggerData) == "table" and triggerData.trigger
+        if type(trigger) == "table" then
+          modern = modern + (trigger.eaConvertedFrom == "secretAura" and 1 or 0)
+          cdm = cdm + (trigger.eaConvertedFrom == "cdm" and 1 or 0)
+          swing = swing + (trigger.event == "Swing Timer" and trigger.swingType ~= nil and 1 or 0)
+        end
       end
     end
+  end
+  local flagged = {}
+  for data in Private.TraverseAll(root) do
     if data.uid and Private.EAHasWarning(data.uid) then
       flagged[#flagged + 1] = data.id
     end
@@ -76,7 +81,11 @@ function OptionsPrivate.OpenUpdate(data, children, target, linkedAuras, sender, 
       callbackFunc(success, id, ...)
     end
     local root = success and summarize and EverythingAuras.GetData(id)
-    local text = root and OptionsPrivate.EAImportSummary(root)
+    local incoming = { data }
+    for _, child in ipairs(type(children) == "table" and children or {}) do
+      incoming[#incoming + 1] = child
+    end
+    local text = root and OptionsPrivate.EAImportSummary(root, incoming)
     if text then
       -- After the import has picked the new aura in the list.
       C_Timer.After(0, function()

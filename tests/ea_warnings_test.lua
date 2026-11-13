@@ -177,6 +177,21 @@ T.expect(Has(cdmNote.EAConvertedCooldownManager, "Also listed: Hammer of Justice
 local elapsed = Check({ triggers = { { trigger = { type = "aura2", eaConvertedFrom = "cdm", cdmUseElapsed = true } } } })
 T.expect(Has(elapsed.EANotHereYet, "Elapsed Time filter") and Has(elapsed.EAConvertedCooldownManager, "converted"),
   "an Elapsed Time filter is named")
+local leftoverTrigger = { type = "spell", event = "Cooldown Progress (Spell)", eaConvertedFrom = "cdm", cdmUseElapsed = true,
+  cdmShow = "usable", genericShowOn = "showAlways", eaCdmLostConditions = { "recharging" } }
+local leftoverAura = { triggers = { { trigger = leftoverTrigger } },
+  conditions = { { check = { trigger = -2, checks = { { trigger = 1, variable = "recharging" } } } } } }
+local leftoverElapsed = Check(leftoverAura)
+T.expect(not Has(leftoverElapsed.EANotHereYet, "Elapsed Time filter"), "a leftover Elapsed Time key on a Cooldown says nothing")
+T.expect(Has(leftoverElapsed.EANotHereYet, "Show On Usable or Not Usable") and Has(leftoverElapsed.EANotHereYet,
+  "Recharging condition"), "the old usable Show setting and a condition with no match here are named")
+leftoverAura.conditions, leftoverTrigger.genericShowOn = {}, "showOnReady"
+private.EAUpdateWarnings(leftoverAura)
+T.expect(warnings[leftoverAura.uid].EANotHereYet == nil,
+  "once the condition is deleted and Show On is changed, neither is named any more")
+local itemLost = Check({ triggers = { { trigger = { type = "item", event = "Cooldown Progress (Item)", eaConvertedFrom = "cdm",
+  eaCdmLostConditions = { "stacks" } } } }, conditions = { { check = { trigger = 1, variable = "stacks" } } } })
+T.expect(Has(itemLost.EANotHereYet, "Charges condition"), "a lost condition reads by its label, Charges for stacks")
 
 
 T.section("A group shows its own notes")

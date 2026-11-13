@@ -29,7 +29,10 @@ local function fixture(forever)
   f.private = {
     load_prototype = { args = { { name = "class" }, { name = "playerTitle" }, { name = "size" } } },
     ScanForLoads = function(_, event) f.scans[#f.scans + 1] = event end,
+    EACurrentAuraUid = function() return f.currentUid end,
+    ClearAuraEnvironment = function(id) f.cleared[#f.cleared + 1] = id end,
   }
+  f.cleared, f.auras = {}, { ["Aura A"] = { uid = "auraA" }, ["Aura B"] = { uid = "auraB" } }
   f.addon = {
     IsLibsOK = function() return true end,
     IsForever = function() return forever end,
@@ -38,6 +41,7 @@ local function fixture(forever)
     GetSwingTimerInfo = function(hand) f.swingCalls[#f.swingCalls + 1] = hand return 2, 10, "Sword" end,
     InitSwingTimer = function() f.inits = f.inits + 1 end,
     SafeToNumber = function(v) local n = tonumber(v) return n and n < 2147483648 and n or nil end,
+    GetData = function(id) return f.auras[id] end,
   }
   local function Texture(kind)
     local tex = Stub({ kind = kind })
@@ -65,6 +69,7 @@ local function fixture(forever)
       local button = Button()
       self.slots[slot] = { filter = filter, ids = opts.candidateFilters.includeSpellIDs, enabled = true, button = button }
       if not f.lateInit then opts.initializeFrame(button) end
+      if f.failAfterInit then error("refused after init") end
       return button
     end
     function c.SetAuraSlotCandidateFilters(self, slot, filters) self.slots[slot].ids = filters.includeSpellIDs end
@@ -103,6 +108,11 @@ local function fixture(forever)
       function frame.SetReverse(self, on) self.reverse = on end
       function frame.SetHideCountdownNumbers(self, on) self.hideNumbers = on end
       function frame.SetCountdownFont(self, name) self.font = name end
+      function frame.GetCountdownFontString(self)
+        self.countdownText = rawget(self, "countdownText") or Stub({ points = {} })
+        function self.countdownText.SetPoint(text, ...) text.points[#text.points + 1] = { ... } end
+        return self.countdownText
+      end
       f.frames[#f.frames + 1] = frame
       return frame
     end,
@@ -260,5 +270,49 @@ T.expect(none == nil and why == "Blizzard refused the aura slot." and f.containe
 f.refuseSlots, f.noContainer = nil, true
 none, why = f.addon.AuraOverlay(unitFrame, { spellIDs = { 1 } })
 T.expect(none == nil and why == "This client cannot draw aura overlays.", "nor does a client without aura containers")
+f.noContainer = nil
+
+T.section("AuraOverlay, the second time round")
+local slotFrame = Stub({ level = 1 })
+function slotFrame.GetObjectType() return "Button" end
+function slotFrame.GetFrameLevel(self) return self.level end
+local first = f.addon.AuraOverlay(slotFrame, { spellIDs = { 1 }, debuffSpellIDs = { 2 }, countdownPoint = "BOTTOM",
+  countdownY = 2, countdownColor = { 1, 0, 0, 1 } })
+local firstCooldown = first:GetButton().cooldown
+T.expect(firstCooldown.countdownText.points[1][1] == "BOTTOM" and firstCooldown.countdownText.points[1][5] == 2
+  and rawget(firstCooldown, "font") ~= nil, "the countdown sits where it was asked, in its own color")
+first:SetSpellIDs({ 3 })
+local firstContainer = f.containers[#f.containers]
+T.expect(firstContainer.slots.harmful.enabled == true and firstContainer.slots.main.ids[1] == 3,
+  "SetSpellIDs without a debuff list leaves the debuff slot alone")
+f.refuseSlots = true
+T.expect(f.addon.AuraOverlay(slotFrame, { spellIDs = { 1 } }) == nil and not first:IsReleased(),
+  "a new overlay that fails keeps the one already on the frame")
+f.refuseSlots = nil
+local otherFrame = Stub({ level = 1 })
+function otherFrame.GetObjectType() return "Button" end
+function otherFrame.GetFrameLevel(self) return self.level end
+local sharedFrame = Stub({ level = 1 })
+function sharedFrame.GetObjectType() return "Button" end
+function sharedFrame.GetFrameLevel(self) return self.level end
+f.currentUid = "auraA"
+local fromA = f.addon.AuraOverlay(sharedFrame, { spellIDs = { 1 } })
+local fromA2 = f.addon.AuraOverlay(sharedFrame, { spellIDs = { 3 }, border = { 0, 0, 1, 1 } })
+f.currentUid = "auraB"
+local fromB = f.addon.AuraOverlay(sharedFrame, { spellIDs = { 2 } })
+f.currentUid = nil
+local loose = f.addon.AuraOverlay(otherFrame, { spellIDs = { 1 } })
+T.expect(not fromA:IsReleased() and not fromA2:IsReleased() and not fromB:IsReleased(),
+  "one aura can lay two overlays on a frame, and another aura can share it")
+f.private.ClearAuraEnvironment("Aura A")
+T.expect(fromA:IsReleased() and fromA2:IsReleased() and not fromB:IsReleased() and not loose:IsReleased()
+  and f.cleared[#f.cleared] == "Aura A", "when an aura's init is about to run again, only its own overlays retire")
+f.private.ClearAuraEnvironment("Aura A")
+T.expect(f.cleared[#f.cleared] == "Aura A" and not first:IsReleased(),
+  "clearing again is harmless, and overlays made outside aura code stay until released")
+f.failAfterInit = true
+none, why = f.addon.AuraOverlay(otherFrame, { spellIDs = { 1 } })
+T.expect(none == nil and why == "Blizzard refused the aura slot.", "a slot Blizzard refuses after setting it up does not count")
+f.failAfterInit = nil
 
 T.finish()

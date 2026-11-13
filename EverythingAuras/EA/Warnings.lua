@@ -173,6 +173,21 @@ function Private.EAHasWarning(uid)
   return warned[uid] ~= nil and next(warned[uid]) ~= nil
 end
 
+local CONDITION_LABELS = { recharging = L["Recharging"], isReady = L["Is Ready"], auraActive = L["Aura Active"],
+  stacks = L["Charges"], spellCount = L["Spell Count"], spellId = L["Spell ID"] }
+
+local function ConditionUsed(checks, triggernum, variable)
+  for _, check in ipairs(checks) do
+    if type(check) == "table" then
+      if check.trigger == triggernum and check.variable == variable
+        or type(check.checks) == "table" and ConditionUsed(check.checks, triggernum, variable) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 local function Add(list, seen, label)
   if not seen[label] then
     seen[label] = true
@@ -280,7 +295,11 @@ function Private.EAUpdateWarnings(data)
   if not FOREVER and type(data.load) == "table" and data.load.use_loadFlag == true then
     Add(notHere, notHereSeen, L["Load Flag"])
   end
-  for _, triggerData in ipairs(triggers) do
+  local checks = {}
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    checks[#checks + 1] = type(condition) == "table" and condition.check or nil
+  end
+  for triggernum, triggerData in ipairs(triggers) do
     local trigger = type(triggerData) == "table" and triggerData.trigger
     if type(trigger) == "table" then
       if trigger.eaConvertedFrom == "secretAura" then
@@ -312,8 +331,17 @@ function Private.EAUpdateWarnings(data)
         if type(trigger.eaCdmOthers) == "table" and #trigger.eaCdmOthers > 0 then
           cdmOthers = table.concat(trigger.eaCdmOthers, ", ")
         end
-        if trigger.cdmUseElapsed then
+        if trigger.cdmUseElapsed and trigger.type == "aura2" then
           Add(notHere, notHereSeen, L["Elapsed Time filter"])
+        end
+        if trigger.type == "spell" and (trigger.cdmShow == "usable" or trigger.cdmShow == "unusable")
+          and trigger.genericShowOn == "showAlways" then
+          Add(notHere, notHereSeen, L["Show On Usable or Not Usable"])
+        end
+        for _, name in ipairs(type(trigger.eaCdmLostConditions) == "table" and trigger.eaCdmLostConditions or {}) do
+          if ConditionUsed(checks, triggernum, name) then
+            Add(notHere, notHereSeen, L["%s condition"]:format(CONDITION_LABELS[name] or tostring(name)))
+          end
         end
       end
       if trigger.type == "combatlog" then

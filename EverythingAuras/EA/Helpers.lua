@@ -90,6 +90,7 @@ end
 
 local MAIN_SLOT, HARMFUL_SLOT = "main", "harmful"
 local overlays = {}
+local overlaysByAura = {}
 local fontCount = 0
 
 local function SpellList(values)
@@ -157,7 +158,7 @@ local function BuildOverlayButton(handle, holder, button)
     cooldown:SetDrawSwipe(options.swipeVisible ~= false)
     cooldown:SetReverse(options.reverse and true or false)
     cooldown:SetHideCountdownNumbers(options.countdown == false)
-    if options.countdownFont or options.countdownSize or options.countdownFlags then
+    if options.countdownFont or options.countdownSize or options.countdownFlags or options.countdownColor then
       fontCount = fontCount + 1
       local font = CreateFont("EverythingAurasOverlayFont" .. fontCount)
       font:SetFont(options.countdownFont or STANDARD_TEXT_FONT, tonumber(options.countdownSize) or 12,
@@ -166,6 +167,13 @@ local function BuildOverlayButton(handle, holder, button)
         font:SetTextColor(unpack(options.countdownColor, 1, 4))
       end
       cooldown:SetCountdownFont(font:GetName())
+    end
+    local countdownText = (options.countdownPoint or options.countdownX or options.countdownY)
+      and cooldown.GetCountdownFontString and cooldown:GetCountdownFontString()
+    if countdownText then
+      local point = type(options.countdownPoint) == "string" and options.countdownPoint or "CENTER"
+      countdownText:ClearAllPoints()
+      countdownText:SetPoint(point, cooldown, point, tonumber(options.countdownX) or 0, tonumber(options.countdownY) or 0)
     end
     button:SetDurationCooldown(cooldown)
     holder.cooldown = cooldown
@@ -200,7 +208,11 @@ local function SetSlot(handle, slot, filter, ids)
       candidateFilters = { includeSpellIDs = ids },
       initializeFrame = function(new) BuildOverlayButton(handle, holder, new) end,
     })
-    holder.button = holder.button or ok and button or nil
+    if not ok then
+      holder.button = nil
+      return false
+    end
+    holder.button = holder.button or button
     if not holder.button then
       return false
     end
@@ -215,8 +227,12 @@ function Handle:SetSpellIDs(buffs, debuffs)
   if self.released then
     return
   end
-  SetSlot(self, MAIN_SLOT, self.options.filter or "HELPFUL", SpellList(buffs))
-  SetSlot(self, HARMFUL_SLOT, "HARMFUL", SpellList(debuffs))
+  if buffs ~= nil then
+    SetSlot(self, MAIN_SLOT, self.options.filter or "HELPFUL", SpellList(buffs))
+  end
+  if debuffs ~= nil then
+    SetSlot(self, HARMFUL_SLOT, "HARMFUL", SpellList(debuffs))
+  end
   self.container:UpdateAllAuras()
 end
 
@@ -303,7 +319,28 @@ function EverythingAuras.AuraOverlay(frame, options)
   container:SetShown(options.enabled ~= false)
   container:UpdateAllAuras()
   overlays[handle] = true
+  local owner = Private.EACurrentAuraUid and Private.EACurrentAuraUid()
+  if owner then
+    overlaysByAura[owner] = overlaysByAura[owner] or {}
+    overlaysByAura[owner][handle] = true
+  end
   return handle
+end
+
+-- An aura's environment is cleared on every Add, right before its init runs again, so its overlays retire with it.
+local StockClearAuraEnvironment = Private.ClearAuraEnvironment
+function Private.ClearAuraEnvironment(id, ...)
+  local data = EverythingAuras.GetData(id)
+  local owned = data and overlaysByAura[data.uid]
+  if owned then
+    overlaysByAura[data.uid] = nil
+    for handle in pairs(owned) do
+      handle:Release()
+    end
+  end
+  if StockClearAuraEnvironment then
+    return StockClearAuraEnvironment(id, ...)
+  end
 end
 
 -- An aura container does not follow target or focus changes on its own (measured, probe N1).

@@ -37,14 +37,23 @@ local function MemberSize(member)
   return width, height
 end
 
-local function CenterOffset(member)
-  local centered = (member.selfPoint or "CENTER") == "CENTER" and (member.anchorPoint or "CENTER") == "CENTER"
-  return centered and (tonumber(member.xOffset) or 0) or 0, centered and (tonumber(member.yOffset) or 0) or 0
+local POINT_SIGNS = { CENTER = { 0, 0 }, LEFT = { 1, 0 }, RIGHT = { -1, 0 }, TOP = { 0, -1 }, BOTTOM = { 0, 1 },
+  TOPLEFT = { 1, -1 }, TOPRIGHT = { -1, -1 }, BOTTOMLEFT = { 1, 1 }, BOTTOMRIGHT = { -1, 1 } }
+
+local function Offsets(member)
+  return tonumber(member.xOffset) or 0, tonumber(member.yOffset) or 0
+end
+
+local function CenterOffset(member, width, height)
+  local sign = POINT_SIGNS[member.selfPoint or "CENTER"] or POINT_SIGNS.CENTER
+  local x, y = Offsets(member)
+  return x + sign[1] * width / 2, y + sign[2] * height / 2
 end
 
 -- A plain group cannot close gaps, so each member gets the place it has when every member shows.
 local function LayoutModernRow(group, members)
-  if group.blizzardFlow ~= true or group.eaFlowLaidOut or FLOW_FRAMES[group.blizzardFlowFrames or ""] or #members == 0 then
+  if group.regionType ~= "group" or group.blizzardFlow ~= true or group.eaFlowLaidOut
+    or FLOW_FRAMES[group.blizzardFlowFrames or ""] or #members == 0 then
     return
   end
   local growth = group.blizzardFlowGrowth or "RIGHT"
@@ -61,7 +70,7 @@ local function LayoutModernRow(group, members)
     or "RD"
   local anchorX, anchorY
   if not newOrigin then
-    anchorX, anchorY = CenterOffset(members[1])
+    anchorX, anchorY = CenterOffset(members[1], sizes[1][1], sizes[1][2])
   else
     -- A group's region is a 2 px point, and the row starts at its corner on that point, not its center.
     local corner = group.blizzardFlowGrid and gridType or growth
@@ -121,7 +130,7 @@ local function LayoutModernRow(group, members)
   for index, member in ipairs(members) do
     local nudgeX, nudgeY = 0, 0
     if newOrigin then
-      nudgeX, nudgeY = CenterOffset(member)
+      nudgeX, nudgeY = Offsets(member)
     end
     member.selfPoint, member.anchorPoint = "CENTER", "CENTER"
     member.xOffset, member.yOffset = positions[index][1] + nudgeX, positions[index][2] + nudgeY
@@ -527,11 +536,11 @@ local function PickedSpells(trigger, buff)
   return ids
 end
 
-local function CopyFilter(trigger, use, operator, value, toUse, toOperator, toValue, default)
+local function CopyFilter(trigger, use, operator, value, toUse, toOperator, toValue, default, fallback)
   if trigger[use] then
     trigger[toUse] = true
     trigger[toOperator] = CDM_OPERATORS[trigger[operator]] and trigger[operator] or default
-    trigger[toValue] = tostring(trigger[value] or 0)
+    trigger[toValue] = tostring(trigger[value] or fallback)
   end
 end
 
@@ -558,11 +567,11 @@ local function ToSpellCooldown(trigger, entries)
   trigger.use_track, trigger.track = true, CDM_TRACK[trigger.cdmTrack or ""] and trigger.cdmTrack or "auto"
   trigger.use_showgcd = trigger.use_cdmShowGCD == true or nil
   CopyFilter(trigger, "cdmUseRemaining", "cdmRemainingOperator", "cdmRemainingTime", "use_remaining",
-    "remaining_operator", "remaining", "<")
+    "remaining_operator", "remaining", "<", 10)
   CopyFilter(trigger, "cdmUseCharges", "cdmChargeOperator", "cdmChargeCount", "use_charges", "charges_operator",
-    "charges", ">=")
+    "charges", ">=", 1)
   CopyFilter(trigger, "cdmUseSpellCount", "cdmSpellCountOperator", "cdmSpellCount", "use_spellCount",
-    "spellCount_operator", "spellCount", ">=")
+    "spellCount_operator", "spellCount", ">=", 1)
   trigger.use_genericShowOn, trigger.genericShowOn = true, CDM_SHOW[trigger.cdmShow or ""] or "showAlways"
   local others = {}
   for index = 2, #entries do
@@ -597,8 +606,8 @@ local function ToAura(trigger, entries, picked)
   trigger.unitExists = not trigger.cdmRequireTarget
   trigger.showClones = #names + #ids > 1 and trigger.cdmAutoClone ~= false and trigger.matchesShowOn ~= "showOnMissing"
   trigger.combineMode = CDM_COMBINE[trigger.cdmCombineMode or ""]
-  CopyFilter(trigger, "cdmUseRemaining", "cdmRemainingOperator", "cdmRemainingTime", "useRem", "remOperator", "rem", "<")
-  CopyFilter(trigger, "cdmUseStacks", "cdmStackOperator", "cdmStackCount", "useStacks", "stacksOperator", "stacks", ">=")
+  CopyFilter(trigger, "cdmUseRemaining", "cdmRemainingOperator", "cdmRemainingTime", "useRem", "remOperator", "rem", "<", 10)
+  CopyFilter(trigger, "cdmUseStacks", "cdmStackOperator", "cdmStackCount", "useStacks", "stacksOperator", "stacks", ">=", 1)
 end
 
 local function ToItemCooldown(trigger, entries)
@@ -644,17 +653,50 @@ local function ConvertCooldownManager(trigger)
   return kind
 end
 
-local CDM_COOLDOWN_CONDITIONS = { stacks = "charges", isUsable = "spellUsable", inRange = "spellInRange",
-  spellId = "effectiveSpellId" }
+local CDM_CONDITIONS = {
+  cooldown = { stacks = "charges", isUsable = "spellUsable", inRange = "spellInRange", spellId = "effectiveSpellId",
+    onCooldown = "onCooldown", isReady = "isReady", spellCount = "spellCount", insufficientResources = "insufficientResources",
+    name = "name", expirationTime = "expirationTime", duration = "duration" },
+  buff = { stacks = "stacks", name = "name", spellId = "spellId", expirationTime = "expirationTime", duration = "duration" },
+  item = { onCooldown = "onCooldown", name = "name", expirationTime = "expirationTime", duration = "duration" },
+}
+-- show and activationTime are on every trigger (Private.GetTriggerConditions), so they always carry over.
+local SHARED_CONDITIONS = { show = "show", activationTime = "activationTime" }
 
-local function RenameConditions(checks, triggernum)
+-- The aura trigger has Aura(s) Found only with Show On Always. On Found it is the trigger's own state, on Missing its inverse.
+local AURA_ACTIVE = { showAlways = "buffed", showOnActive = "show", showOnMissing = "!show" }
+
+local function ConditionNames(kind, trigger)
+  local names = {}
+  for from, to in pairs(CDM_CONDITIONS[kind]) do
+    names[from] = to
+  end
+  for from, to in pairs(SHARED_CONDITIONS) do
+    names[from] = to
+  end
+  if kind == "buff" then
+    names.auraActive = AURA_ACTIVE[trigger.matchesShowOn or ""]
+  end
+  return names
+end
+
+local function RenameConditions(checks, triggernum, names, lost, seen)
   for _, check in ipairs(checks) do
     if type(check) == "table" then
-      if check.trigger == triggernum and CDM_COOLDOWN_CONDITIONS[check.variable] then
-        check.variable = CDM_COOLDOWN_CONDITIONS[check.variable]
+      if check.trigger == triggernum and type(check.variable) == "string" then
+        local mapped = names[check.variable]
+        if mapped and mapped:sub(1, 1) == "!" then
+          check.variable = mapped:sub(2)
+          check.value = tonumber(check.value) == 1 and 0 or 1
+        elseif mapped then
+          check.variable = mapped
+        elseif not seen[check.variable] then
+          seen[check.variable] = true
+          lost[#lost + 1] = check.variable
+        end
       end
       if type(check.checks) == "table" then
-        RenameConditions(check.checks, triggernum)
+        RenameConditions(check.checks, triggernum, names, lost, seen)
       end
     end
   end
@@ -707,17 +749,19 @@ function Private.EAModernize(data)
   if version < 7 and EverythingAuras.IsForever() then
     for triggernum, triggerData in ipairs(type(data.triggers) == "table" and data.triggers or {}) do
       local trigger = type(triggerData) == "table" and triggerData.trigger
-      if type(trigger) == "table" and (trigger.type == "cdm"
-        or trigger.type == "spell" and trigger.event == "Blizzard Cooldown Manager")
-        and ConvertCooldownManager(trigger) == "cooldown" and type(data.conditions) == "table" then
-        local checks = {}
+      local kind = type(trigger) == "table" and (trigger.type == "cdm"
+        or trigger.type == "spell" and trigger.event == "Blizzard Cooldown Manager") and ConvertCooldownManager(trigger)
+      if kind and type(data.conditions) == "table" then
+        local checks, lost = {}, {}
         for _, condition in ipairs(data.conditions) do
           checks[#checks + 1] = type(condition) == "table" and condition.check or nil
         end
-        RenameConditions(checks, triggernum)
+        RenameConditions(checks, triggernum, ConditionNames(kind, trigger), lost, {})
+        trigger.eaCdmLostConditions = #lost > 0 and lost or nil
       end
     end
-    if data.regionType == "group" and data.blizzardFlow == true then
+    -- An import or a chat link runs PreAdd on data not saved yet, whose children's IDs may name the player's own auras.
+    if data.regionType == "group" and data.blizzardFlow == true and EverythingAuras.GetData(data.id) == data then
       local members = ChildrenOf(data)
       if #members > 0 and Untouched(members) then
         LayoutModernRow(data, members)
