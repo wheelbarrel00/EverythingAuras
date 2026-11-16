@@ -45,6 +45,10 @@ for key, value in pairs({
     = "In combat WoW hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick.",
   ["This mode reads the combat log, which WoW Forever closes to addons."]
     = "This mode reads the combat log, which WoW closes to addons.",
+  ["General bags hold any item. Specialty bags, such as quivers, ammo pouches, soul bags and herb bags, hold only certain items. The keyring and the bank never count."]
+    = "General bags hold any item, and your reagent bag counts with them, the same as on your backpack button. Specialty bags, such as a profession's bag, hold only certain items. The bank never counts.",
+  ["Range Check and Spell in Range, including whether your target is in range of a spell."]
+    = "Range Check and Spell in Range, including whether your target is in range of a spell. Tested at a training dummy, not yet in dungeons or raids.",
 }) do
   L[key] = value
 end

@@ -1,4 +1,4 @@
--- Everything Auras 0.6.0: the new triggers, Form ID, enchant kinds and the spec load option, through the real code builders.
+-- Everything Auras 0.6.0 and 0.6.1: the new triggers, Form ID, enchant kinds and the spec load option, through the real code builders.
 local testsDir = arg[0]:match("^(.*)[/\\][^/\\]*$") or "."
 package.path = testsDir .. "/?.lua;" .. package.path
 local T = require("helpers")
@@ -241,22 +241,76 @@ end
 
 local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.001 end
 
-T.section("Registered on WoW Forever only")
+local function keys(map)
+  local list = {}
+  for key in pairs(map) do list[#list + 1] = tostring(key) end
+  table.sort(list)
+  return table.concat(list, ", ")
+end
+local function argNames(args)
+  local list = {}
+  for _, arg in ipairs(args) do list[#list + 1] = arg.name or "?" end
+  return table.concat(list, ", ")
+end
+local function watches(f, event)
+  for _, fr in ipairs(f.frames) do
+    if fr.events[event] then return true end
+  end
+  return false
+end
+
+T.section("Registered per client (0.6.1)")
 local retail = fixture(false)
-T.expect(retail.private.event_prototypes["Bag Space"] == nil and next(retail.private.category_event_prototype.item) == nil,
-  "Retail gets no new triggers")
-T.expect(retail.private.event_prototypes.Money.args[3].hidden == true, "Retail keeps the stock Money trigger")
 local f = fixture(true)
+local SHARED = "Bag Space, Equipment Durability, Money, Range Check, Spell in Range, Spell in Range (Action Bar), "
+  .. "Stance/Form/Aura, Tracking, Weapon Enchant"
+T.expect(keys(retail.private.event_prototypes) == SHARED, "Retail gets the ported triggers: " .. keys(retail.private.event_prototypes))
+T.expect(keys(f.private.event_prototypes) == "Ammo, Bag Space, Equipment Durability, Money, Range Check, Role, "
+  .. "Spell in Range, Spell in Range (Action Bar), Stance/Form/Aura, Tracking, Weapon Enchant",
+  "Forever registers what 0.6.0 registered: " .. keys(f.private.event_prototypes))
+local retailCats, foreverCats = retail.private.category_event_prototype, f.private.category_event_prototype
+T.expect(keys(retailCats.item) == "Bag Space, Equipment Durability" and keys(retailCats.unit) == "Range Check, Tracking"
+  and keys(retailCats.spell) == "Spell in Range, Spell in Range (Action Bar)", "Retail lists them in the trigger menu")
+T.expect(keys(foreverCats.item) == "Ammo, Bag Space, Equipment Durability" and keys(foreverCats.unit) == "Range Check, Role, Tracking"
+  and keys(foreverCats.spell) == "Spell in Range, Spell in Range (Action Bar)", "Forever's menu is 0.6.0's")
 for _, event in ipairs({ "Bag Space", "Equipment Durability", "Ammo" }) do
   T.expect(f.private.event_prototypes[event] and f.private.event_prototypes[event].type == "item"
     and f.private.category_event_prototype.item[event] == f.private.event_prototypes[event].name,
     event .. " is an item trigger under its saved name")
 end
+T.expect(argNames(retail.private.event_prototypes["Stance/Form/Aura"].args) == "note, form, inverse"
+  and argNames(retail.private.event_prototypes["Weapon Enchant"].args) == argNames(EnchantStub().args),
+  "Retail's Stance/Form/Aura and Weapon Enchant stay stock")
+T.expect(argNames(f.private.event_prototypes["Stance/Form/Aura"].args) == "note, formID, form, inverse"
+  and argNames(f.private.event_prototypes["Weapon Enchant"].args):find("weapon, enchantKind, enchant", 1, true) == 1,
+  "Forever keeps Form ID and Enchant Type")
+T.expect(argNames(retail.private.load_prototype.args) == "never, class, talent"
+  and argNames(f.private.load_prototype.args) == "never, class, forever_spec, talent",
+  "the Specialization load option is Forever only")
+T.expect(not watches(retail, "TRAIT_CONFIG_UPDATED") and watches(f, "TRAIT_CONFIG_UPDATED"), "and so is its talent watcher")
+T.expect(keys(retail.private.ExecEnv) == "EAActionSlot, EABagSpace, EADurability, EAGetRange, EASpellInRange, EASpellKnown, "
+  .. "EATracking, EAUnitExists", "Retail's trigger code gets only the helpers it uses: " .. keys(retail.private.ExecEnv))
+T.expect(f.private.ExecEnv.EAAmmo and f.private.ExecEnv.EARole and f.private.ExecEnv.EAFormID
+  and f.private.ExecEnv.EAWeaponEnchant, "Forever keeps Ammo, Role, Form ID and the enchant reader")
+T.expect(retail.private.event_prototypes.Money.args[3].hidden == nil
+  and retail.private.event_prototypes.Money.args[3].conditionType == "number", "Money's filters work on Retail too")
+
+T.section("Bag Space on Retail (0.6.1)")
+-- Krivos' bags, read in game on 2026-11-16: the reagent bag is bag 5 with bag family 0.
+retail.bags = { [0] = { slots = 20, free = 0, family = 0 }, [1] = { slots = 36, free = 1, family = 0 },
+  [2] = { slots = 36, free = 4, family = 0 }, [3] = { slots = 36, free = 33, family = 0 },
+  [4] = { slots = 36, free = 36, family = 0 }, [5] = { slots = 38, free = 23, family = 0 } }
+local shown, state = run(retail, { type = "item", event = "Bag Space", bagType = "general" })
+T.expect(shown and state.free == 97 and state.totalSlots == 202, "the reagent bag counts as general, 97 free like the backpack button")
+shown = run(retail, { type = "item", event = "Bag Space", bagType = "specialty" })
+T.expect(shown == false, "with no profession bag, Specialty has nothing to show")
+shown, state = run(retail, { type = "unit", event = "Range Check", unit = "target" })
+T.expect(shown and state.minRange == 25 and state.maxRange == 30, "Range Check runs on Retail")
 
 T.section("Bag Space")
 f.bags = { [0] = { slots = 16, free = 4, family = 0 }, [1] = { slots = 10, free = 2, family = 0 },
   [2] = { slots = 12, free = 6, family = 1 }, [3] = { slots = 0, free = 0, family = 0 } }
-local shown, state = run(f, { type = "item", event = "Bag Space", bagType = "general" })
+shown, state = run(f, { type = "item", event = "Bag Space", bagType = "general" })
 T.expect(shown and state.free == 6 and state.totalSlots == 26 and state.used == 20, "general bags: 6 of 26 free")
 T.expect(near(state.freePercent, 600 / 26), "free space in percent, not rounded")
 T.expect(state.freeGeneral == 6 and state.freeSpecialty == 6, "both free counts for texts")
@@ -425,7 +479,8 @@ local code = ConstructFunction(f.private.event_prototypes.Money,
 T.expect(code:find("silver>=50", 1, true) and code:find("money>100", 1, true), "both become tests")
 
 T.section("Range functions for custom code (0.6.0 round 2)")
-T.expect(retail.addon.GetRange == retail.rawGetRange, "Retail keeps the library calls as they are")
+T.expect(retail.addon.GetRange ~= retail.rawGetRange and retail.addon.IsSpellInRange ~= retail.rawSpellInRange,
+  "Retail's range calls get the same guard since 0.6.1")
 local r = fixture(true)
 local minR, maxR = r.addon.GetRange("target", true)
 T.expect(minR == 25 and maxR == 30, "a readable range passes through")

@@ -184,7 +184,7 @@ local function rowsOf(label)
   end
   return out
 end
-T.expect(#rowsOf("What else works in combat") == 5, "five things that work in combat")
+T.expect(#rowsOf("What else works in combat") == 6, "six things that work in combat, Range on Retail too since 0.6.1")
 T.expect(hasLine("Blizzard draws your Icon and Progress Bar auras") and hasLine("debuffs on you, your pet or your group")
   and hasLine("stack count"), "In Combat explains what Blizzard draws, bars, the new units and the stack count (decision 24)")
 
@@ -234,9 +234,11 @@ local loginTimers = loginTimerCount()
 fire("PLAYER_LOGIN")
 T.expect(loginTimerCount() == loginTimers + 1 and rec.timers[#rec.timers].delay == 2, "a new version shows What's New after login")
 rec.timers[#rec.timers].f()
-T.expect(whatsNewWindow.shown and whatsNewWindow.section == "Everything Auras 0.5.0-beta", "titled with the version")
+T.expect(whatsNewWindow.shown and whatsNewWindow.section == "Everything Auras 0.6.1-beta", "titled with the version")
+T.expect(hasLine("Your reagent bag counts as a general bag") and hasLine("not yet in dungeons or raids")
+  and hasLine("The new Load Flag load option") and not hasLine("Ammo"), "Retail's 0.6.1 notes, without Forever's triggers")
 rec.buttons["Got it"].onClick()
-T.expect(not whatsNewWindow.shown and private.db.eaSeenWhatsNew == "0.5.0-beta", "closing it marks the version seen")
+T.expect(not whatsNewWindow.shown and private.db.eaSeenWhatsNew == "0.6.1-beta", "closing it marks the version seen")
 fire("PLAYER_LOGIN")
 T.expect(loginTimerCount() == loginTimers + 1, "the same version does not show again")
 private.db.eaSeenWhatsNew = nil
@@ -274,10 +276,10 @@ local seenBefore = private.db.eaSeenWhatsNew
 local whatsNewChunk = assert(loadfile(T.repoRoot .. "/EverythingAuras/EA/WhatsNew.lua"))
 setfenv(whatsNewChunk, setmetatable({ EverythingAuras = foreverEA }, { __index = env }))("EverythingAuras", private)
 private.EAShowWhatsNew()
-T.expect(whatsNewWindow.section == "Everything Auras 0.6.0-beta" and hasLine("Bag Space, Equipment Durability")
-  and not hasLine("Cooldowns keep count in combat"), "Forever shows the 0.6.0 notes")
+T.expect(whatsNewWindow.section == "Everything Auras 0.6.0-beta" and hasLine("Bag Space, Equipment Durability, Ammo")
+  and not hasLine("Your reagent bag counts as a general bag"), "Forever shows the 0.6.0 notes")
 rec.buttons["Got it"].onClick()
-T.expect(private.db.eaSeenWhatsNew == "0.6.0-beta" and seenBefore == "0.5.0-beta", "and marks 0.6.0 seen, where Retail marks 0.5.0")
+T.expect(private.db.eaSeenWhatsNew == "0.6.0-beta" and seenBefore == "0.6.1-beta", "and marks 0.6.0 seen, where Retail marks 0.6.1")
 
 T.section("Slash commands on Forever")
 local foreverFrames, foreverPrinted = {}, {}

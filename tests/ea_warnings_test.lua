@@ -64,7 +64,7 @@ T.section("Settings that are not here yet")
 local group = Check({ regionType = "group", blizzardFlow = true })
 T.expect(Has(group.EANotHereYet, "Modern Aura Group layout"), "a Modern Aura Group says its layout is lost")
 local flagged = Check({ load = { use_loadFlag = true, loadFlag = "x" } })
-T.expect(Has(flagged.EANotHereYet, "Load Flag"), "a Load Flag is named")
+T.expect(flagged.EANotHereYet == nil, "Load Flag works on Retail too since 0.6.1, so it is not named")
 local stance = Check({ triggers = { { trigger = { type = "unit", event = "Stance/Form/Aura", use_formID = false,
   formID = { multi = { [5] = true } } } } } })
 T.expect(Has(stance.EANotHereYet, "Form ID filter"), "a form ID filter is named, in multi mode too")
@@ -125,11 +125,10 @@ local heal = Check({ triggers = { { trigger = { type = "unit", event = "Health",
 T.expect(Has(heal.EANotHereYet, "Incoming Heal display") and not Has(heal.EANotHereYet, "ForeverAuras"),
   "named without blaming ForeverAuras")
 
-T.section("Money filters (0.6.0)")
+T.section("Money filters (0.6.0, Retail since 0.6.1)")
 local moneyTrigger = { type = "unit", event = "Money", use_silver = true, use_money = true }
 local stock = Check({ triggers = { { trigger = moneyTrigger } } })
-T.expect(Has(stock.EANotHereYet, "Silver filter") and Has(stock.EANotHereYet, "Money filter"),
-  "Retail still names the Money filters it ignores")
+T.expect(stock.EANotHereYet == nil, "Retail reads the Money filters too, so nothing is named")
 local roundThree = {
   triggers = { { trigger = { type = "unit", event = "Stance/Form/Aura", use_formID = true, formID = { single = 5 } } },
     { trigger = { type = "item", event = "Weapon Enchant", use_enchantKind = true, enchantKind = "imbue" } } },

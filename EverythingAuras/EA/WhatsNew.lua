@@ -5,24 +5,24 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = "0.5.0-beta"
+local WHATS_NEW_VERSION = "0.6.1-beta"
 
 local ENTRIES = {
   {
-    title = L["Cooldowns keep count in combat"],
-    desc = L["Spell cooldown auras keep a time left in combat, learned the last time you used the spell out of combat. Conditions such as turning red under 10 seconds, the trigger's Remaining Time and sorting by time left now work mid-fight. The estimate changes only looks and never plays sounds, sends chat, runs custom code or shows glows."],
+    title = L["New triggers"],
+    desc = L["Bag Space, Equipment Durability, Range Check, Spell in Range, Spell in Range (Action Bar) and Tracking are new triggers, and Money can check gold, silver and copper. Your reagent bag counts as a general bag, the same as on your backpack button."],
   },
   {
-    title = L["Blizzard draws your auras"],
-    desc = L["Blizzard Draws This Icon and Blizzard Draws This Bar are now on by default, also for the auras you already have, unless you turned them off. A buff you gain in combat shows the moment it appears, with its timer. An aura you already had starts once Everything Auras knows its spell IDs: open the options once, or let it see the buff out of combat."],
+    title = L["Range in combat"],
+    desc = L["Range Check and Spell in Range keep working in combat. They were tested at a training dummy, not yet in dungeons or raids. WeakAuras strings that use Range Check now work too."],
   },
   {
-    title = L["Bars and stack counts"],
-    desc = L["Progress Bars get Blizzard Draws This Bar, so Blizzard draws the bar, its icon, its name and its time in combat too. A text that shows only %s becomes Blizzard's stack count."],
+    title = L["Load Flags"],
+    desc = L["The new Load Flag load option loads an aura while custom code in another aura has set that flag with SetLoadFlag. Flags last until you reload."],
   },
 }
 
--- 0.6.0 changed only WoW Forever, so Retail keeps the 0.5.0 notes and shows nothing new.
+-- 0.6.0 changed only WoW Forever and 0.6.1 only Retail, so each client shows its own latest notes.
 if EverythingAuras.IsForever() then
   WHATS_NEW_VERSION = "0.6.0-beta"
   ENTRIES = {

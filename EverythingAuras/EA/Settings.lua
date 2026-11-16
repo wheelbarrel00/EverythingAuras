@@ -141,12 +141,10 @@ local function CombatPage(_, content)
     { L["Spell cooldowns"], L["The swipe, and whether the spell is ready. The time left is estimated from the cooldown Everything Auras learned the last time you used the spell out of combat. The estimate changes only looks, such as colors, size and sort order, never sounds, chat, custom code or glows. A cooldown shortened partway, for example by a proc, shows a little too long, but it still turns ready on time. Spells with charges show no time left."] },
     { L["Item cooldowns"], L["Everything, including the time left."] },
     { L["Your casts"], L["Which spell you cast."] },
+    { L["Range"], L["Range Check and Spell in Range, including whether your target is in range of a spell."] },
     { L["Health"], L["Bars draw, but the numbers can't be compared or used in math. Your maximum health can, a target's can't."] },
     { L["Combat log"], L["Closed to addons on WoW Forever. Auras that need it stay off and carry a warning."] },
   }
-  if EverythingAuras.IsForever() then
-    table.insert(rows, 4, { L["Range"], L["Range Check and Spell in Range, including whether your target is in range of a spell."] })
-  end
   for _, row in ipairs(rows) do
     works:Add(KeyValue(content, row[1], row[2]), { fitHeight = true })
   end

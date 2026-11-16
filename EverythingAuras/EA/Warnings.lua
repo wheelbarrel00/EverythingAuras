@@ -21,7 +21,6 @@ local UNREAD_FILTERS = {
   ["Cast"] = { { "use_important", L["Important filter"], "set" } },
   ["Health"] = { { "use_showIncomingHeal", L["Incoming Heal display"] }, { "use_healprediction", L["Incoming Heal filter"] } },
   ["Cooldown Progress (Spell)"] = { { "use_showgcdtext", L["Global Cooldown Text"] } },
-  ["Money"] = { { "use_money", L["Money filter"] }, { "use_silver", L["Silver filter"] }, { "use_copper", L["Copper filter"] } },
   ["Character Stats"] = {
     { "use_rangedattackpower", L["Ranged Attack Power filter"] }, { "use_meleecritpercent", L["Melee Critical filter"] },
     { "use_rangedcritpercent", L["Ranged Critical filter"] }, { "use_spellcritpercent", L["Spell Critical filter"] },
@@ -33,7 +32,6 @@ local UNREAD_FILTERS = {
 -- EA/Triggers.lua reads these filters, the enchant type and the talent spec load option on WoW Forever.
 local FOREVER = EverythingAuras.IsForever()
 if FOREVER then
-  UNREAD_FILTERS["Money"] = nil
   UNREAD_FILTERS["Stance/Form/Aura"] = nil
 end
 
@@ -291,9 +289,6 @@ function Private.EAUpdateWarnings(data)
   if data.blizzardFlow == true and (not FOREVER or flowFrames or not data.eaFlowLaidOut) then
     Add(notHere, notHereSeen, flowFrames and L["Modern Aura Group on unit frames or nameplates"]
       or L["Modern Aura Group layout"])
-  end
-  if not FOREVER and type(data.load) == "table" and data.load.use_loadFlag == true then
-    Add(notHere, notHereSeen, L["Load Flag"])
   end
   local checks = {}
   for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do

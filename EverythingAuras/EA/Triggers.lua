@@ -1,5 +1,4 @@
 if not EverythingAuras.IsLibsOK() then return end
-if not EverythingAuras.IsForever() then return end
 
 local Private = select(2, ...)
 local L = EverythingAuras.L
@@ -23,11 +22,6 @@ end
 Private.ea_durability_progress = {
   overall = L["Overall Durability (%)"],
   lowest = L["Lowest Item Durability (%)"],
-}
-
-Private.ea_ammo_modes = {
-  equipped = L["Equipped Ammo"],
-  all = L["All Carried Ammo"],
 }
 
 local function LastBag()
@@ -111,150 +105,6 @@ function Private.ExecEnv.EADurability(slot)
   local result = { lowest, current / maximum * 100, broken, count, name, icon }
   lastDurability[slot] = result
   return unpack(result, 1, 6)
-end
-
-local function ParseAmmoIDs(text)
-  if type(text) == "number" then
-    text = tostring(text)
-  end
-  if type(text) ~= "string" or not text:find("%S") then
-    return nil
-  end
-  local ids, seen = {}, {}
-  for entry in (text .. ","):gmatch("([^,]*),") do
-    local id = tonumber(entry:match("^%s*(%d+)%s*$"))
-    if not id or id < 1 or id >= MAX_ITEM_ID then
-      return false
-    end
-    if not seen[id] then
-      seen[id] = true
-      ids[#ids + 1] = id
-    end
-  end
-  return ids
-end
-
-local ammoBags, ammoWatcher
-local waitingItems, lastAmmo = {}, {}
-
--- An item whose class data has not loaded yet is skipped and counted once GET_ITEM_INFO_RECEIVED brings it.
-local function ScanAmmoBags()
-  local totals = {}
-  for bag = 0, LastBag() do
-    local slots = C_Container.GetContainerNumSlots(bag)
-    if issecretvalue(slots) then
-      return nil
-    end
-    for slot = 1, slots or 0 do
-      local info = C_Container.GetContainerItemInfo(bag, slot)
-      if info then
-        local itemID, stack = info.itemID, info.stackCount
-        if hasanysecretvalues(itemID, stack) then
-          return nil
-        end
-        local classID = select(6, C_Item.GetItemInfoInstant(itemID))
-        if classID == nil then
-          if not waitingItems[itemID] then
-            waitingItems[itemID] = true
-            C_Item.RequestLoadItemDataByID(itemID)
-          end
-        elseif classID == Enum.ItemClass.Projectile then
-          totals[itemID] = (totals[itemID] or 0) + (stack or 0)
-        end
-      end
-    end
-  end
-  return totals
-end
-
-function Private.ExecEnv.EAAmmo(text, mode)
-  local ids = ParseAmmoIDs(text)
-  if ids == false then
-    return nil
-  end
-  if not (ammoWatcher and ammoBags) then
-    ammoBags = ScanAmmoBags()
-  end
-  local ammoSlot = INVSLOT_AMMO or 0
-  local equipped = GetInventoryItemID("player", ammoSlot)
-  local slotCount = GetInventoryItemCount("player", ammoSlot)
-  local key = tostring(text) .. "|" .. mode
-  if not ammoBags or hasanysecretvalues(equipped, slotCount) then
-    local previous = lastAmmo[key]
-    if previous then
-      return unpack(previous, 1, 3)
-    end
-    return nil
-  end
-  -- An empty ammo slot reads as item 0 with a count of 1 on WoW Forever (measured 2026-11-11).
-  if not equipped or equipped <= 0 then
-    equipped, slotCount = nil, 0
-  end
-  slotCount = slotCount or 0
-
-  local count, single = 0, nil
-  if ids then
-    local listsEquipped = false
-    for _, id in ipairs(ids) do
-      count = count + (ammoBags[id] or 0)
-      listsEquipped = listsEquipped or id == equipped
-    end
-    if listsEquipped and not ammoBags[equipped] then
-      count = count + slotCount
-    end
-    single = #ids == 1 and ids[1] or nil
-  elseif mode == "equipped" and equipped then
-    -- The ammo slot can report the carried total itself, so the larger of the two is the count, never the sum.
-    count = math.max(ammoBags[equipped] or 0, slotCount)
-    single = equipped
-  else
-    local kinds = 0
-    for id, total in pairs(ammoBags) do
-      count, kinds, single = count + total, kinds + 1, id
-    end
-    if equipped and not ammoBags[equipped] and slotCount > 0 then
-      count, kinds, single = count + slotCount, kinds + 1, equipped
-    end
-    if kinds ~= 1 then
-      single = nil
-    end
-  end
-
-  local name, icon = L["Ammo"], AMMO_ICON
-  if single then
-    name = C_Item.GetItemNameByID(single) or name
-    icon = C_Item.GetItemIconByID(single) or icon
-  end
-  lastAmmo[key] = { count, name, icon }
-  return count, name, icon
-end
-
-local function WatchAmmo()
-  if ammoWatcher then
-    return
-  end
-  ammoWatcher = CreateFrame("Frame")
-  ammoWatcher:RegisterEvent("BAG_UPDATE_DELAYED")
-  ammoWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-  ammoWatcher:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-  ammoWatcher:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
-  -- An item that never loads stays marked until the bags change, so it is asked for once per change.
-  ammoWatcher:SetScript("OnEvent", function(_, event, itemID, success)
-    if event == "GET_ITEM_INFO_RECEIVED" then
-      if not waitingItems[itemID] or success == false then
-        return
-      end
-    else
-      waitingItems = {}
-    end
-    ammoBags = nil
-    Private.ScanEvents("FA_AMMO_UPDATE")
-  end)
-  ammoBags = nil
-end
-
-local function AmmoMode(trigger)
-  return trigger.ammoMode == "all" and "all" or "equipped"
 end
 
 local function DurabilitySlot(trigger)
@@ -379,65 +229,8 @@ local value = %s
   progressType = "static",
 }
 
-Private.event_prototypes["Ammo"] = {
-  type = "item",
-  events = {},
-  internal_events = { "FA_AMMO_UPDATE" },
-  force_events = "FA_AMMO_UPDATE",
-  name = EverythingAuras.newFeatureString .. L["Ammo"],
-  loadFunc = WatchAmmo,
-  init = function(trigger)
-    return ([[
-local count, name, icon = Private.ExecEnv.EAAmmo(%q, %q)
-if not count then return false end
-]]):format(tostring(trigger.ammoItemIDs or ""), AmmoMode(trigger))
-  end,
-  args = StateArgs({
-    {
-      name = "ammoItemIDs",
-      display = L["Item IDs"],
-      type = "string",
-      required = true,
-      test = "true",
-      reloadOptions = true,
-      validate = function(_, value)
-        return ParseAmmoIDs(value) ~= false or L["Enter whole item IDs separated by commas, or leave this empty."]
-      end,
-      desc = L["Leave this empty to count the ammo the Count setting picks. Enter item IDs separated by commas to count only those items. The bank never counts."],
-    },
-    {
-      name = "ammoMode",
-      display = L["Count"],
-      type = "select",
-      values = "ea_ammo_modes",
-      default = "equipped",
-      required = true,
-      test = "true",
-      enable = function(trigger)
-        return ParseAmmoIDs(trigger.ammoItemIDs) == nil
-      end,
-      desc = L["Equipped Ammo counts the arrows or bullets in your ammo slot, or all you carry when the slot is empty. All Carried Ammo counts every arrow and bullet in your bags."],
-    },
-    { name = "count", display = L["Ammo Count"], type = "number", store = true, conditionType = "number",
-      multiEntry = { operator = "and", limit = 2 } },
-    { name = "stacks", init = "count", display = L["Stacks"], hidden = true, store = true, test = "true",
-      conditionType = "number" },
-    { name = "value", init = "count", display = L["Progress Value"], hidden = true, store = true, test = "true",
-      conditionType = "number" },
-    { name = "total", init = "0", display = L["Progress Total"], hidden = true, store = true, test = "true",
-      conditionType = "number" },
-  }),
-  GetNameAndIcon = function(trigger)
-    local _, name, icon = Private.ExecEnv.EAAmmo(trigger.ammoItemIDs, AmmoMode(trigger))
-    return name or L["Ammo"], icon or AMMO_ICON
-  end,
-  statesParameter = "one",
-  automaticrequired = true,
-  progressType = "static",
-}
-
 Private.category_event_prototype.item = Private.category_event_prototype.item or {}
-for _, event in ipairs({ "Bag Space", "Equipment Durability", "Ammo" }) do
+for _, event in ipairs({ "Bag Space", "Equipment Durability" }) do
   Private.category_event_prototype.item[event] = Private.event_prototypes[event].name
 end
 
@@ -738,14 +531,6 @@ for _, event in ipairs({ "Spell in Range", "Spell in Range (Action Bar)" }) do
   Private.category_event_prototype.spell[event] = Private.event_prototypes[event].name
 end
 
-local function ClassLabel(classFile, text)
-  local className = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
-    or classFile:sub(1, 1) .. classFile:sub(2):lower()
-  local label = ("%s: %s"):format(className, text)
-  local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
-  return color and color.WrapTextInColorCode and color:WrapTextInColorCode(label) or label
-end
-
 local ANY_TRACKING_SPELL = "anySpell"
 local TRACKING_ICON = "Interface\\Icons\\Ability_Tracking"
 
@@ -854,6 +639,227 @@ if active == nil%s then return false end
   progressType = "none",
 }
 
+Private.category_event_prototype.unit["Tracking"] = Private.event_prototypes["Tracking"].name
+
+-- Retail has no ammo, talent trees or C_Item.GetWeaponEnchantInfo, and keeps the stock role and form options.
+if not EverythingAuras.IsForever() then return end
+
+Private.ea_ammo_modes = {
+  equipped = L["Equipped Ammo"],
+  all = L["All Carried Ammo"],
+}
+
+local function ParseAmmoIDs(text)
+  if type(text) == "number" then
+    text = tostring(text)
+  end
+  if type(text) ~= "string" or not text:find("%S") then
+    return nil
+  end
+  local ids, seen = {}, {}
+  for entry in (text .. ","):gmatch("([^,]*),") do
+    local id = tonumber(entry:match("^%s*(%d+)%s*$"))
+    if not id or id < 1 or id >= MAX_ITEM_ID then
+      return false
+    end
+    if not seen[id] then
+      seen[id] = true
+      ids[#ids + 1] = id
+    end
+  end
+  return ids
+end
+
+local ammoBags, ammoWatcher
+local waitingItems, lastAmmo = {}, {}
+
+-- An item whose class data has not loaded yet is skipped and counted once GET_ITEM_INFO_RECEIVED brings it.
+local function ScanAmmoBags()
+  local totals = {}
+  for bag = 0, LastBag() do
+    local slots = C_Container.GetContainerNumSlots(bag)
+    if issecretvalue(slots) then
+      return nil
+    end
+    for slot = 1, slots or 0 do
+      local info = C_Container.GetContainerItemInfo(bag, slot)
+      if info then
+        local itemID, stack = info.itemID, info.stackCount
+        if hasanysecretvalues(itemID, stack) then
+          return nil
+        end
+        local classID = select(6, C_Item.GetItemInfoInstant(itemID))
+        if classID == nil then
+          if not waitingItems[itemID] then
+            waitingItems[itemID] = true
+            C_Item.RequestLoadItemDataByID(itemID)
+          end
+        elseif classID == Enum.ItemClass.Projectile then
+          totals[itemID] = (totals[itemID] or 0) + (stack or 0)
+        end
+      end
+    end
+  end
+  return totals
+end
+
+function Private.ExecEnv.EAAmmo(text, mode)
+  local ids = ParseAmmoIDs(text)
+  if ids == false then
+    return nil
+  end
+  if not (ammoWatcher and ammoBags) then
+    ammoBags = ScanAmmoBags()
+  end
+  local ammoSlot = INVSLOT_AMMO or 0
+  local equipped = GetInventoryItemID("player", ammoSlot)
+  local slotCount = GetInventoryItemCount("player", ammoSlot)
+  local key = tostring(text) .. "|" .. mode
+  if not ammoBags or hasanysecretvalues(equipped, slotCount) then
+    local previous = lastAmmo[key]
+    if previous then
+      return unpack(previous, 1, 3)
+    end
+    return nil
+  end
+  -- An empty ammo slot reads as item 0 with a count of 1 on WoW Forever (measured 2026-11-11).
+  if not equipped or equipped <= 0 then
+    equipped, slotCount = nil, 0
+  end
+  slotCount = slotCount or 0
+
+  local count, single = 0, nil
+  if ids then
+    local listsEquipped = false
+    for _, id in ipairs(ids) do
+      count = count + (ammoBags[id] or 0)
+      listsEquipped = listsEquipped or id == equipped
+    end
+    if listsEquipped and not ammoBags[equipped] then
+      count = count + slotCount
+    end
+    single = #ids == 1 and ids[1] or nil
+  elseif mode == "equipped" and equipped then
+    -- The ammo slot can report the carried total itself, so the larger of the two is the count, never the sum.
+    count = math.max(ammoBags[equipped] or 0, slotCount)
+    single = equipped
+  else
+    local kinds = 0
+    for id, total in pairs(ammoBags) do
+      count, kinds, single = count + total, kinds + 1, id
+    end
+    if equipped and not ammoBags[equipped] and slotCount > 0 then
+      count, kinds, single = count + slotCount, kinds + 1, equipped
+    end
+    if kinds ~= 1 then
+      single = nil
+    end
+  end
+
+  local name, icon = L["Ammo"], AMMO_ICON
+  if single then
+    name = C_Item.GetItemNameByID(single) or name
+    icon = C_Item.GetItemIconByID(single) or icon
+  end
+  lastAmmo[key] = { count, name, icon }
+  return count, name, icon
+end
+
+local function WatchAmmo()
+  if ammoWatcher then
+    return
+  end
+  ammoWatcher = CreateFrame("Frame")
+  ammoWatcher:RegisterEvent("BAG_UPDATE_DELAYED")
+  ammoWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+  ammoWatcher:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+  ammoWatcher:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+  -- An item that never loads stays marked until the bags change, so it is asked for once per change.
+  ammoWatcher:SetScript("OnEvent", function(_, event, itemID, success)
+    if event == "GET_ITEM_INFO_RECEIVED" then
+      if not waitingItems[itemID] or success == false then
+        return
+      end
+    else
+      waitingItems = {}
+    end
+    ammoBags = nil
+    Private.ScanEvents("FA_AMMO_UPDATE")
+  end)
+  ammoBags = nil
+end
+
+local function AmmoMode(trigger)
+  return trigger.ammoMode == "all" and "all" or "equipped"
+end
+
+Private.event_prototypes["Ammo"] = {
+  type = "item",
+  events = {},
+  internal_events = { "FA_AMMO_UPDATE" },
+  force_events = "FA_AMMO_UPDATE",
+  name = EverythingAuras.newFeatureString .. L["Ammo"],
+  loadFunc = WatchAmmo,
+  init = function(trigger)
+    return ([[
+local count, name, icon = Private.ExecEnv.EAAmmo(%q, %q)
+if not count then return false end
+]]):format(tostring(trigger.ammoItemIDs or ""), AmmoMode(trigger))
+  end,
+  args = StateArgs({
+    {
+      name = "ammoItemIDs",
+      display = L["Item IDs"],
+      type = "string",
+      required = true,
+      test = "true",
+      reloadOptions = true,
+      validate = function(_, value)
+        return ParseAmmoIDs(value) ~= false or L["Enter whole item IDs separated by commas, or leave this empty."]
+      end,
+      desc = L["Leave this empty to count the ammo the Count setting picks. Enter item IDs separated by commas to count only those items. The bank never counts."],
+    },
+    {
+      name = "ammoMode",
+      display = L["Count"],
+      type = "select",
+      values = "ea_ammo_modes",
+      default = "equipped",
+      required = true,
+      test = "true",
+      enable = function(trigger)
+        return ParseAmmoIDs(trigger.ammoItemIDs) == nil
+      end,
+      desc = L["Equipped Ammo counts the arrows or bullets in your ammo slot, or all you carry when the slot is empty. All Carried Ammo counts every arrow and bullet in your bags."],
+    },
+    { name = "count", display = L["Ammo Count"], type = "number", store = true, conditionType = "number",
+      multiEntry = { operator = "and", limit = 2 } },
+    { name = "stacks", init = "count", display = L["Stacks"], hidden = true, store = true, test = "true",
+      conditionType = "number" },
+    { name = "value", init = "count", display = L["Progress Value"], hidden = true, store = true, test = "true",
+      conditionType = "number" },
+    { name = "total", init = "0", display = L["Progress Total"], hidden = true, store = true, test = "true",
+      conditionType = "number" },
+  }),
+  GetNameAndIcon = function(trigger)
+    local _, name, icon = Private.ExecEnv.EAAmmo(trigger.ammoItemIDs, AmmoMode(trigger))
+    return name or L["Ammo"], icon or AMMO_ICON
+  end,
+  statesParameter = "one",
+  automaticrequired = true,
+  progressType = "static",
+}
+
+Private.category_event_prototype.item["Ammo"] = Private.event_prototypes["Ammo"].name
+
+local function ClassLabel(classFile, text)
+  local className = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
+    or classFile:sub(1, 1) .. classFile:sub(2):lower()
+  local label = ("%s: %s"):format(className, text)
+  local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+  return color and color.WrapTextInColorCode and color:WrapTextInColorCode(label) or label
+end
+
 Private.ea_role_types = {
   TANK = L["Tank"],
   HEALER = L["Healer"],
@@ -891,7 +897,6 @@ Private.event_prototypes["Role"] = {
   progressType = "none",
 }
 
-Private.category_event_prototype.unit["Tracking"] = Private.event_prototypes["Tracking"].name
 Private.category_event_prototype.unit["Role"] = Private.event_prototypes["Role"].name
 
 -- Blizzard's form IDs with the spell that names each form, in the order the list shows them.

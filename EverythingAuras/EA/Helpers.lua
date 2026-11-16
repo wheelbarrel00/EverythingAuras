@@ -1,5 +1,4 @@
 if not EverythingAuras.IsLibsOK() then return end
-if not EverythingAuras.IsForever() then return end
 
 local Private = select(2, ...)
 local L = EverythingAuras.L
@@ -58,6 +57,9 @@ table.insert(loadArgs, IndexOfArg(loadArgs, "playerTitle") or #loadArgs + 1, {
   events = { LOAD_FLAG_EVENT },
   desc = L["Loads while custom code in another aura has set this flag with SetLoadFlag. The name must match exactly, and flags last until you reload."],
 })
+
+-- Retail has no C_SwingTimer, and the other helpers below are for imported WoW Forever code.
+if not EverythingAuras.IsForever() then return end
 
 local SWING_TYPES = { main = 0, off = 1, ranged = 2 }
 local SWING_HANDS = { [0] = "main", [1] = "off", [2] = "ranged" }

@@ -135,9 +135,19 @@ local function flush(f)
   for _, timer in ipairs(timers) do timer.fn() end
 end
 
-T.section("Forever only")
+T.section("Retail gets Load Flag only (0.6.1)")
 local retail = fixture(false)
-T.expect(retail.addon.SetLoadFlag == nil and #retail.private.load_prototype.args == 3, "nothing is added on Retail")
+local retailArgs = retail.private.load_prototype.args
+T.expect(#retailArgs == 4 and retailArgs[2].name == "loadFlag" and retailArgs[3].name == "playerTitle",
+  "the Load Flag option sits before Player Title on Retail too")
+T.expect(retail.addon.SetLoadFlag and retail.addon.SetLoadFlags and retail.addon.LoadFlag, "and so do its functions")
+retail.addon.SetLoadFlag("raid", true)
+flush(retail)
+T.expect(retail.addon.LoadFlag("raid") == true and retail.scans[1] == "EA_LOAD_FLAG", "a set flag rechecks the loads")
+T.expect(retail.addon.WatchSwingTimer == nil and retail.addon.IsTargetInSwingRange == nil
+  and retail.addon.AuraOverlay == nil and retail.addon.SetupClassPackCDM == nil, "no swing helpers, AuraOverlay or class packs")
+retail.addon.GetSwingTimerInfo(1)
+T.expect(retail.swingCalls[1] == 1 and #retail.frames == 0, "the stock swing timer stays as it is, and no watcher frame")
 
 T.section("Load Flag")
 local f = fixture(true)
