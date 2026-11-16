@@ -29,7 +29,7 @@ local UNREAD_FILTERS = {
     { "use_bonushealing", L["Bonus Healing filter"] }, { "use_expertisepercent", L["Expertise filter"] },
   },
 }
--- EA/Triggers.lua reads these filters, the enchant type and the talent spec load option on WoW Forever.
+-- EA/Triggers.lua reads the Form ID filter, the enchant type and the talent spec load option on WoW Forever.
 local FOREVER = EverythingAuras.IsForever()
 if FOREVER then
   UNREAD_FILTERS["Stance/Form/Aura"] = nil

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.1-beta] - 2026-11-16
+
+Everything in this version is for Retail. Nothing changes on WoW Forever.
+
+### New Features
+
+- Bag Space trigger: free, used and total slots and free space, for all bags or general bags. Your reagent bag counts as a general bag, the same as on your backpack button (specialty bags not yet tested in game)
+- Equipment Durability trigger: overall and lowest durability, broken items, and the most worn item's name
+- Range Check, Spell in Range and Spell in Range (Action Bar) triggers, in and out of combat (tested on my target at a training dummy, not yet in dungeons, raids or PvP)
+- Tracking trigger for your tracking spells and map filters, with Any Tracking Spell for when none of your tracking spells is on (not yet tested in game with none on)
+- Load Flag load option, set and read from custom code with SetLoadFlag, SetLoadFlags and LoadFlag
+- Money triggers can check gold, silver and copper
+
+### Improvements
+
+- Imported auras that use Range Check, a Load Flag, or Money's total, silver or copper filters now work instead of carrying a warning
+
 ## [0.6.0-beta] - 2026-11-13
 
 Everything in this version is for WoW Forever. Nothing changes on Retail.

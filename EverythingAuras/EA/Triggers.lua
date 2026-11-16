@@ -641,7 +641,7 @@ if active == nil%s then return false end
 
 Private.category_event_prototype.unit["Tracking"] = Private.event_prototypes["Tracking"].name
 
--- Retail has no ammo, talent trees or C_Item.GetWeaponEnchantInfo, and keeps the stock role and form options.
+-- Retail has no ammo or C_Item.GetWeaponEnchantInfo, has real specs, and keeps the stock role and form options.
 if not EverythingAuras.IsForever() then return end
 
 Private.ea_ammo_modes = {
