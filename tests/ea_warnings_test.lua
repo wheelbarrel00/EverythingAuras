@@ -156,6 +156,9 @@ local bare = { uid = "bare", regionType = "group", blizzardFlow = true, eaFlowLa
 private.EAUpdateWarnings(bare)
 T.expect(warnings.bare and Has(warnings.bare.EAModernGroupRow, "fixed row"),
   "a group imported without a triggers table gets its note at once")
+local dynamicRow = Check({ regionType = "dynamicgroup", blizzardFlow = true, eaFlowDynamic = true })
+T.expect(dynamicRow.EANotHereYet == nil and Has(dynamicRow.EAModernGroupDynamic, "close up") and dynamicRow.EAModernGroupRow == nil,
+  "a Modern Aura Group imported as a dynamic group gets its own note, not a not-here-yet warning (0.7.0)")
 local onFrames = Check({ regionType = "group", blizzardFlow = true, eaFlowLaidOut = true, blizzardFlowFrames = "UNITFRAME" })
 T.expect(Has(onFrames.EANotHereYet, "on unit frames or nameplates") and onFrames.EAModernGroupRow == nil,
   "auras drawn on unit frames or nameplates are named")

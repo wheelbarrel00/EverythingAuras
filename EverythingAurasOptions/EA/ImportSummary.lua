@@ -20,8 +20,7 @@ function OptionsPrivate.EAImportSummary(root, incoming)
   local modern, cdm, swing, groups = 0, 0, 0, 0
   for _, data in ipairs(incoming) do
     if type(data) == "table" then
-      if data.regionType == "group" and data.blizzardFlow == true and data.eaFlowLaidOut
-        and not FLOW_FRAMES[data.blizzardFlowFrames or ""] then
+      if data.blizzardFlow == true and data.eaFlowDynamic and not FLOW_FRAMES[data.blizzardFlowFrames or ""] then
         groups = groups + 1
       end
       for _, triggerData in ipairs(type(data.triggers) == "table" and data.triggers or {}) do
@@ -46,7 +45,7 @@ function OptionsPrivate.EAImportSummary(root, incoming)
     L["%d Aura (Modern) triggers, now standard Aura triggers"])
   Count(converted, cdm, L["1 Cooldown Manager trigger, now a standard trigger"],
     L["%d Cooldown Manager triggers, now standard triggers"])
-  Count(converted, groups, L["1 Modern Aura Group, now a fixed row"], L["%d Modern Aura Groups, now fixed rows"])
+  Count(converted, groups, L["1 Modern Aura Group, now a dynamic group"], L["%d Modern Aura Groups, now dynamic groups"])
   Count(converted, swing, L["1 Swing Timer trigger, now on its hand setting"],
     L["%d Swing Timer triggers, now on their hand setting"])
   if #converted == 0 and #flagged == 0 then

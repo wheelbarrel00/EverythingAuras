@@ -64,7 +64,7 @@ T.expect(retail.options.EAImportSummary == nil and debug.getinfo(retail.options.
 T.section("After a ForeverAuras import")
 local f = fixture(true)
 aura(f, "Pack", { regionType = "group", controlledChildren = { "Row", "Swing", "Broken" } })
-aura(f, "Row", { regionType = "group", blizzardFlow = true, eaFlowLaidOut = true, controlledChildren = { "Seal", "Might" } })
+aura(f, "Row", { regionType = "dynamicgroup", blizzardFlow = true, eaFlowDynamic = true, controlledChildren = { "Seal", "Might" } })
 aura(f, "Seal", { triggers = { { trigger = { type = "aura2", eaConvertedFrom = "secretAura" } } } })
 aura(f, "Might", { triggers = { { trigger = { type = "aura2", eaConvertedFrom = "secretAura" } },
   { trigger = { type = "spell", eaConvertedFrom = "cdm" } } } })
@@ -84,7 +84,7 @@ local text = dialog and dialog.text or ""
 T.expect(text:find("Converted on import:", 1, true)
   and text:find("- 2 Aura (Modern) triggers, now standard Aura triggers", 1, true), "it counts the Aura (Modern) triggers")
 T.expect(text:find("- 1 Cooldown Manager trigger, now a standard trigger", 1, true)
-  and text:find("- 1 Modern Aura Group, now a fixed row", 1, true)
+  and text:find("- 1 Modern Aura Group, now a dynamic group", 1, true)
   and text:find("- 1 Swing Timer trigger, now on its hand setting", 1, true), "and the other pieces, in the singular")
 T.expect(text:find("aura list to see what does not work yet:\nBroken, Swing", 1, true), "it names the auras with a warning")
 
@@ -104,7 +104,7 @@ T.expect(#f.dialogs == before and f.called[1] == false, "not when the import fai
 aura(f, "Clean", { triggers = { { trigger = { type = "aura2" } } } })
 import(f, fromFA, true, "Clean")
 T.expect(#f.dialogs == before, "not when nothing was converted or is missing")
-aura(f, "Framed", { regionType = "group", blizzardFlow = true, eaFlowLaidOut = true, blizzardFlowFrames = "NAMEPLATE" })
+aura(f, "Framed", { regionType = "group", blizzardFlow = true, eaFlowDynamic = true, blizzardFlowFrames = "NAMEPLATE" })
 import(f, fromFA, true, "Framed", { f.auras.Framed })
 T.expect(#f.dialogs == before, "a group on nameplates was not laid out, so it is not counted")
 

@@ -19573,6 +19573,8 @@ local everythingAuras = {
 		"SLASH_EverythingAurasShort2",
 	},
 	read_globals = {
+		"AnchorUtil",
+		"AuraContainerSortMethod",
 		"C_ChatInfo",
 		"C_CooldownViewer",
 		"C_CurveUtil",

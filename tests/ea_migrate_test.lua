@@ -248,7 +248,7 @@ T.expect(migrated({ type = "item", event = "Equipment Durability" }).durabilityS
 T.expect(migrated({ type = "unit", event = "Bag Space" }).bagType == nil, "only item triggers are touched")
 T.expect(migrated({ type = "item", event = "Bag Space" }, 6).bagType == nil, "the step runs once")
 
-T.section("Modern Aura Groups become a fixed row (0.6.0)")
+T.section("Modern Aura Groups become dynamic groups (0.7.0)")
 local function at(member, x, y)
   return member.selfPoint == "CENTER" and member.anchorPoint == "CENTER" and member.xOffset == x and member.yOffset == y
 end
@@ -264,54 +264,65 @@ local function row(group, members, toc)
   private.EANormalizeImport(group, members)
   return members
 end
-local m = row({ blizzardFlowOrigin = "group", blizzardFlowSpacing = 2 }, { {}, { xOffset = 5 }, {} })
-T.expect(at(m[1], 16, -16) and at(m[2], 55, -16) and at(m[3], 84, -16),
-  "a new row starts at the group's point, and a member's own offset moves only that member")
-local g = { blizzardFlowOrigin = "group" }
-row(g, { {} })
-T.expect(g.eaFlowLaidOut == true, "the group is marked laid out")
-m = row({}, { { xOffset = 100, yOffset = 50 }, { width = 20, height = 20 }, {} })
-T.expect(at(m[1], 100, 50) and at(m[2], 128, 56) and at(m[3], 156, 50),
-  "an old row starts at its first member's place, members of other sizes line up at the top")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrowth = "LEFT" }, { {}, {} })
-T.expect(at(m[1], -16, -16) and at(m[2], -50, -16), "Left starts at the top right")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrowth = "UP" }, { {}, {} })
-T.expect(at(m[1], 16, 16) and at(m[2], 16, 50), "Up starts at the bottom left")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrowth = "DOWN" }, { {}, {} })
-T.expect(at(m[1], 16, -16) and at(m[2], 16, -50), "Down starts at the top left")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrowth = "CENTER_HORIZONTAL" }, { {}, {} })
-T.expect(at(m[1], -17, -16) and at(m[2], 17, -16), "Centered Horizontal centers on the top middle")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrowth = "CENTER_VERTICAL" }, { {}, {} })
-T.expect(at(m[1], 16, 17) and at(m[2], 16, -17), "Centered Vertical centers on the left middle")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowPerRow = 2 }, { {}, {}, {} })
-T.expect(at(m[1], 16, -16) and at(m[2], 50, -16) and at(m[3], 16, -50), "a grid fills rows to the right, then down")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowPerRow = 2, blizzardFlowGridType = "LU" },
-  { {}, {}, {} })
-T.expect(at(m[1], -16, 16) and at(m[2], -50, 16) and at(m[3], -16, 50), "a Left-Up grid starts at the bottom right")
-m = row({ blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowPerRow = 2, blizzardFlowGridType = "HV" },
-  { {}, {}, {} })
-T.expect(at(m[3], 16, -50), "a centered grid code falls back to right, then down")
+local function dynamicAs(group, grow, point)
+  return group.regionType == "dynamicgroup" and group.grow == grow and group.selfPoint == point and group.align == "LEFT"
+    and group.sort == "none" and group.stagger == 0 and group.eaFlowDynamic == true
+end
+local g = { blizzardFlowOrigin = "group", blizzardFlowSpacing = 3, xOffset = 10, yOffset = 20 }
+local m = row(g, { {}, { xOffset = 5 }, {} })
+T.expect(dynamicAs(g, "RIGHT", "TOPLEFT") and g.space == 3 and g.xOffset == 10 and g.yOffset == 20,
+  "a new row becomes a dynamic group growing right from the group's own place")
+T.expect(m[2].xOffset == 5 and m[1].selfPoint == nil, "its auras are left as they are, the group places them")
+for _, case in ipairs({ { "LEFT", "LEFT", "TOPRIGHT" }, { "UP", "UP", "BOTTOMLEFT" }, { "DOWN", "DOWN", "TOPLEFT" },
+  { "CENTER_HORIZONTAL", "HORIZONTAL", "TOP" }, { "CENTER_VERTICAL", "VERTICAL", "LEFT" } }) do
+  local grown = { blizzardFlowOrigin = "group", blizzardFlowGrowth = case[1] }
+  row(grown, { {}, {} })
+  T.expect(dynamicAs(grown, case[2], case[3]), case[1] .. " grows " .. case[2] .. " from " .. case[3])
+end
+local horizontal, vertical = { blizzardFlowOrigin = "group", blizzardFlowGrowth = "CENTER_HORIZONTAL" },
+  { blizzardFlowOrigin = "group", blizzardFlowGrowth = "CENTER_VERTICAL" }
+row(horizontal, { {} })
+row(vertical, { {} })
+T.expect(horizontal.centerType == "LR" and vertical.centerType == "RL", "centered rows run left to right and top to bottom")
+local grid = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowPerRow = 2, blizzardFlowGridType = "LU",
+  blizzardFlowRowSpace = 5, blizzardFlowColumnSpace = 6 }
+row(grid, { {}, {}, {} })
+T.expect(dynamicAs(grid, "GRID", "BOTTOMRIGHT") and grid.gridType == "LU" and grid.gridWidth == 2 and grid.rowSpace == 5
+  and grid.columnSpace == 6, "a grid keeps its direction, row width and spacing")
+local odd = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowGridType = "HV" }
+row(odd, { {} })
+T.expect(odd.gridType == "RD" and odd.selfPoint == "TOPLEFT" and odd.gridWidth == 6,
+  "a grid code dynamic groups lack falls back to right, then down")
+local limited = { blizzardFlowOrigin = "group", blizzardFlowUseLimit = true, blizzardFlowLimit = 3 }
+row(limited, { {}, {} })
+T.expect(limited.useLimit == true and limited.limit == 3, "its limit carries over")
+local old = {}
+row(old, { { xOffset = 100, yOffset = 50 }, { width = 20, height = 20 } })
+T.expect(old.xOffset == 84 and old.yOffset == 66, "an old row starts at its first aura's top left corner")
+local anchored = {}
+row(anchored, { { xOffset = 100, yOffset = 50, selfPoint = "LEFT" }, {} })
+T.expect(anchored.xOffset == 100 and anchored.yOffset == 66, "wherever that aura is anchored")
 local framed = { blizzardFlowFrames = "NAMEPLATE" }
-m = row(framed, { {}, {} })
-T.expect(m[1].xOffset == nil and not framed.eaFlowLaidOut, "a group on unit frames or nameplates is left alone")
+row(framed, { {}, {} })
+T.expect(framed.regionType == "group" and not framed.eaFlowDynamic, "a group on unit frames or nameplates is left alone")
 local notFlow = { blizzardFlow = false }
-m = row(notFlow, { {}, {} })
-T.expect(m[2].xOffset == nil and not notFlow.eaFlowLaidOut, "a plain group is left alone")
-m = row({}, { {}, {} }, 120105)
-T.expect(m[2].xOffset == nil, "a string from another client is left alone")
+row(notFlow, { {}, {} })
+T.expect(notFlow.regionType == "group", "a plain group is left alone")
+local foreign = {}
+row(foreign, { {}, {} }, 120105)
+T.expect(foreign.regionType == "group", "a string from another client is left alone")
 forever = false
-m = row({}, { {}, {} })
-T.expect(m[2].xOffset == nil, "Retail lays nothing out")
+local onRetail = {}
+row(onRetail, { {}, {} })
+T.expect(onRetail.regionType == "group", "Retail converts nothing")
 forever = true
 local nested = { id = "Inner", regionType = "group", blizzardFlow = true, blizzardFlowOrigin = "group", controlledChildren = { "N1", "N2" } }
-local n1, n2 = { id = "N1" }, { id = "N2" }
-private.EANormalizeImport({ tocversion = 16001, regionType = "group", controlledChildren = { "Inner" } }, { nested, n1, n2 })
-T.expect(at(n1, 16, -16) and at(n2, 50, -16), "a Modern Aura Group inside an imported group is laid out too")
-local again = { blizzardFlowOrigin = "group" }
+private.EANormalizeImport({ tocversion = 16001, regionType = "group", controlledChildren = { "Inner" } }, { nested, { id = "N1" }, { id = "N2" } })
+T.expect(dynamicAs(nested, "RIGHT", "TOPLEFT"), "a Modern Aura Group inside an imported group is converted too")
+local again = { blizzardFlowOrigin = "group", xOffset = 7 }
 m = row(again, { {}, {} })
-m[2].xOffset = 99
 private.EANormalizeImport(again, m)
-T.expect(m[2].xOffset == 99, "a group laid out once is not laid out again")
+T.expect(again.xOffset == 7 and again.regionType == "dynamicgroup", "a group converted once is not changed again")
 
 local function saveGroup(group)
   savedAuras[group.id] = group
@@ -339,13 +350,9 @@ savedGroup = saveGroup({ id = "Saved", regionType = "group", blizzardFlow = true
   triggers = {}, eaVersion = 6 })
 T.expect(savedAuras.S2.xOffset == nil, "not on Retail")
 forever = true
-m = row({}, { { xOffset = 100, yOffset = 50, selfPoint = "LEFT" }, {} })
-T.expect(at(m[1], 116, 50) and at(m[2], 150, 50), "an old row starts where its first member really is, whatever its anchor")
-m = row({ blizzardFlowOrigin = "group" }, { {}, { xOffset = 5, selfPoint = "LEFT" } })
-T.expect(at(m[2], 55, -16), "a member's own offset is a nudge whatever its anchor")
 local dynamic = { regionType = "dynamicgroup", blizzardFlow = true, blizzardFlowOrigin = "group" }
 m = row(dynamic, { {}, {} })
-T.expect(m[2].xOffset == nil and not dynamic.eaFlowLaidOut, "a dynamic group is never laid out")
+T.expect(m[2].xOffset == nil and not dynamic.eaFlowLaidOut and not dynamic.eaFlowDynamic, "a dynamic group is left alone")
 
 T.section("Cooldown Manager triggers become standard triggers (0.6.0)")
 local function cdm(t, version, conditions)

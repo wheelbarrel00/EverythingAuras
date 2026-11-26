@@ -138,6 +138,50 @@ local function LayoutModernRow(group, members)
   group.eaFlowLaidOut = true
 end
 
+local DYNAMIC_GROWS = { RIGHT = "RIGHT", LEFT = "LEFT", UP = "UP", DOWN = "DOWN", CENTER_HORIZONTAL = "HORIZONTAL",
+  CENTER_VERTICAL = "VERTICAL" }
+-- The corner the dynamic group options give each grow with a top or left alignment, the way the row lined up.
+local DYNAMIC_POINTS = { RIGHT = "TOPLEFT", LEFT = "TOPRIGHT", UP = "BOTTOMLEFT", DOWN = "TOPLEFT", HORIZONTAL = "TOP",
+  VERTICAL = "LEFT" }
+local GRID_POINTS = { RU = "BOTTOMLEFT", UR = "BOTTOMLEFT", LU = "BOTTOMRIGHT", UL = "BOTTOMRIGHT", RD = "TOPLEFT",
+  DR = "TOPLEFT", LD = "TOPRIGHT", DL = "TOPRIGHT", HD = "TOP", HU = "BOTTOM", VR = "LEFT", VL = "RIGHT", DH = "TOP",
+  UH = "BOTTOM", LV = "RIGHT", RV = "LEFT" }
+
+-- A dynamic group closes gaps itself, and Blizzard can lay it out in combat (decision 27).
+local function ConvertModernGroup(group, members)
+  if group.regionType ~= "group" or group.blizzardFlow ~= true or FLOW_FRAMES[group.blizzardFlowFrames or ""]
+    or #members == 0 then
+    return
+  end
+  local spacing = tonumber(group.blizzardFlowSpacing) or 2
+  local grow, point
+  if group.blizzardFlowGrid then
+    grow = "GRID"
+    group.gridType = GRID_POINTS[group.blizzardFlowGridType or ""] and group.blizzardFlowGridType or "RD"
+    point = GRID_POINTS[group.gridType]
+    group.gridWidth = math.max(1, tonumber(group.blizzardFlowPerRow) or 6)
+    group.rowSpace = tonumber(group.blizzardFlowRowSpace) or spacing
+    group.columnSpace = tonumber(group.blizzardFlowColumnSpace) or spacing
+  else
+    grow = DYNAMIC_GROWS[group.blizzardFlowGrowth or "RIGHT"] or "RIGHT"
+    point = DYNAMIC_POINTS[grow]
+    group.centerType = grow == "VERTICAL" and "RL" or "LR"
+  end
+  if group.blizzardFlowOrigin ~= "group" then
+    -- Before 1.1.0 the row started where its first member was placed, not where the group was.
+    local width, height = MemberSize(members[1])
+    local centerX, centerY = CenterOffset(members[1], width, height)
+    local sign = POINT_SIGNS[point]
+    group.xOffset = (tonumber(group.xOffset) or 0) + centerX - sign[1] * width / 2
+    group.yOffset = (tonumber(group.yOffset) or 0) + centerY - sign[2] * height / 2
+  end
+  group.regionType, group.grow, group.selfPoint, group.align = "dynamicgroup", grow, point, "LEFT"
+  group.space, group.stagger, group.sort = spacing, 0, "none"
+  group.useLimit = group.blizzardFlowUseLimit and true or false
+  group.limit = tonumber(group.blizzardFlowLimit) or 5
+  group.eaFlowDynamic = true
+end
+
 -- Members that no longer share one place were arranged by hand after an earlier import, so they stay.
 local function Untouched(members)
   local first = members[1]
@@ -191,10 +235,10 @@ function Private.EANormalizeImport(data, children)
       end
     end
     if EverythingAuras.IsForever() then
-      LayoutModernRow(data, ChildrenOf(data, byId))
+      ConvertModernGroup(data, ChildrenOf(data, byId))
       for _, child in ipairs(children) do
         if type(child) == "table" and child.regionType == "group" then
-          LayoutModernRow(child, ChildrenOf(child, byId))
+          ConvertModernGroup(child, ChildrenOf(child, byId))
         end
       end
     end

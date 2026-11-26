@@ -29,6 +29,8 @@ local TAKEOVERS = {
 
 local records = {}
 local spare = {}
+-- Dynamic groups Blizzard lays out, by the group's uid, and their members, by the member's uid.
+local groups, members = {}, {}
 local wrappers = setmetatable({}, { __mode = "k" })
 
 local function Secret()
@@ -141,15 +143,45 @@ local function AlwaysLook(data, found)
   return look
 end
 
--- Anything Blizzard's slot cannot match exactly would make its icon and the trigger disagree (probes N1, N8).
-function Private.EANativeQualifies(data)
+local MEMBER_TEXTS = { icon = { ["%s"] = true }, aurabar = { ["%s"] = true, ["%n"] = true, ["%p"] = true } }
+local GROWS = { RIGHT = true, LEFT = true, UP = true, DOWN = true, HORIZONTAL = true, VERTICAL = true, GRID = true }
+local CENTER_TYPES = { LR = true, RL = true }
+local GRID_TYPES = { RD = true, RU = true, LD = true, LU = true, DR = true, DL = true, UR = true, UL = true }
+local GROUP_ANCHORS = { SCREEN = true, SELECTFRAME = true }
+
+-- Blizzard places a group's buttons itself, so any part it does not draw would stay where Everything Auras put the aura.
+local function OnlyBlizzardParts(data)
+  local allowed = MEMBER_TEXTS[data.regionType] or {}
+  local subRegions = type(data.subRegions) == "table" and data.subRegions or {}
+  local function Plain(sub)
+    if type(sub) ~= "table" then
+      return false
+    end
+    if sub.type == "subtext" then
+      return sub.text_visible == false or allowed[sub.text_text] == true
+    end
+    return sub.type == "subbackground" or (sub.type == "subglow" and not sub.glow)
+  end
+  for _, sub in ipairs(subRegions) do
+    if not Plain(sub) then
+      return false
+    end
+  end
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
+      local index = type(change) == "table" and type(change.property) == "string" and change.property:match("^sub%.(%d+)%.")
+      local sub = index and subRegions[tonumber(index)]
+      if index and not (sub and sub.type == "subtext" and allowed[sub.text_text]) then
+        return false
+      end
+    end
+  end
+  return true
+end
+
+local function Check(data, inGroup)
   if data.regionType ~= "icon" and not IsBar(data) then
     return false, L["Only an Icon or a Progress Bar can be drawn by Blizzard."]
-  end
-  for parent in Private.TraverseParents(data) do
-    if parent.regionType == "dynamicgroup" then
-      return false, L["Not available inside a dynamic group, which places its icons from Everything Auras' own state."]
-    end
   end
   if type(data.triggers) ~= "table" or #data.triggers ~= 1 then
     return false, L["Needs exactly one trigger."]
@@ -177,6 +209,9 @@ function Private.EANativeQualifies(data)
   if showOn == "showOnMissing" then
     return false, L["A Missing reminder holds what it showed when the fight started, because Blizzard draws an aura only while it is there."]
   elseif showOn == "showAlways" then
+    if inGroup then
+      return false, L["In a dynamic group Blizzard draws only auras set to show while found."]
+    end
     if IsBar(data) then
       return false, L["Blizzard draws Show On Always only on icons for now."]
     end
@@ -197,8 +232,11 @@ function Private.EANativeQualifies(data)
   if changed then
     return false, L["Blizzard shows the aura's own icon and time, so it cannot follow a manual icon, Set Minimum or Maximum Progress, or a progress source other than Automatic, set directly or by a condition."]
   end
-  if trigger.showClones then
-    return false, L["Does not work with Auto-Clone."]
+  if trigger.showClones and not inGroup then
+    return false, L["Auto-Clone works only inside a dynamic group, where Blizzard lists every match."]
+  end
+  if inGroup and not OnlyBlizzardParts(data) then
+    return false, L["In a dynamic group Blizzard places each aura itself, so the aura may show only what Blizzard draws: no other texts, borders or glows."]
   end
   local filtered = trigger.fetchTooltip and (trigger.use_tooltip or trigger.use_tooltipValue)
   for _, key in ipairs(FLAG_FILTERS) do
@@ -213,6 +251,80 @@ function Private.EANativeQualifies(data)
     return false, L["Needs Name(s) or Exact Spell ID(s)."]
   end
   return true
+end
+
+-- One container lays out the whole group, and it watches one unit and keeps its auras in list order.
+local function GroupQualifies(group)
+  local grow = group.grow or "DOWN"
+  if not GROWS[grow] then
+    return false, L["Blizzard lays out a dynamic group only when it grows Right, Left, Up, Down, Centered or in a Grid."]
+  end
+  if (grow == "HORIZONTAL" or grow == "VERTICAL") and not CENTER_TYPES[group.centerType or "LR"] then
+    return false, L["Blizzard adds a centered group's auras in list order, not from the middle out."]
+  end
+  if grow == "GRID" and not GRID_TYPES[group.gridType or "RD"] then
+    return false, L["Blizzard starts a grid in a corner, not centered."]
+  end
+  if (group.sort or "none") ~= "none" then
+    return false, L["Blizzard keeps a group's auras in list order, so the group's Sort must be None."]
+  end
+  if grow ~= "GRID" and (tonumber(group.stagger) or 0) ~= 0 then
+    return false, L["Blizzard cannot stagger a group's auras."]
+  end
+  if not GROUP_ANCHORS[group.anchorFrameType or "SCREEN"] or group.useAnchorPerUnit then
+    return false, L["The group must be anchored to the screen or a frame, not to nameplates, unit frames or the mouse."]
+  end
+  if group.border then
+    return false, L["Blizzard cannot draw the group's border."]
+  end
+  local children = type(group.controlledChildren) == "table" and group.controlledChildren or {}
+  if #children == 0 then
+    return false, L["The group has no auras."]
+  end
+  if group.useLimit and (tonumber(group.limit) or 0) < #children then
+    return false, L["Blizzard cannot limit the whole group, so its Limit must be at least its number of auras."]
+  end
+  local first
+  for _, id in ipairs(children) do
+    local child = EverythingAuras.GetData(id)
+    if type(child) ~= "table" then
+      return false, L["The group has no auras."]
+    end
+    if not child.eaNative then
+      return false, L["Every aura in the group needs Blizzard Draws This Icon or Blizzard Draws This Bar switched on."]
+    end
+    local ok, reason = Check(child, true)
+    if not ok then
+      return false, child.id .. ": " .. reason
+    end
+    first = first or child
+    if child.regionType ~= first.regionType or child.width ~= first.width or child.height ~= first.height then
+      return false, L["Every aura in the group must be the same kind and size."]
+    end
+    if UnitOf(child.triggers[1].trigger) ~= UnitOf(first.triggers[1].trigger) then
+      return false, L["Every aura in the group must watch the same unit."]
+    end
+  end
+  return true
+end
+
+-- Anything Blizzard's slot cannot match exactly would make its icon and the trigger disagree (probes N1, N8).
+function Private.EANativeQualifies(data)
+  local direct = true
+  for parent in Private.TraverseParents(data) do
+    if parent.regionType == "dynamicgroup" then
+      if not direct then
+        return false, L["Not available in a group inside a dynamic group."]
+      end
+      local ok, reason = Check(data, true)
+      if not ok then
+        return false, reason
+      end
+      return GroupQualifies(parent)
+    end
+    direct = false
+  end
+  return Check(data, false)
 end
 
 function Private.EANativeWanted(data)
@@ -368,11 +480,38 @@ end
 
 local Style
 
+-- A group's button sits where Blizzard puts it, so a part copies its place inside the aura's own frame, not that frame.
+local function Corner(frame, point)
+  local left, right, top, bottom = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+  if not (left and right and top and bottom) then
+    return nil
+  end
+  local x = point:find("LEFT") and left or point:find("RIGHT") and right or (left + right) / 2
+  local y = point:find("TOP") and top or point:find("BOTTOM") and bottom or (top + bottom) / 2
+  return x, y
+end
+
+local function Relocate(widget, source, region, button)
+  local left, bottom = source:GetLeft(), source:GetBottom()
+  local regionLeft, regionBottom = region:GetLeft(), region:GetBottom()
+  widget:ClearAllPoints()
+  if left and bottom and regionLeft and regionBottom then
+    widget:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", left - regionLeft, bottom - regionBottom)
+    widget:SetSize(source:GetWidth(), source:GetHeight())
+  else
+    widget:SetAllPoints(button)
+  end
+end
+
 -- Runs once per button, before Blizzard locks it while auras are secret, so all art is handed over here.
 local function BuildButton(record, button)
   record.button = button
-  button:ClearAllPoints()
-  button:SetAllPoints(button:GetParent())
+  if record.member then
+    button:SetSize(tonumber(record.member.data.width) or 32, tonumber(record.member.data.height) or 32)
+  else
+    button:ClearAllPoints()
+    button:SetAllPoints(button:GetParent())
+  end
   button:EnableMouse(false)
   local icon = button:CreateTexture(nil, "ARTWORK")
   icon:SetAllPoints(button)
@@ -408,8 +547,9 @@ local function BuildButton(record, button)
     button:SetDurationText(record.texts.timer, {})
   end
   -- A button built while auras are secret cannot be styled until they can be read again, so it is styled now.
-  if record.region then
-    Style(record, record.data, record.region)
+  local region, data = record.region or record.member and record.member.region, record.data or record.member and record.member.data
+  if region then
+    Style(record, data, region)
   end
 end
 
@@ -438,20 +578,34 @@ local function TakeOver(record, region, takeover)
   widget:SetShadowOffset(text:GetShadowOffset())
   widget:SetJustifyH(text:GetJustifyH())
   local point, relativeTo, relativePoint, x, y = text:GetPoint(1)
-  if point then
+  if point and record.member then
+    local textX, textY = Corner(text, point)
+    local regionX, regionY = Corner(region, "BOTTOMLEFT")
+    widget:ClearAllPoints()
+    if textX and regionX then
+      widget:SetPoint(point, record.button, "BOTTOMLEFT", textX - regionX, textY - regionY)
+    else
+      widget:SetPoint("CENTER", record.button, "CENTER")
+    end
+  elseif point then
     widget:ClearAllPoints()
     widget:SetPoint(point, relativeTo, relativePoint, x, y)
   end
   widget:SetAlpha(1)
-  text:SetShown(not record.drawn)
+  text:SetShown(not (record.member or record).drawn)
 end
 
 local function StyleBar(record, region)
   local bar, background, fill = region.bar, record.background, record.fill
-  background:ClearAllPoints()
-  background:SetAllPoints(bar)
-  fill:ClearAllPoints()
-  fill:SetAllPoints(bar)
+  if record.member then
+    Relocate(background, bar, region, record.button)
+    Relocate(fill, bar, region, record.button)
+  else
+    background:ClearAllPoints()
+    background:SetAllPoints(bar)
+    fill:ClearAllPoints()
+    fill:SetAllPoints(bar)
+  end
   local atlas = bar.fg:GetAtlas()
   if atlas then
     background:SetAtlas(atlas)
@@ -469,15 +623,19 @@ local function StyleBar(record, region)
   fill:SetReverseFill(orientation[2])
   fill:SetRotatesTexture(orientation[1] == "VERTICAL")
   local icon = record.icon
-  icon:ClearAllPoints()
-  icon:SetAllPoints(region.icon)
+  if record.member then
+    Relocate(icon, region.icon, region, record.button)
+  else
+    icon:ClearAllPoints()
+    icon:SetAllPoints(region.icon)
+  end
   icon:SetShown(region.iconVisible and true or false)
   icon:SetVertexColor(region.icon:GetVertexColor())
 end
 
 function Style(record, data, region)
   local button, icon = record.button, record.icon
-  local level = region:GetFrameLevel()
+  local level = record.member and record.member.group.container:GetFrameLevel() + 1 or region:GetFrameLevel()
   button:SetFrameLevel(level)
   record.overlay:SetFrameLevel(level + 2)
 
@@ -593,7 +751,7 @@ local function UpdateSounds(record, data, force)
 end
 
 function Private.EANativeSound(data, when)
-  local record = data and records[data.uid]
+  local record = data and (records[data.uid] or members[data.uid])
   return record and record.drawn and record.sounds[when] or false
 end
 
@@ -686,13 +844,18 @@ local function Mirror(region)
   for _, method in ipairs({ "SetTexCoord", "SetDesaturation", "SetDesaturated", "SetVertexColor" }) do
     hooksecurefunc(region.icon, method, function(_, ...)
       local record = region.eaNativeRecord
-      if record and record.icon and not Secret() then
-        if method == "SetTexCoord" and record.always then
-          pcall(record.under.icon.SetTexCoord, record.under.icon, ...)
-        end
-        -- The aura's own icon wears the missing look while missing, which Blizzard's icon must never copy.
-        if method == "SetTexCoord" or not record.always then
-          pcall(record.icon[method], record.icon, ...)
+      if not record or Secret() then
+        return
+      end
+      if method == "SetTexCoord" and record.always then
+        pcall(record.under.icon.SetTexCoord, record.under.icon, ...)
+      end
+      -- The aura's own icon wears the missing look while missing, which Blizzard's icon must never copy.
+      if method == "SetTexCoord" or not record.always then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.icon then
+            pcall(target.icon[method], target.icon, ...)
+          end
         end
       end
     end)
@@ -700,14 +863,22 @@ local function Mirror(region)
   if region.bar then
     hooksecurefunc(region.bar.fg, "SetVertexColor", function(_, ...)
       local record = region.eaNativeRecord
-      if record and record.fill and not Secret() then
-        pcall(record.fill.SetStatusBarColor, record.fill, ...)
+      if record and not Secret() then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.fill then
+            pcall(target.fill.SetStatusBarColor, target.fill, ...)
+          end
+        end
       end
     end)
     hooksecurefunc(region.bar.bg, "SetVertexColor", function(_, ...)
       local record = region.eaNativeRecord
-      if record and record.background and not Secret() then
-        pcall(record.background.SetVertexColor, record.background, ...)
+      if record and not Secret() then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.background then
+            pcall(target.background.SetVertexColor, target.background, ...)
+          end
+        end
       end
     end)
   end
@@ -755,6 +926,12 @@ end
 local failed = {}
 -- The options store a name's ranks after this runs, so an aura with no spell IDs yet is tried again on refresh.
 local pending = {}
+local SafeConfigureGroup, DetachMember
+
+local function GroupParent(data)
+  local parent = data and data.parent and EverythingAuras.GetData(data.parent)
+  return type(parent) == "table" and parent.regionType == "dynamicgroup" and parent or nil
+end
 
 local function Configure(data, region)
   local uid = data.uid
@@ -768,6 +945,15 @@ local function Configure(data, region)
     return
   end
   pending[uid] = nil
+  local groupData = GroupParent(data)
+  if groupData then
+    Release(uid)
+    SafeConfigureGroup(groupData)
+    return
+  end
+  if members[uid] then
+    DetachMember(members[uid])
+  end
   local wanted = region and Private.EANativeWanted(data)
   if region then
     region.eaNativeWanted = wanted or nil
@@ -884,6 +1070,374 @@ local function SafeConfigure(data, region)
   end
 end
 
+-- Dynamic groups: one container lays out every member, so an aura that is gone leaves no gap (decision 27).
+local pendingGroups, failedGroups = {}, {}
+local cloneHidden = setmetatable({}, { __mode = "k" })
+local SORT_EXPIRATION = AuraContainerSortMethod and AuraContainerSortMethod.Expiration or 4
+
+-- The same start corner and directions the group's own grower uses (DynamicGroup.lua growers).
+local function Flow(groupData)
+  local axes, directions = AnchorUtil.FlowLayoutAxis, AnchorUtil.FlowDirection
+  local grow = groupData.grow or "DOWN"
+  local axis, horizontal, vertical = axes.Horizontal, directions.Right, directions.Down
+  if grow == "LEFT" then
+    horizontal = directions.Left
+  elseif grow == "UP" then
+    axis, vertical = axes.Vertical, directions.Up
+  elseif grow == "DOWN" then
+    axis = axes.Vertical
+  elseif grow == "HORIZONTAL" then
+    horizontal = groupData.centerType == "RL" and directions.Left or directions.Right
+  elseif grow == "VERTICAL" then
+    -- A centered vertical group lists its first aura at the bottom unless it runs top to bottom.
+    axis, vertical = axes.Vertical, groupData.centerType == "RL" and directions.Down or directions.Up
+  elseif grow == "GRID" then
+    local gridType = groupData.gridType or "RD"
+    local first = gridType:sub(1, 1)
+    axis = (first == "R" or first == "L") and axes.Horizontal or axes.Vertical
+    horizontal = gridType:find("L") and directions.Left or directions.Right
+    vertical = gridType:find("U") and directions.Up or directions.Down
+  end
+  local corner = (vertical == directions.Up and "BOTTOM" or "TOP") .. (horizontal == directions.Left and "RIGHT" or "LEFT")
+  return axis, horizontal, vertical, corner
+end
+
+-- A grid that fills rows first spaces its auras by column space and its rows by row space (DynamicGroup.lua GRID).
+local function Spacing(groupData)
+  if (groupData.grow or "DOWN") ~= "GRID" then
+    return tonumber(groupData.space) or 0, 0
+  end
+  local rowSpace, columnSpace = tonumber(groupData.rowSpace) or 0, tonumber(groupData.columnSpace) or 0
+  if (groupData.gridType or "RD"):find("^[RL]") then
+    return columnSpace, rowSpace
+  end
+  return rowSpace, columnSpace
+end
+
+local function HideClone(region, drawn, variant)
+  region.eaNativeOn = drawn or nil
+  if variant == "icon" then
+    if region.icon then
+      region.icon:SetShown(not drawn)
+    end
+    if drawn and region.cooldown then
+      region.cooldown:Hide()
+    end
+  elseif region.bar then
+    region.bar:SetShown(not drawn)
+    region.bar.bg:SetShown(not drawn)
+    region.iconFrame:SetShown(not drawn)
+  end
+  local allowed = MEMBER_TEXTS[variant == "icon" and "icon" or "aurabar"]
+  local list = {}
+  for _, takeover in ipairs(TAKEOVERS) do
+    local sub = allowed[takeover.format] and SubText(region, takeover.format)
+    if sub then
+      sub.text:SetShown(not drawn)
+      list[#list + 1] = sub.text
+    end
+  end
+  cloneHidden[region] = drawn and list or nil
+  if Private.EAUpdateUnsureLook then
+    Private.EAUpdateUnsureLook(region)
+  end
+end
+
+-- Auto-Clone gives each match its own region, which Blizzard's list replaces while it draws.
+local function SyncClones(member)
+  local clones = member.data and Private.clones and Private.clones[member.data.id]
+  for _, clone in pairs(clones or {}) do
+    if member.variant == "icon" then
+      KeepCooldownHidden(clone)
+    end
+    HideClone(clone, member.drawn and true or false, member.variant)
+  end
+end
+
+function DetachMember(member)
+  local group = member.group
+  if group then
+    if member.key then
+      pcall(group.container.SetAuraGroupEnabled, group.container, member.key, false)
+    end
+    if group.members[member.uid] == member then
+      group.members[member.uid] = nil
+    end
+  end
+  member.active, member.drawn = false, false
+  local region = member.region
+  if region then
+    local wasDrawn = region.eaNativeOn
+    region.eaNativeOn = nil
+    ShowOwnParts(member, region, true)
+    if member.variant == "icon" and wasDrawn and region.state and region.UpdateProgress then
+      region:UpdateProgress()
+    end
+    if region.tooltipFrame then
+      region.tooltipFrame:EnableMouseMotion(member.data and member.data.useTooltip and true or false)
+    end
+    if wasDrawn and Private.EAUpdateUnsureLook then
+      Private.EAUpdateUnsureLook(region)
+    end
+    if region.eaNativeRecord == member then
+      region.eaNativeRecord = nil
+    end
+  end
+  UpdateSounds(member, member.data or { actions = {} })
+  SyncClones(member)
+  if members[member.uid] == member then
+    members[member.uid] = nil
+  end
+end
+
+local function ReleaseGroup(uid, forget)
+  local group = groups[uid]
+  if not group then
+    return
+  end
+  for _, member in pairs(group.members) do
+    DetachMember(member)
+  end
+  group.container:Hide()
+  group.active, group.drawn = false, false
+  if forget then
+    groups[uid] = nil
+  end
+end
+
+local function SetGroupActive(group, active)
+  local drawable = true
+  for _, member in pairs(group.members) do
+    drawable = drawable and Drawable(member)
+  end
+  local anyDrawn = false
+  group.active = active
+  for _, member in pairs(group.members) do
+    local loaded = active and Private.loaded[member.data.id] == true
+    member.active = loaded
+    member.drawn = loaded and drawable
+    anyDrawn = anyDrawn or member.drawn
+    group.container:SetAuraGroupEnabled(member.key, member.drawn)
+    local region = member.region
+    if region then
+      local wasDrawn = region.eaNativeOn
+      region.eaNativeOn = member.drawn or nil
+      ShowOwnParts(member, region, not member.drawn)
+      if member.variant == "icon" then
+        if member.drawn and region.cooldown then
+          region.cooldown:Hide()
+        elseif wasDrawn and region.state and region.UpdateProgress then
+          region:UpdateProgress()
+        end
+      end
+      if region.tooltipFrame then
+        region.tooltipFrame:EnableMouseMotion(not member.drawn and member.data.useTooltip and true or false)
+      end
+      if (wasDrawn or false) ~= member.drawn and Private.EAUpdateUnsureLook then
+        Private.EAUpdateUnsureLook(region)
+      end
+      if member.drawn and not Secret() then
+        for _, part in ipairs(member.parts) do
+          if part.styled == false and part.button then
+            Style(part, member.data, region)
+          end
+        end
+      end
+    end
+    UpdateSounds(member, member.data)
+    SyncClones(member)
+  end
+  group.drawn = anyDrawn
+  group.container:SetShown(anyDrawn)
+end
+
+local function ConfigureGroup(groupData)
+  local uid = groupData.uid
+  local groupRegion = EverythingAuras.GetRegion(groupData.id)
+  local ok = groupRegion and not failedGroups[uid] and GroupQualifies(groupData) or false
+  local children = {}
+  for _, id in ipairs(type(groupData.controlledChildren) == "table" and groupData.controlledChildren or {}) do
+    local child = EverythingAuras.GetData(id)
+    if type(child) == "table" then
+      children[#children + 1] = child
+    end
+  end
+  local ready = ok
+  for _, child in ipairs(children) do
+    if ready and (not next(SpellIds(child)) or not KnownIds(child)) then
+      ready = false
+    end
+    local region = EverythingAuras.GetRegion(child.id)
+    if region then
+      -- IDs read out of combat are learned only while the group can be drawn.
+      region.eaNativeWanted = ok or nil
+    end
+  end
+  pendingGroups[uid] = ok and not ready or nil
+  if not ready then
+    ReleaseGroup(uid)
+    return
+  end
+  local group = groups[uid]
+  if not group then
+    local created, container = pcall(CreateFrame, "AuraContainer", nil, UIParent, "CustomAuraContainerTemplate")
+    if not created or not container then
+      return
+    end
+    container:Hide()
+    pcall(container.SetEditModePreviewEnabled, container, false)
+    group = { uid = uid, container = container, members = {}, partsByKey = {}, keys = {} }
+    groups[uid] = group
+  end
+  group.data, group.region = groupData, groupRegion
+  local container, first = group.container, children[1]
+  local unit = UnitOf(first.triggers[1].trigger)
+  if group.unit ~= unit then
+    container:SetUnit(unit)
+    group.unit = unit
+  end
+  local axis, horizontal, vertical, corner = Flow(groupData)
+  container:SetFlowLayoutAxis(axis)
+  container:SetFlowLayoutGrowthDirection(horizontal, vertical)
+  container:SetFlowLayoutAnchorPoint(corner)
+  local spacing, lineSpacing = Spacing(groupData)
+  local width, height = tonumber(first.width) or 32, tonumber(first.height) or 32
+  local maximum
+  if (groupData.grow or "DOWN") == "GRID" then
+    local perLine = math.max(1, tonumber(groupData.gridWidth) or 5)
+    local size = axis == AnchorUtil.FlowLayoutAxis.Horizontal and width or height
+    maximum = perLine * size + (perLine - 1) * spacing + 0.5
+  end
+  container:SetFlowLayoutMaximumLineSize(maximum)
+  -- The group places its auras from its own anchor point, which stays put while its size changes.
+  local point = groupData.selfPoint or "TOP"
+  container:ClearAllPoints()
+  container:SetPoint(point, groupRegion, point)
+  container:SetFrameStrata(groupRegion:GetFrameStrata())
+  container:SetFrameLevel(groupRegion:GetFrameLevel() + 1)
+  container:SetScale(groupRegion:GetEffectiveScale() / UIParent:GetEffectiveScale())
+  container:SetAlpha(groupData.alpha or 1)
+
+  local used = {}
+  for index, child in ipairs(children) do
+    local member = members[child.uid]
+    if member and member.group ~= group then
+      DetachMember(member)
+      member = nil
+    end
+    if not member then
+      member = { uid = child.uid, group = group, hidden = {}, sounds = {}, soundHandles = {} }
+      members[child.uid] = member
+    end
+    group.members[child.uid] = member
+    local variant = Variant(child)
+    local key = child.uid .. ":" .. variant
+    if member.key and member.key ~= key then
+      container:SetAuraGroupEnabled(member.key, false)
+    end
+    member.key, member.variant, member.data = key, variant, child
+    group.partsByKey[key] = group.partsByKey[key] or {}
+    member.parts = group.partsByKey[key]
+    for _, part in ipairs(member.parts) do
+      part.member, part.hidden, part.data = member, member.hidden, child
+    end
+    used[key] = true
+    local region = EverythingAuras.GetRegion(child.id)
+    if member.region ~= region and member.region and member.region.eaNativeRecord == member then
+      member.region.eaNativeRecord = nil
+    end
+    member.region = region
+    if region then
+      region.eaNativeRecord = member
+      Mirror(region)
+      if variant == "icon" then
+        KeepCooldownHidden(region)
+      end
+    end
+    local trigger = child.triggers[1].trigger
+    local ids = SpellIds(child)
+    local filter, filters = Filter(trigger), CandidateFilters(trigger, ids)
+    local filtersKey = FiltersKey(filters)
+    local count = trigger.showClones and math.huge or 1
+    local layout = { layoutIndex = index, elementSpacing = spacing, lineSpacing = lineSpacing, elementWidth = width,
+      elementHeight = height }
+    if not container:HasAuraGroup(key) then
+      group.keys[key] = true
+      container:AddAuraGroup(key, filter, {
+        candidateFilters = filters,
+        sortMethod = SORT_EXPIRATION,
+        maxFrameCount = count,
+        layout = layout,
+        initializeFrame = function(button)
+          local part = { member = member, variant = variant, hidden = member.hidden, data = member.data }
+          table.insert(member.parts, part)
+          BuildButton(part, button)
+        end,
+      })
+    else
+      if member.filter ~= filter then
+        container:SetAuraGroupFilterString(key, filter)
+      end
+      if member.filtersKey ~= filtersKey then
+        container:SetAuraGroupCandidateFilters(key, filters)
+      end
+      container:SetAuraGroupMaxFrameCount(key, count)
+      container:SetAuraGroupLayout(key, layout)
+    end
+    member.unit, member.filter, member.ids, member.idsKey, member.filtersKey = unit, filter, ids, Key(ids), filtersKey
+    if region then
+      if Secret() then
+        for _, part in ipairs(member.parts) do
+          part.styled = false
+        end
+        for _, takeover in ipairs(TAKEOVERS) do
+          local sub = MEMBER_TEXTS[child.regionType][takeover.format] and SubText(region, takeover.format)
+          if sub then
+            member.hidden[takeover.key] = sub.text
+          end
+        end
+      else
+        for _, part in ipairs(member.parts) do
+          if part.button then
+            Style(part, child, region)
+          end
+        end
+      end
+    end
+  end
+  for childUid, member in pairs(group.members) do
+    if not used[member.key] or member.group ~= group then
+      DetachMember(member)
+      group.members[childUid] = nil
+    end
+  end
+  for key in pairs(group.keys) do
+    if not used[key] then
+      container:SetAuraGroupEnabled(key, false)
+    end
+  end
+  SetGroupActive(group, not EverythingAuras.IsPaused())
+end
+
+function SafeConfigureGroup(groupData)
+  local ok, err = pcall(ConfigureGroup, groupData)
+  if not ok then
+    failedGroups[groupData.uid] = true
+    pcall(ReleaseGroup, groupData.uid)
+    geterrorhandler()(err)
+  end
+end
+
+local function HasNativeChild(groupData)
+  for _, id in ipairs(type(groupData.controlledChildren) == "table" and groupData.controlledChildren or {}) do
+    local child = EverythingAuras.GetData(id)
+    if type(child) == "table" and child.eaNative then
+      return true
+    end
+  end
+  return false
+end
+
 local function RefreshAll(force)
   for uid, record in pairs(records) do
     local id = Private.UIDtoID(uid)
@@ -908,6 +1462,31 @@ local function RefreshAll(force)
       pending[uid] = nil
     end
   end
+  local groupUids = {}
+  for uid in pairs(groups) do
+    groupUids[#groupUids + 1] = uid
+  end
+  for uid in pairs(pendingGroups) do
+    if not groups[uid] then
+      groupUids[#groupUids + 1] = uid
+    end
+  end
+  for _, uid in ipairs(groupUids) do
+    local id = Private.UIDtoID(uid)
+    local data = id and EverythingAuras.GetData(id)
+    if data and data.regionType == "dynamicgroup" then
+      SafeConfigureGroup(data)
+      local group = groups[uid]
+      for _, member in pairs(force and group and group.members or {}) do
+        if member.soundRetry then
+          UpdateSounds(member, member.data, true)
+        end
+      end
+    else
+      ReleaseGroup(uid, true)
+      pendingGroups[uid] = nil
+    end
+  end
 end
 
 for _, regionType in ipairs({ "icon", "aurabar" }) do
@@ -922,7 +1501,23 @@ for _, regionType in ipairs({ "icon", "aurabar" }) do
         record.hidden[key] = nil
       end
     end
+    for _, text in ipairs(cloneHidden[region] or {}) do
+      text:Show()
+    end
+    cloneHidden[region] = nil
     modify(parent, region, data)
+    if region.cloneId and region.cloneId ~= "" then
+      local member = members[data.uid]
+      if member and member.drawn then
+        if member.variant == "icon" then
+          KeepCooldownHidden(region)
+        end
+        HideClone(region, true, member.variant)
+      elseif region.eaNativeOn then
+        HideClone(region, false, Variant(data))
+      end
+      return
+    end
     if data.eaNative or region.eaNativeRecord then
       SafeConfigure(data, region)
     else
@@ -965,7 +1560,30 @@ end
 Private.callbacks:RegisterCallback("ScanForLoads", function()
   RefreshAll()
 end)
+local dynamicGroup = Private.regionTypes.dynamicgroup
+if dynamicGroup then
+  local modifyGroup = dynamicGroup.modify
+  dynamicGroup.modify = function(parent, region, data)
+    modifyGroup(parent, region, data)
+    if groups[data.uid] or pendingGroups[data.uid] or HasNativeChild(data) then
+      SafeConfigureGroup(data)
+    end
+  end
+end
+
 Private.callbacks:RegisterCallback("Add", function(_, uid, id, data)
+  if groups[uid] and data.regionType ~= "dynamicgroup" then
+    ReleaseGroup(uid, true)
+  end
+  local member = members[uid]
+  if member then
+    local groupData = GroupParent(data)
+    if groupData then
+      SafeConfigureGroup(groupData)
+    else
+      DetachMember(member)
+    end
+  end
   if not records[uid] then
     return
   end
@@ -986,9 +1604,31 @@ local function Reevaluate(match)
       end
     end
   end
+  local changed = {}
+  for _, group in pairs(groups) do
+    if group.active and match(group.unit) then
+      local drawable = true
+      for _, member in pairs(group.members) do
+        drawable = drawable and Drawable(member)
+      end
+      if drawable ~= group.drawn then
+        changed[#changed + 1] = group
+      end
+    end
+  end
+  for _, group in ipairs(changed) do
+    SetGroupActive(group, group.active)
+  end
 end
 Private.callbacks:RegisterCallback("Delete", function(_, uid)
   Release(uid)
+  if members[uid] then
+    DetachMember(members[uid])
+  end
+  if groups[uid] then
+    ReleaseGroup(uid, true)
+  end
+  pendingGroups[uid] = nil
 end)
 
 -- The container does not follow a unit token to a new unit by itself (probe N1b).
@@ -996,6 +1636,11 @@ local function Follow(match)
   for _, record in pairs(records) do
     if record.active and match(record.unit) then
       record.container:UpdateAllAuras()
+    end
+  end
+  for _, group in pairs(groups) do
+    if group.active and match(group.unit) then
+      group.container:UpdateAllAuras()
     end
   end
   Reevaluate(match)

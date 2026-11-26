@@ -286,7 +286,7 @@ function Private.EAUpdateWarnings(data)
   local notHere, notHereSeen = {}, {}
   local secretHealth, secretHealthSeen = {}, {}
   local flowFrames = data.blizzardFlowFrames == "UNITFRAME" or data.blizzardFlowFrames == "NAMEPLATE"
-  if data.blizzardFlow == true and (not FOREVER or flowFrames or not data.eaFlowLaidOut) then
+  if data.blizzardFlow == true and (not FOREVER or flowFrames or not (data.eaFlowLaidOut or data.eaFlowDynamic)) then
     Add(notHere, notHereSeen, flowFrames and L["Modern Aura Group on unit frames or nameplates"]
       or L["Modern Aura Group layout"])
   end
@@ -383,6 +383,8 @@ function Private.EAUpdateWarnings(data)
       or L["Imported from ForeverAuras' Cooldown Manager trigger and converted to a standard trigger."]))
   SetWarning(uid, "EAModernGroupRow", "info", FOREVER and data.blizzardFlow == true and data.eaFlowLaidOut == true
     and not flowFrames and L["Imported from a ForeverAuras Modern Aura Group. Its auras sit in a fixed row, so a missing one leaves a gap, and the group's sort and limit are not used."])
+  SetWarning(uid, "EAModernGroupDynamic", "info", FOREVER and data.blizzardFlow == true and data.eaFlowDynamic == true
+    and not flowFrames and L["Imported from a ForeverAuras Modern Aura Group as a dynamic group, so its auras close up when one is missing. Its sort is not used, and its Limit counts the auras the group shows."])
   SetWarning(uid, "EACombatLog", "warning", combatLog
     and L["Uses the combat log, which WoW Forever closes to addons. That part never fires."])
   SetWarning(uid, "EAUnknownEvent", "warning", #unknownEvents > 0
