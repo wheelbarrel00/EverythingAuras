@@ -284,11 +284,28 @@ auras.B.triggers[1].trigger.unit = "target"
 T.expect(not qualifies(auras.A), "every aura on the same unit")
 auras.B.triggers[1].trigger.unit = "player"
 auras.B.subRegions[2].text_text = "%p"
-T.expect(not qualifies(auras.B), "an icon text other than %s keeps the group as it is")
+T.expect(qualifies(auras.B), "an icon's %p text is Blizzard's timer, so the group qualifies (0.7.0 round 3)")
+auras.B.subRegions[2].text_text = "%n"
+T.expect(not qualifies(auras.B), "an icon text other than %s or %p keeps the group as it is")
 auras.B.subRegions[2].text_text = "%s"
 auras.B.subRegions[3].glow = true
-T.expect(not qualifies(auras.B), "a glow that shows keeps it as it is")
+T.expect(qualifies(auras.B), "a glow that is always on is Blizzard's too (0.7.0 round 3)")
+auras.B.subRegions[3].glowType = "Sparkle"
+T.expect(not qualifies(auras.B), "a glow type Blizzard has no copy of keeps it as it is")
+auras.B.subRegions[3].glowType = nil
 auras.B.subRegions[3].glow = false
+auras.B.subRegions[4] = { type = "subborder", border_edge = "Square Full White", border_color = { 1, 0, 0, 1 } }
+T.expect(qualifies(auras.B), "a plain Square Full White border qualifies")
+auras.B.conditions = { { check = { trigger = 1, variable = "debuffClass", op = "==", value = "magic" },
+  changes = { { property = "sub.4.border_color", value = { 0, 0, 1, 1 } } } } }
+T.expect(qualifies(auras.B), "so does one colored by Debuff Type")
+auras.B.conditions = { { check = { trigger = 1, variable = "stacks", op = ">", value = "2" },
+  changes = { { property = "sub.4.border_color", value = { 0, 0, 1, 1 } } } } }
+T.expect(not qualifies(auras.B), "a border colored by anything else keeps it as it is")
+auras.B.conditions = nil
+auras.B.subRegions[4].border_edge = "Blizzard Tooltip"
+T.expect(not qualifies(auras.B), "and so does another edge style")
+auras.B.subRegions[4] = nil
 auras.B.conditions = { { check = { trigger = 1, variable = "stacks" }, changes = { { property = "sub.3.glow", value = true } } } }
 T.expect(not qualifies(auras.B), "so does a condition that turns a glow on")
 auras.B.conditions = { { check = { trigger = 1, variable = "stacks" }, changes = { { property = "sub.2.text_color" } } } }
@@ -419,18 +436,24 @@ auras.A.actions = { start = { do_sound = true, sound = "Interface\\Alert.ogg" } 
 Modify(auras.A)
 T.expect(private.EANativeSound(auras.A, "start"), "a member's On Show sound plays through Blizzard")
 auras.B.triggers[1].trigger.showClones = true
+auras.B.subRegions[3].glow = true
 local clone = NewRegion("B-clone")
 clone.cloneId = "x"
 regions["B-clone"] = nil
+local cloneGlow = NewWidget(clone)
+cloneGlow.type = "subglow"
+clone.subRegions = { { type = "subbackground" }, clone.subRegions[1], cloneGlow }
 private.clones.B = { x = clone }
 Modify(group)
 T.expect(container.groups[keyB].options.maxFrameCount == math.huge, "an Auto-Clone aura becomes a list showing every match")
 T.expect(clone.eaNativeOn and not clone.icon.visible and not clone.countText.visible, "its own clones step aside")
+T.expect(cloneGlow.alpha == 0, "with their always-on glow, which Blizzard draws on each button")
 world.paused = true
 Modify(group)
-T.expect(clone.icon.visible and not clone.eaNativeOn, "paused: the clones draw themselves")
+T.expect(clone.icon.visible and not clone.eaNativeOn and cloneGlow.alpha == 1, "paused: the clones draw themselves, glow too")
 world.paused = false
 Modify(group)
+auras.B.subRegions[3].glow = false
 
 T.section("Delete and failure")
 private.callbacks:Fire("Delete", "G")

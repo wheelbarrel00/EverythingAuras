@@ -26,6 +26,17 @@ local TAKEOVERS = {
   { key = "name", format = "%n" },
   { key = "timer", format = "%p" },
 }
+local RT_TESTS = { ["<"] = function(v, n) return v < n end, ["<="] = function(v, n) return v <= n end,
+  [">"] = function(v, n) return v > n end, [">="] = function(v, n) return v >= n end }
+-- Blizzard keys a dispel color by the aura's dispel name, "" for an enrage and None for none (GetDispelTypeMapKey).
+local DISPEL_KEYS = { magic = "Magic", curse = "Curse", disease = "Disease", poison = "Poison", bleed = "Bleed",
+  enrage = "", none = "None" }
+-- Blizzard's border pieces are plain strips, which match only a solid edge file.
+local PLAIN_EDGES = { ["Square Full White"] = true }
+local GLOW_TYPES = { buttonOverlay = true, Pixel = true, ACShine = true, Proc = true }
+-- The smallest positive number, so a formatter's 0 breakpoint covers exactly 0 (Types.lua GetTimeFormatter).
+local MIN_POSITIVE = 2 ^ -1074
+local SORT_EXPIRATION = AuraContainerSortMethod and AuraContainerSortMethod.Expiration or 4
 
 local records = {}
 local spare = {}
@@ -53,6 +64,11 @@ local function HasSpells(trigger)
     end
   end
   return false
+end
+
+-- A trigger that names no aura matches any aura of its kind, as a slot with no spell IDs does (probe P6).
+local function AnyAura(trigger)
+  return not trigger.useName and not trigger.useExactSpellId
 end
 
 -- A container watches one unit, so the units that clone an aura for each group member stay Everything Auras' own.
@@ -143,27 +159,91 @@ local function AlwaysLook(data, found)
   return look
 end
 
-local MEMBER_TEXTS = { icon = { ["%s"] = true }, aurabar = { ["%s"] = true, ["%n"] = true, ["%p"] = true } }
+local MEMBER_TEXTS = { icon = { ["%s"] = true, ["%p"] = true }, aurabar = { ["%s"] = true, ["%n"] = true, ["%p"] = true } }
 local GROWS = { RIGHT = true, LEFT = true, UP = true, DOWN = true, HORIZONTAL = true, VERTICAL = true, GRID = true }
 local CENTER_TYPES = { LR = true, RL = true }
 local GRID_TYPES = { RD = true, RU = true, LD = true, LU = true, DR = true, DL = true, UR = true, UL = true }
 local GROUP_ANCHORS = { SCREEN = true, SELECTFRAME = true }
 
+local function SubChanges(data, index)
+  local prefix, list = "sub." .. index .. ".", {}
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
+      if type(change) == "table" and type(change.property) == "string" and change.property:sub(1, #prefix) == prefix then
+        list[#list + 1] = { check = condition.check, change = change, property = change.property:sub(#prefix + 1) }
+      end
+    end
+  end
+  return list
+end
+
+-- A glow a condition switches on follows the trigger, which Blizzard cannot, so only an always-on glow is Blizzard's.
+local function GlowKind(data, index)
+  local sub = data.subRegions[index]
+  if #SubChanges(data, index) > 0 then
+    return "own"
+  end
+  if not sub.glow then
+    return nil
+  end
+  return GLOW_TYPES[sub.glowType or "buttonOverlay"] and "blizzard" or "own"
+end
+
+-- Debuff Type conditions become the colors Blizzard picks by the aura's dispel type, later conditions winning.
+local function DispelColors(data, index)
+  local sub = data.subRegions[index]
+  local colors = {}
+  for _, key in pairs(DISPEL_KEYS) do
+    colors[key] = type(sub.border_color) == "table" and sub.border_color or { 1, 1, 1, 1 }
+  end
+  for _, entry in ipairs(SubChanges(data, index)) do
+    local check = entry.check
+    local key = type(check) == "table" and check.trigger == 1 and check.variable == "debuffClass" and check.checks == nil
+      and DISPEL_KEYS[check.value]
+    if not key or (check.op ~= "==" and check.op ~= "~=") or entry.property ~= "border_color"
+      or type(entry.change.value) ~= "table" then
+      return nil
+    end
+    for _, other in pairs(DISPEL_KEYS) do
+      if (check.op == "==") == (other == key) then
+        colors[other] = entry.change.value
+      end
+    end
+  end
+  return colors
+end
+
+local function BorderKind(data, index)
+  local sub = data.subRegions[index]
+  if not PLAIN_EDGES[sub.border_edge or "Square Full White"] then
+    return "own"
+  end
+  if #SubChanges(data, index) == 0 then
+    return sub.border_visible ~= false and "plain" or nil
+  end
+  return sub.border_visible ~= false and DispelColors(data, index) and "dispel" or "own"
+end
+
 -- Blizzard places a group's buttons itself, so any part it does not draw would stay where Everything Auras put the aura.
 local function OnlyBlizzardParts(data)
   local allowed = MEMBER_TEXTS[data.regionType] or {}
   local subRegions = type(data.subRegions) == "table" and data.subRegions or {}
-  local function Plain(sub)
+  for index, sub in ipairs(subRegions) do
     if type(sub) ~= "table" then
       return false
-    end
-    if sub.type == "subtext" then
-      return sub.text_visible == false or allowed[sub.text_text] == true
-    end
-    return sub.type == "subbackground" or (sub.type == "subglow" and not sub.glow)
-  end
-  for _, sub in ipairs(subRegions) do
-    if not Plain(sub) then
+    elseif sub.type == "subtext" then
+      if not (sub.text_visible == false or allowed[sub.text_text] == true) then
+        return false
+      end
+    elseif sub.type == "subglow" then
+      if GlowKind(data, index) == "own" then
+        return false
+      end
+    elseif sub.type == "subborder" then
+      if BorderKind(data, index) == "own" then
+        return false
+      end
+    elseif sub.type ~= "subbackground" then
       return false
     end
   end
@@ -171,7 +251,7 @@ local function OnlyBlizzardParts(data)
     for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
       local index = type(change) == "table" and type(change.property) == "string" and change.property:match("^sub%.(%d+)%.")
       local sub = index and subRegions[tonumber(index)]
-      if index and not (sub and sub.type == "subtext" and allowed[sub.text_text]) then
+      if index and not (sub and (sub.type == "subborder" or sub.type == "subtext" and allowed[sub.text_text])) then
         return false
       end
     end
@@ -198,12 +278,14 @@ local function Check(data, inGroup)
   if debuffType ~= "HELPFUL" and debuffType ~= "HARMFUL" then
     return false, L["Needs Buff or Debuff, not both."]
   end
-  if unit == "player" and debuffType == "HARMFUL" then
-    return false, L["Blizzard does not draw debuffs on you for addons."]
-  end
+  local any = AnyAura(trigger)
   -- Blizzard matches a debuff's spell ID only on a unit you cannot assist (AuraContainerUtil.lua:78-80).
-  if unit ~= "target" and unit ~= "focus" and debuffType == "HARMFUL" then
-    return false, L["Blizzard does not draw debuffs on your pet or your group for addons."]
+  local restricted = debuffType == "HARMFUL" and unit ~= "target" and unit ~= "focus"
+  if restricted and not any then
+    if unit == "player" then
+      return false, L["Blizzard draws debuffs on you only for an aura that names none: untick Name(s) and Exact Spell ID(s), and narrow it with the trigger's filters."]
+    end
+    return false, L["Blizzard draws debuffs on your pet or your group only for an aura that names none: untick Name(s) and Exact Spell ID(s), and narrow it with the trigger's filters."]
   end
   local showOn = trigger.matchesShowOn or "showOnActive"
   if showOn == "showOnMissing" then
@@ -221,6 +303,18 @@ local function Check(data, inGroup)
   elseif showOn ~= "showOnActive" then
     return false, L["Needs Show On set to Aura(s) Found."]
   end
+  if any then
+    if showOn ~= "showOnActive" then
+      return false, L["An aura that names none needs Show On set to Aura(s) Found."]
+    end
+    -- One slot sorted by expiration shows the aura ending soonest, the trigger's default pick.
+    if not trigger.showClones and (trigger.combineMode or "showLowest") ~= "showLowest" then
+      return false, L["Blizzard shows the aura that ends soonest, so Preferred Match must be Least remaining time."]
+    end
+    if restricted and trigger.useIgnoreExactSpellId then
+      return false, L["Blizzard cannot ignore spell IDs on debuffs on you, your pet or your group."]
+    end
+  end
   -- Blizzard shows only the aura's own icon and time, and Everything Auras hides its own while Blizzard draws.
   local progressSource = type(data.progressSource) == "table" and data.progressSource[1] or -1
   local changed = data.iconSource == 0 or progressSource ~= -1 or data.useAdjustededMin or data.useAdjustededMax
@@ -236,7 +330,7 @@ local function Check(data, inGroup)
     return false, L["Auto-Clone works only inside a dynamic group, where Blizzard lists every match."]
   end
   if inGroup and not OnlyBlizzardParts(data) then
-    return false, L["In a dynamic group Blizzard places each aura itself, so the aura may show only what Blizzard draws: no other texts, borders or glows."]
+    return false, L["In a dynamic group Blizzard places each aura itself, so the aura may show only what Blizzard draws: a text that shows only %s or %p (or %n on a bar), a glow that is always on, and a Square Full White border, plain or colored by Debuff Type."]
   end
   local filtered = trigger.fetchTooltip and (trigger.use_tooltip or trigger.use_tooltipValue)
   for _, key in ipairs(FLAG_FILTERS) do
@@ -247,7 +341,7 @@ local function Check(data, inGroup)
   if filtered or not totalOk or not dispelOk then
     return false, L["Blizzard cannot apply some of this trigger's filters: stacks, remaining time, name patterns, ignored names, a Total Time other than <=, or the Enrage and None debuff types."]
   end
-  if not HasSpells(trigger) then
+  if not any and not HasSpells(trigger) then
     return false, L["Needs Name(s) or Exact Spell ID(s)."]
   end
   return true
@@ -424,8 +518,16 @@ local function Key(ids)
 end
 
 local function CandidateFilters(trigger, ids)
-  local filters = { includeSpellIDs = ids, maxDuration = (TotalLimit(trigger)),
+  local any = AnyAura(trigger)
+  local filters = { includeSpellIDs = not any and ids or nil, maxDuration = (TotalLimit(trigger)),
     includeDispelTypes = (DispelTypes(trigger)) }
+  if any and trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" then
+    local excluded = {}
+    for _, value in ipairs(trigger.ignoreAuraSpellids) do
+      AddId(excluded, value)
+    end
+    filters.excludeSpellIDs = next(excluded) and excluded or nil
+  end
   for _, pair in ipairs(TRISTATE_FILTERS) do
     if trigger[pair[1]] ~= nil then
       filters[pair[2]] = trigger[pair[1]] and true or false
@@ -435,8 +537,9 @@ local function CandidateFilters(trigger, ids)
 end
 
 local function FiltersKey(filters)
-  local parts = { Key(filters.includeSpellIDs), tostring(filters.maxDuration),
-    filters.includeDispelTypes and Key(filters.includeDispelTypes) or "-" }
+  local parts = { filters.includeSpellIDs and Key(filters.includeSpellIDs) or "*", tostring(filters.maxDuration),
+    filters.includeDispelTypes and Key(filters.includeDispelTypes) or "-",
+    filters.excludeSpellIDs and Key(filters.excludeSpellIDs) or "-" }
   for _, pair in ipairs(TRISTATE_FILTERS) do
     parts[#parts + 1] = tostring(filters[pair[2]])
   end
@@ -461,6 +564,121 @@ local function SubText(region, format)
   end
 end
 
+-- Conditions name a text by its place in the settings, which the region skips for a type this client lacks.
+local function TimerIndex(data)
+  for index, settings in ipairs(type(data.subRegions) == "table" and data.subRegions or {}) do
+    if type(settings) == "table" and settings.type == "subtext" and settings.text_text == "%p" then
+      return index, settings
+    end
+  end
+end
+
+local function CeilFormatter(precision, threshold)
+  local up, down = Enum.NumericRuleFormatRounding.Up, Enum.NumericRuleFormatRounding.Down
+  local breakpoints = { { threshold = 0, format = "" } }
+  if threshold > 0 then
+    breakpoints[#breakpoints + 1] = { threshold = MIN_POSITIVE, format = "%." .. precision .. "f" }
+  end
+  -- The aura's own text rounds whole seconds up (Types.lua time formatter 99), while "%d" alone truncates (probe 073).
+  breakpoints[#breakpoints + 1] = { threshold = threshold > 0 and threshold or MIN_POSITIVE, step = 1, rounding = up,
+    format = "%d" }
+  breakpoints[#breakpoints + 1] = { threshold = 60.000001, step = 1, rounding = up, format = "%i:%02i",
+    components = { { div = 60, step = 1, rounding = down }, { mod = 60, step = 1, rounding = down } } }
+  local formatter = C_StringUtil.CreateNumericRuleFormatter()
+  formatter:SetBreakpoints(breakpoints)
+  return formatter
+end
+
+local formatters = {}
+-- The same time format the aura's own %p text uses (Types.lua timed CreateFormatter), or nil for Blizzard's default.
+local function TimeFormatter(settings)
+  if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Private.GetTimeFormatter) then
+    return nil, "default"
+  end
+  local prefix = "text_text_format_p_"
+  local kind = settings[prefix .. "format"]
+  if kind ~= nil and kind ~= "timed" then
+    return nil, "default"
+  end
+  local format = tonumber(settings[prefix .. "time_format"]) or 0
+  local threshold = math.min(tonumber(settings[prefix .. "time_dynamic_threshold"]) or 60, 60)
+  local precision = tonumber(settings[prefix .. "time_precision"]) or 1
+  local floor = settings[prefix .. "time_legacy_floor"] and true or false
+  if kind == nil then
+    -- An unformatted %p falls back to the built-in format with decimals under a minute (Prototypes.lua dynamic_texts p).
+    format, threshold, precision, floor = 0, 60, 1, true
+  end
+  local key = table.concat({ format, threshold, precision, tostring(floor) }, ":")
+  if formatters[key] == nil then
+    if format ~= 0 or floor then
+      formatters[key] = Private.GetTimeFormatter(format, precision, threshold)
+    else
+      formatters[key] = CeilFormatter(precision, threshold)
+    end
+  end
+  return formatters[key], key
+end
+
+-- Remaining Time conditions that color or hide the %p text, the only ones Blizzard's color curve can follow.
+local function TimerSteps(data, index)
+  local steps = {}
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    local check = type(condition) == "table" and condition.check
+    local test = type(check) == "table" and check.trigger == 1 and check.variable == "expirationTime"
+      and check.checks == nil and RT_TESTS[check.op]
+    local at = test and tonumber(check.value)
+    if at then
+      local step = { test = test, at = at, op = check.op }
+      for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
+        if type(change) == "table" and change.property == "sub." .. index .. ".text_color" and type(change.value) == "table" then
+          step.color = change.value
+        elseif type(change) == "table" and change.property == "sub." .. index .. ".text_visible" then
+          step.visible = change.value and true or false
+        end
+      end
+      if step.color or step.visible ~= nil then
+        steps[#steps + 1] = step
+      end
+    end
+  end
+  return steps
+end
+
+local function StepAt(steps, value, base, baseVisible)
+  local color, visible = base, baseVisible
+  for _, step in ipairs(steps) do
+    if step.test(value, step.at) then
+      color = step.color or color
+      if step.visible ~= nil then
+        visible = step.visible
+      end
+    end
+  end
+  return color, visible
+end
+
+-- Each condition applies over a stretch of time left, in list order like the aura's own conditions.
+local function TimerCurve(steps, base, baseVisible)
+  local starts, seen = { 0 }, { [0] = true }
+  for _, step in ipairs(steps) do
+    if step.at > 0 and not seen[step.at] then
+      seen[step.at] = true
+      starts[#starts + 1] = step.at
+    end
+  end
+  table.sort(starts)
+  local curve, parts = C_CurveUtil.CreateColorCurve(), {}
+  curve:SetType(Enum.LuaCurveType.Step)
+  for i, start in ipairs(starts) do
+    local stop = starts[i + 1]
+    local color, visible = StepAt(steps, stop and (start + stop) / 2 or start + 1, base, baseVisible)
+    local alpha = visible and (color[4] or 1) or 0
+    curve:AddPoint(start, CreateColor(color[1] or 1, color[2] or 1, color[3] or 1, alpha))
+    parts[#parts + 1] = string.format("%s=%s,%s,%s,%s", start, color[1] or 1, color[2] or 1, color[3] or 1, alpha)
+  end
+  return curve, table.concat(parts, ";")
+end
+
 local function StyleCooldown(cooldown, data)
   cooldown:SetAlpha(data.cooldown and 1 or 0)
   cooldown:SetDrawSwipe(data.cooldownSwipe ~= false)
@@ -476,6 +694,503 @@ local function NewText(overlay, button)
   text:SetPoint("CENTER", button, "CENTER")
   text:SetAlpha(0)
   return text
+end
+
+local CORNERS = { TOPLEFT = { 0, 1 }, TOPRIGHT = { 1, 1 }, BOTTOMRIGHT = { 1, 0 }, BOTTOMLEFT = { 0, 0 } }
+
+local function Edges(w, h, order)
+  local edges = {}
+  for i, from in ipairs(order) do
+    local to = order[i % #order + 1]
+    local dx, dy = CORNERS[to][1] - CORNERS[from][1], CORNERS[to][2] - CORNERS[from][2]
+    edges[i] = { len = dx ~= 0 and w or h, point = from, dx = dx, dy = dy,
+      start = dx == 1 and "LEFT" or dx == -1 and "RIGHT" or dy == 1 and "BOTTOM" or "TOP",
+      stop = dx == 1 and "RIGHT" or dx == -1 and "LEFT" or dy == 1 and "TOP" or "BOTTOM" }
+  end
+  return edges
+end
+
+-- Blizzard's button runs no addon scripts, so a moving glow is looping animation pieces, one texture per piece.
+local function Mover(host, period)
+  local group = host:CreateAnimationGroup()
+  group:SetLooping("REPEAT")
+  local keep = host:CreateTexture(nil, "BACKGROUND")
+  keep:SetSize(1, 1)
+  keep:SetPoint("CENTER")
+  keep:SetAlpha(0)
+  local length = group:CreateAnimation("Alpha")
+  length:SetTarget(keep)
+  length:SetFromAlpha(0)
+  length:SetToAlpha(0)
+  length:SetDuration(period)
+  local mover = { group = group }
+  function mover.Piece(texture, t0, duration, alpha, effect)
+    duration = math.max(duration, 0.001)
+    local on = group:CreateAnimation("Alpha")
+    on:SetTarget(texture)
+    on:SetFromAlpha(alpha)
+    on:SetToAlpha(alpha)
+    on:SetStartDelay(t0)
+    on:SetDuration(duration)
+    if t0 + duration < period - 0.002 then
+      local off = group:CreateAnimation("Alpha")
+      off:SetTarget(texture)
+      off:SetFromAlpha(0)
+      off:SetToAlpha(0)
+      off:SetStartDelay(t0 + duration)
+      off:SetDuration(0.001)
+    end
+    if effect.dx then
+      local move = group:CreateAnimation("Translation")
+      move:SetTarget(texture)
+      move:SetOffset(effect.dx, effect.dy)
+      move:SetStartDelay(t0)
+      move:SetDuration(duration)
+    end
+    if effect.origin then
+      local scale = group:CreateAnimation("Scale")
+      scale:SetTarget(texture)
+      scale:SetOrigin(effect.origin, 0, 0)
+      scale:SetScaleFrom(effect.x0, effect.y0)
+      scale:SetScaleTo(effect.x1, effect.y1)
+      scale:SetStartDelay(t0)
+      scale:SetDuration(duration)
+    end
+  end
+  function mover.Span(f0, df, emit)
+    local t0, duration = (f0 % 1) * period, df * period
+    if t0 + duration <= period + 0.0005 then
+      emit(t0, duration, 0, 1)
+    else
+      local split = period - t0
+      emit(t0, split, 0, split / duration)
+      emit(0, duration - split, split / duration, 1)
+    end
+  end
+  return mover
+end
+
+local GLOW_YELLOW = { 0.95, 0.95, 0.32, 1 }
+
+-- A line turning a corner is on two edges at once, so each edge has its own grow, slide and shrink pieces.
+local function PixelGlow(host, w, h, sub, color)
+  color = color or GLOW_YELLOW
+  local count = tonumber(sub.glowLines) or 8
+  count = count > 0 and count or 8
+  local frequency = tonumber(sub.glowFrequency) or 0.25
+  local period = frequency ~= 0 and math.abs(1 / frequency) or 4
+  local length = math.min(tonumber(sub.glowLength) or math.floor((w + h) * (2 / count - 0.1)), w, h)
+  local thickness = tonumber(sub.glowThickness) or 1
+  if sub.glowBorder ~= false then
+    for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+      { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+      local ring = host:CreateTexture(nil, "ARTWORK")
+      ring:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+      ring:SetPoint(side[1])
+      ring:SetPoint(side[2])
+      if side[3] then ring:SetHeight(thickness + 1) else ring:SetWidth(thickness + 1) end
+    end
+  end
+  local mover = Mover(host, period)
+  local perimeter = 2 * (w + h)
+  local edges = Edges(w, h, frequency < 0 and { "TOPLEFT", "BOTTOMLEFT", "BOTTOMRIGHT", "TOPRIGHT" }
+    or { "TOPLEFT", "TOPRIGHT", "BOTTOMRIGHT", "BOTTOMLEFT" })
+  local function Line(edge, at)
+    local texture = host:CreateTexture(nil, "OVERLAY")
+    texture:SetColorTexture(color[1] or 1, color[2] or 1, color[3] or 1, 1)
+    if edge.dx ~= 0 then texture:SetSize(length, thickness) else texture:SetSize(thickness, length) end
+    texture:SetPoint(edge.point, host, edge.point, edge.dx * at, edge.dy * at)
+    texture:SetAlpha(0)
+    return texture
+  end
+  local function Scaled(edge, origin, from, to)
+    from, to = math.max(from, 0.001), math.max(to, 0.001)
+    if edge.dx ~= 0 then
+      return { origin = origin, x0 = from, y0 = 1, x1 = to, y1 = 1 }
+    end
+    return { origin = origin, x0 = 1, y0 = from, x1 = 1, y1 = to }
+  end
+  local alpha = color[4] or 1
+  for line = 1, count do
+    local phase = (line - 1) / count
+    local e0 = 0
+    for _, edge in ipairs(edges) do
+      local slide = edge.len - length
+      mover.Span((e0 - length) / perimeter - phase, length / perimeter, function(t0, duration, a, z)
+        mover.Piece(Line(edge, 0), t0, duration, alpha, Scaled(edge, edge.start, a, z))
+      end)
+      if slide > 0 then
+        mover.Span(e0 / perimeter - phase, slide / perimeter, function(t0, duration, a, z)
+          mover.Piece(Line(edge, slide * a), t0, duration, alpha,
+            { dx = edge.dx * slide * (z - a), dy = edge.dy * slide * (z - a) })
+        end)
+      end
+      mover.Span((e0 + slide) / perimeter - phase, length / perimeter, function(t0, duration, a, z)
+        mover.Piece(Line(edge, slide), t0, duration, alpha, Scaled(edge, edge.stop, 1 - a, 1 - z))
+      end)
+      e0 = e0 + edge.len
+    end
+  end
+  return { mover.group }
+end
+
+local function ShineGlow(host, w, h, sub, color)
+  color = color or GLOW_YELLOW
+  local count = tonumber(sub.glowLines) or 4
+  count = count > 0 and count or 4
+  local frequency = tonumber(sub.glowFrequency) or 0.125
+  local period = frequency ~= 0 and math.abs(1 / frequency) or 8
+  local scale = tonumber(sub.glowScale) or 1
+  local retail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+  local perimeter = 2 * (w + h)
+  local edges = Edges(w, h, frequency < 0 and { "BOTTOMLEFT", "BOTTOMRIGHT", "TOPRIGHT", "TOPLEFT" }
+    or { "BOTTOMLEFT", "TOPLEFT", "TOPRIGHT", "BOTTOMRIGHT" })
+  local rings = {}
+  for ring, size in ipairs({ 7, 6, 5, 4 }) do
+    local mover = Mover(host, period * ring)
+    for spark = 1, count do
+      local e0 = 0
+      for _, edge in ipairs(edges) do
+        local len = edge.len
+        mover.Span(e0 / perimeter - spark / count, len / perimeter, function(t0, duration, a, z)
+          local texture = host:CreateTexture(nil, "OVERLAY")
+          if retail then
+            texture:SetTexture("Interface\\Artifacts\\Artifacts")
+            texture:SetTexCoord(0.8115234375, 0.9169921875, 0.8798828125, 0.9853515625)
+          else
+            texture:SetTexture("Interface\\ItemSocketingFrame\\UI-ItemSockets")
+            texture:SetTexCoord(0.3984375, 0.4453125, 0.40234375, 0.44921875)
+            texture:SetBlendMode("ADD")
+          end
+          texture:SetDesaturated(true)
+          texture:SetVertexColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+          texture:SetSize(size * scale, size * scale)
+          texture:SetPoint("CENTER", host, edge.point, edge.dx * len * a, edge.dy * len * a)
+          texture:SetAlpha(0)
+          mover.Piece(texture, t0, duration, 1, { dx = edge.dx * len * (z - a), dy = edge.dy * len * (z - a) })
+        end)
+        e0 = e0 + len
+      end
+    end
+    rings[ring] = mover.group
+  end
+  return rings
+end
+
+local function FlipBook(group, texture, duration, rows, columns, frames, frameSize, alpha)
+  local shown = group:CreateAnimation("Alpha")
+  shown:SetTarget(texture)
+  shown:SetFromAlpha(alpha)
+  shown:SetToAlpha(alpha)
+  shown:SetDuration(duration)
+  local book = group:CreateAnimation("FlipBook")
+  book:SetTarget(texture)
+  book:SetDuration(duration)
+  book:SetFlipBookRows(rows)
+  book:SetFlipBookColumns(columns)
+  book:SetFlipBookFrames(frames)
+  book:SetFlipBookFrameWidth(frameSize)
+  book:SetFlipBookFrameHeight(frameSize)
+end
+
+local function Tint(texture, color)
+  if color then
+    texture:SetDesaturated(true)
+    texture:SetVertexColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+  end
+end
+
+local function ButtonGlow(host, w, h, sub, color)
+  local alpha = color and color[4] or 1
+  local outer = host:CreateTexture(nil, "OVERLAY")
+  outer:SetTexture("Interface\\SpellActivationOverlay\\IconAlert")
+  outer:SetTexCoord(0.00781250, 0.50781250, 0.27734375, 0.52734375)
+  outer:SetAllPoints(host)
+  Tint(outer, color)
+  outer:SetAlpha(alpha)
+  local ants = host:CreateTexture(nil, "OVERLAY", nil, 1)
+  ants:SetTexture("Interface\\SpellActivationOverlay\\IconAlertAnts")
+  ants:SetSize(w * 0.85, h * 0.85)
+  ants:SetPoint("CENTER")
+  Tint(ants, color)
+  ants:SetAlpha(0)
+  local frequency = tonumber(sub.glowFrequency) or 0
+  local group = host:CreateAnimationGroup()
+  group:SetLooping("REPEAT")
+  -- The ants sheet holds 22 frames of 48 pixels (ActionButton's AnimateTexCoords), timed by the glow's frequency.
+  FlipBook(group, ants, frequency > 0 and 0.15 / frequency or 0.6, 5, 5, 22, 48, alpha)
+  return { group }
+end
+
+local function ProcGlow(host, w, h, sub, color)
+  local list = {}
+  local loop = host:CreateTexture(nil, "OVERLAY")
+  loop:SetAtlas("UI-HUD-ActionBar-Proc-Loop-Flipbook")
+  loop:SetAllPoints(host)
+  Tint(loop, color)
+  loop:SetAlpha(0)
+  local looping = host:CreateAnimationGroup()
+  looping:SetLooping("REPEAT")
+  FlipBook(looping, loop, tonumber(sub.glowDuration) or 1, 6, 5, 30, 0, color and color[4] or 1)
+  list[1] = looping
+  if sub.glowStartAnim then
+    local start = host:CreateTexture(nil, "OVERLAY", nil, 1)
+    start:SetBlendMode("ADD")
+    start:SetAtlas("UI-HUD-ActionBar-Proc-Start-Flipbook")
+    -- The start burst's size against its 42 pixel button (LibCustomGlow, from ActionButtonTemplate.xml).
+    start:SetSize(w / 42 * 150 / 1.4, h / 42 * 150 / 1.4)
+    start:SetPoint("CENTER")
+    Tint(start, color)
+    start:SetAlpha(0)
+    local burst = host:CreateAnimationGroup()
+    FlipBook(burst, start, 0.7, 6, 5, 30, 0, color and color[4] or 1)
+    list[2] = burst
+  end
+  return list
+end
+
+local GLOW_BUILDERS = { Pixel = PixelGlow, ACShine = ShineGlow, buttonOverlay = ButtonGlow, Proc = ProcGlow }
+
+local function Strips(host, size)
+  local strips = {}
+  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+    { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+    local strip = host:CreateTexture(nil, "OVERLAY")
+    strip:SetPoint(side[1])
+    strip:SetPoint(side[2])
+    if side[3] then strip:SetHeight(size) else strip:SetWidth(size) end
+    strips[#strips + 1] = strip
+  end
+  return strips
+end
+
+local function ColorText(color)
+  color = type(color) == "table" and color or {}
+  return string.format("%s,%s,%s,%s", color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+end
+
+local LOOK_FIELDS = { "glowType", "useGlowColor", "glowLines", "glowFrequency", "glowDuration", "glowLength",
+  "glowThickness", "glowScale", "glowBorder", "glowXOffset", "glowYOffset", "glowStartAnim", "border_size" }
+
+local function LookParts(data, region)
+  local list = {}
+  for index, settings in ipairs(type(data.subRegions) == "table" and data.subRegions or {}) do
+    local live = region.subRegions and region.subRegions[index]
+    local kind = live and type(settings) == "table" and live.type == settings.type
+      and (settings.type == "subglow" and GlowKind(data, index) or settings.type == "subborder" and BorderKind(data, index))
+      or nil
+    if kind == "blizzard" or kind == "plain" or kind == "dispel" then
+      list[#list + 1] = { index = index, settings = settings, live = live, kind = kind }
+    end
+  end
+  return list
+end
+
+local function Measure(source, region)
+  local left, bottom, right, top = source:GetLeft(), source:GetBottom(), source:GetRight(), source:GetTop()
+  local regionLeft, regionBottom = region:GetLeft(), region:GetBottom()
+  if left and bottom and right and top and regionLeft and regionBottom then
+    return left - regionLeft, bottom - regionBottom, right - left, top - bottom
+  end
+end
+
+local function DropKit(button, kit)
+  for _, group in ipairs(kit.groups) do
+    pcall(group.Stop, group)
+    pcall(button.RemoveAuraShownAnimation, button, group)
+  end
+  for _, strip in ipairs(kit.dispel) do
+    pcall(button.RemoveDispelTypeTexture, button, strip)
+  end
+  kit.host:Hide()
+end
+
+local function BuildKit(record, data, region, part, level)
+  local settings, button = part.settings, record.button
+  local x, y, w, h = Measure(part.live, region)
+  if not x then
+    x, y, w, h = 0, 0, tonumber(data.width) or 32, tonumber(data.height) or 32
+  end
+  local glowType = settings.glowType or "buttonOverlay"
+  local color = settings.useGlowColor and type(settings.glowColor) == "table" and settings.glowColor or nil
+  local ex, ey = 0, 0
+  if part.kind == "blizzard" then
+    local xo, yo = tonumber(settings.glowXOffset) or 0, tonumber(settings.glowYOffset) or 0
+    if glowType == "buttonOverlay" then
+      ex, ey = w * 0.2, h * 0.2
+    elseif glowType == "Proc" then
+      ex, ey = xo + w * 0.2, yo + h * 0.2
+    else
+      ex, ey = xo, yo
+    end
+  end
+  local parts = { part.kind, string.format("%.1f:%.1f:%.1f:%.1f", x, y, w, h), ColorText(color),
+    ColorText(settings.border_color) }
+  for _, field in ipairs(LOOK_FIELDS) do
+    parts[#parts + 1] = tostring(settings[field])
+  end
+  local colors = part.kind == "dispel" and DispelColors(data, part.index)
+  for key, value in pairs(colors or {}) do
+    parts[#parts + 1] = key .. "=" .. ColorText(value)
+  end
+  table.sort(parts, function(a, b) return a < b end)
+  local key = table.concat(parts, ";")
+  local kit = record.kits[part.index]
+  if kit and kit.key == key then
+    kit.host:SetFrameLevel(level + 1)
+    return kit
+  end
+  if kit then
+    DropKit(button, kit)
+  end
+  local host = CreateFrame("Frame", nil, button)
+  host:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", x - ex, y - ey)
+  host:SetSize(w + 2 * ex, h + 2 * ey)
+  host:SetFrameLevel(level + 1)
+  kit = { key = key, host = host, groups = {}, dispel = {} }
+  if part.kind == "blizzard" then
+    kit.groups = GLOW_BUILDERS[glowType](host, w + 2 * ex, h + 2 * ey, settings, color)
+    for _, group in ipairs(kit.groups) do
+      button:AddAuraShownAnimation(group)
+      -- Blizzard starts these only when the aura appears, and it may already be showing.
+      if not Secret() then
+        pcall(group.Play, group)
+      end
+    end
+  elseif part.kind == "plain" then
+    local border = type(settings.border_color) == "table" and settings.border_color or {}
+    for _, strip in ipairs(Strips(host, tonumber(settings.border_size) or 2)) do
+      strip:SetColorTexture(border[1] or 1, border[2] or 1, border[3] or 1, border[4] or 1)
+    end
+  else
+    local map = {}
+    for name, value in pairs(colors) do
+      map[name] = CreateColor(value[1] or 1, value[2] or 1, value[3] or 1, value[4] or 1)
+    end
+    -- PreserveAsset keeps the strip's texture and colors it by the aura's dispel type, buffs too (probe 073).
+    local options = { style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset, showWhenHarmful = true,
+      showWhenHelpful = true, showWithoutDispelType = true, customDispelColorMap = map }
+    for _, strip in ipairs(Strips(host, tonumber(settings.border_size) or 2)) do
+      strip:SetTexture(SQUARE)
+      button:AddDispelTypeTexture(strip, options)
+      kit.dispel[#kit.dispel + 1] = strip
+    end
+  end
+  return kit
+end
+
+-- The aura's own copy hides while Blizzard draws, by alpha, because its glow and border show themselves again.
+local function DimLooks(owner, drawn)
+  for _, frame in pairs(owner.dimmed or {}) do
+    frame:SetAlpha(drawn and 0 or 1)
+  end
+end
+
+local function StyleLooks(record, data, region, level)
+  local owner = record.member or record
+  record.kits = record.kits or {}
+  local wanted, dimmed = {}, {}
+  for _, part in ipairs(LookParts(data, region)) do
+    record.kits[part.index] = BuildKit(record, data, region, part, level)
+    wanted[part.index] = true
+    dimmed[part.index] = part.live
+  end
+  for index, kit in pairs(record.kits) do
+    if not wanted[index] then
+      DropKit(record.button, kit)
+      record.kits[index] = nil
+    end
+  end
+  for index, frame in pairs(owner.dimmed or {}) do
+    if dimmed[index] ~= frame then
+      frame:SetAlpha(1)
+    end
+  end
+  owner.dimmed = dimmed
+  DimLooks(owner, owner.drawn)
+end
+
+local textOwners = setmetatable({}, { __mode = "k" })
+local hookedTexts = setmetatable({}, { __mode = "k" })
+
+local function Remaining(region)
+  local state = region and region.state
+  local expiration = state and state.progressType == "timed" and state.expirationTime
+  if type(expiration) ~= "number" or issecretvalue(expiration) then
+    return nil
+  end
+  return expiration - GetTime()
+end
+
+local StyleTimer
+
+-- A condition that colors a text Blizzard took over reaches Blizzard's copy out of combat, and holds in combat.
+local function OnTextColor(text, r, g, b, a)
+  local owner = textOwners[text]
+  local record = owner and owner.record
+  if not record or Secret() or record.hidden[owner.key] ~= text then
+    return
+  end
+  local region, data = record.region, record.data
+  if owner.key == "timer" and region and data then
+    local index = TimerIndex(data)
+    local steps = index and TimerSteps(data, index) or {}
+    if #steps > 0 then
+      local remaining = Remaining(region)
+      if not remaining then
+        return
+      end
+      for _, step in ipairs(steps) do
+        if step.test(remaining, step.at) then
+          return
+        end
+      end
+      record.timerBase = { r or 1, g or 1, b or 1, a or 1 }
+      for _, target in ipairs(record.parts or { record }) do
+        if target.button then
+          StyleTimer(target, data, region)
+        end
+      end
+      return
+    end
+  end
+  for _, target in ipairs(record.parts or { record }) do
+    local widget = target.texts and target.texts[owner.key]
+    if widget then
+      widget:SetTextColor(r or 1, g or 1, b or 1, a or 1)
+    end
+  end
+end
+
+function StyleTimer(record, data, region)
+  local timer = record.texts and record.texts.timer
+  if not timer then
+    return
+  end
+  local index, settings = TimerIndex(data)
+  settings = settings or {}
+  local formatter, formatKey = TimeFormatter(settings)
+  local steps = index and TimerSteps(data, index) or {}
+  local curve, curveKey
+  if #steps > 0 and C_CurveUtil and CreateColor then
+    local owner = record.member or record
+    local base = owner.timerBase or type(settings.text_color) == "table" and settings.text_color or { 1, 1, 1, 1 }
+    curve, curveKey = TimerCurve(steps, base, settings.text_visible ~= false)
+  end
+  local key = tostring(formatKey) .. "|" .. tostring(curveKey)
+  if record.timerKey == key then
+    return
+  end
+  local property = Enum.DurationTextBindingProperty and Enum.DurationTextBindingProperty.RemainingDuration
+  local options = {}
+  if formatter and property then
+    options.textFormat = { formatString = "{}", components = { { property = property, formatter = formatter } } }
+  end
+  if curve and property then
+    options.textColor = { curve = curve, property = property }
+  end
+  record.button:SetDurationText(timer, options)
+  record.timerKey = key
 end
 
 local Style
@@ -540,11 +1255,11 @@ local function BuildButton(record, button)
   record.overlay, record.texts = overlay, {}
   record.texts.count = NewText(overlay, button)
   button:SetApplicationCount(record.texts.count)
+  record.texts.timer = NewText(overlay, button)
+  button:SetDurationText(record.texts.timer, {})
   if record.variant ~= "icon" then
     record.texts.name = NewText(overlay, button)
     button:SetSpellName(record.texts.name)
-    record.texts.timer = NewText(overlay, button)
-    button:SetDurationText(record.texts.timer, {})
   end
   -- A button built while auras are secret cannot be styled until they can be read again, so it is styled now.
   local region, data = record.region or record.member and record.member.region, record.data or record.member and record.member.data
@@ -568,6 +1283,11 @@ local function TakeOver(record, region, takeover)
   if not text then
     widget:SetAlpha(0)
     return
+  end
+  textOwners[text] = { record = record.member or record, key = takeover.key }
+  if not hookedTexts[text] then
+    hookedTexts[text] = true
+    hooksecurefunc(text, "SetTextColor", OnTextColor)
   end
   local font, size, flags = text:GetFont()
   if font then
@@ -673,6 +1393,8 @@ function Style(record, data, region)
   for _, takeover in ipairs(TAKEOVERS) do
     TakeOver(record, region, takeover)
   end
+  StyleTimer(record, data, region)
+  StyleLooks(record, data, region, level)
 
   button:EnableMouse(false)
   if data.useTooltip then
@@ -777,6 +1499,10 @@ local function Drawable(record)
   if unit == "player" or not UnitExists(unit) then
     return true
   end
+  -- The rule is about matching spell IDs, so a slot that lists none shows the same auras on any unit.
+  if record.anyMode and not record.excludes then
+    return true
+  end
   local canAssist = UnitCanAssist("player", unit, true, true)
   if issecretvalue(canAssist) then
     return true
@@ -800,6 +1526,7 @@ local function ShowOwnParts(record, region, shown)
   for _, text in pairs(record.hidden) do
     text:SetShown(shown)
   end
+  DimLooks(record, not shown)
 end
 
 local function SetActive(record, data, active)
@@ -891,7 +1618,7 @@ local function NewRecord(variant)
   end
   container:Hide()
   pcall(container.SetEditModePreviewEnabled, container, false)
-  return { container = container, variant = variant, sounds = {}, soundHandles = {}, hidden = {} }
+  return { container = container, variant = variant, sounds = {}, soundHandles = {}, hidden = {}, dimmed = {} }
 end
 
 -- Slots and containers cannot be removed (CustomAuraContainer.lua:641), so a freed one is reused out of combat.
@@ -915,8 +1642,9 @@ local function Release(uid)
   end
   records[uid] = nil
   record.region, record.unit, record.filter, record.idsKey, record.ids, record.styled = nil, nil, nil, nil, nil, nil
-  record.data, record.filtersKey, record.always = nil, nil, nil
+  record.data, record.filtersKey, record.always, record.timerBase, record.anyMode = nil, nil, nil, nil, nil
   wipe(record.hidden)
+  wipe(record.dimmed)
   if record.button then
     spare[record.variant] = spare[record.variant] or {}
     table.insert(spare[record.variant], record)
@@ -967,7 +1695,8 @@ local function Configure(data, region)
   local trigger = data.triggers[1].trigger
   local unit, filter = UnitOf(trigger), Filter(trigger)
   local ids = SpellIds(data)
-  if not next(ids) or not KnownIds(data) then
+  local any = AnyAura(trigger)
+  if not any and (not next(ids) or not KnownIds(data)) then
     pending[uid] = true
     if record then
       SetActive(record, data, false)
@@ -994,6 +1723,7 @@ local function Configure(data, region)
   end
   region.eaNativeRecord = record
   record.data = data
+  record.timerBase = nil
   record.always = IsAlways(data)
   if record.always and not record.under then
     local under = CreateFrame("Frame", nil, UIParent)
@@ -1007,13 +1737,20 @@ local function Configure(data, region)
   local container, idsKey = record.container, Key(ids)
   local filters = CandidateFilters(trigger, ids)
   local filtersKey = FiltersKey(filters)
+  record.anyMode, record.excludes = any, filters.excludeSpellIDs ~= nil
   if not record.button then
     container:SetUnit(unit)
+    record.sorted = true
     record.button = container:AddAuraSlot(SLOT, filter, {
       candidateFilters = filters,
+      sortMethod = SORT_EXPIRATION,
       initializeFrame = function(button) BuildButton(record, button) end,
     })
   else
+    if not record.sorted then
+      container:SetAuraSlotSortMethod(SLOT, SORT_EXPIRATION)
+      record.sorted = true
+    end
     if record.unit ~= unit then
       container:SetUnit(unit)
     end
@@ -1073,7 +1810,7 @@ end
 -- Dynamic groups: one container lays out every member, so an aura that is gone leaves no gap (decision 27).
 local pendingGroups, failedGroups = {}, {}
 local cloneHidden = setmetatable({}, { __mode = "k" })
-local SORT_EXPIRATION = AuraContainerSortMethod and AuraContainerSortMethod.Expiration or 4
+local cloneDimmed = setmetatable({}, { __mode = "k" })
 
 -- The same start corner and directions the group's own grower uses (DynamicGroup.lua growers).
 local function Flow(groupData)
@@ -1114,7 +1851,7 @@ local function Spacing(groupData)
   return rowSpace, columnSpace
 end
 
-local function HideClone(region, drawn, variant)
+local function HideClone(region, drawn, variant, data)
   region.eaNativeOn = drawn or nil
   if variant == "icon" then
     if region.icon then
@@ -1138,6 +1875,12 @@ local function HideClone(region, drawn, variant)
     end
   end
   cloneHidden[region] = drawn and list or nil
+  local dimmed = {}
+  for _, part in ipairs(data and LookParts(data, region) or {}) do
+    part.live:SetAlpha(drawn and 0 or 1)
+    dimmed[#dimmed + 1] = part.live
+  end
+  cloneDimmed[region] = drawn and dimmed or nil
   if Private.EAUpdateUnsureLook then
     Private.EAUpdateUnsureLook(region)
   end
@@ -1150,7 +1893,7 @@ local function SyncClones(member)
     if member.variant == "icon" then
       KeepCooldownHidden(clone)
     end
-    HideClone(clone, member.drawn and true or false, member.variant)
+    HideClone(clone, member.drawn and true or false, member.variant, member.data)
   end
 end
 
@@ -1183,6 +1926,7 @@ function DetachMember(member)
       region.eaNativeRecord = nil
     end
   end
+  wipe(member.dimmed)
   UpdateSounds(member, member.data or { actions = {} })
   SyncClones(member)
   if members[member.uid] == member then
@@ -1264,7 +2008,7 @@ local function ConfigureGroup(groupData)
   end
   local ready = ok
   for _, child in ipairs(children) do
-    if ready and (not next(SpellIds(child)) or not KnownIds(child)) then
+    if ready and not AnyAura(child.triggers[1].trigger) and (not next(SpellIds(child)) or not KnownIds(child)) then
       ready = false
     end
     local region = EverythingAuras.GetRegion(child.id)
@@ -1326,7 +2070,7 @@ local function ConfigureGroup(groupData)
       member = nil
     end
     if not member then
-      member = { uid = child.uid, group = group, hidden = {}, sounds = {}, soundHandles = {} }
+      member = { uid = child.uid, group = group, hidden = {}, dimmed = {}, sounds = {}, soundHandles = {} }
       members[child.uid] = member
     end
     group.members[child.uid] = member
@@ -1335,7 +2079,7 @@ local function ConfigureGroup(groupData)
     if member.key and member.key ~= key then
       container:SetAuraGroupEnabled(member.key, false)
     end
-    member.key, member.variant, member.data = key, variant, child
+    member.key, member.variant, member.data, member.timerBase = key, variant, child, nil
     group.partsByKey[key] = group.partsByKey[key] or {}
     member.parts = group.partsByKey[key]
     for _, part in ipairs(member.parts) do
@@ -1385,6 +2129,7 @@ local function ConfigureGroup(groupData)
       container:SetAuraGroupLayout(key, layout)
     end
     member.unit, member.filter, member.ids, member.idsKey, member.filtersKey = unit, filter, ids, Key(ids), filtersKey
+    member.anyMode, member.excludes = AnyAura(trigger), filters.excludeSpellIDs ~= nil
     if region then
       if Secret() then
         for _, part in ipairs(member.parts) do
@@ -1500,11 +2245,19 @@ for _, regionType in ipairs({ "icon", "aurabar" }) do
         text:Show()
         record.hidden[key] = nil
       end
+      for index, frame in pairs(record.dimmed) do
+        frame:SetAlpha(1)
+        record.dimmed[index] = nil
+      end
     end
     for _, text in ipairs(cloneHidden[region] or {}) do
       text:Show()
     end
     cloneHidden[region] = nil
+    for _, frame in ipairs(cloneDimmed[region] or {}) do
+      frame:SetAlpha(1)
+    end
+    cloneDimmed[region] = nil
     modify(parent, region, data)
     if region.cloneId and region.cloneId ~= "" then
       local member = members[data.uid]
@@ -1512,9 +2265,9 @@ for _, regionType in ipairs({ "icon", "aurabar" }) do
         if member.variant == "icon" then
           KeepCooldownHidden(region)
         end
-        HideClone(region, true, member.variant)
+        HideClone(region, true, member.variant, data)
       elseif region.eaNativeOn then
-        HideClone(region, false, Variant(data))
+        HideClone(region, false, Variant(data), data)
       end
       return
     end

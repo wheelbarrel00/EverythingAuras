@@ -49,7 +49,7 @@ tinsert(OptionsPrivate.registerRegions, function()
   local SWITCHES = {
     icon = {
       label = L["Blizzard Draws This Icon"],
-      text = L["Blizzard draws this aura's icon, swipe and timer, in combat too. Everything Auras' own texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      text = L["Blizzard draws this aura's icon, swipe and timer, in combat too. Everything Auras' other texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
       fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the icon as usual."],
     },
     aurabar = {
@@ -78,6 +78,7 @@ tinsert(OptionsPrivate.registerRegions, function()
           end,
           desc = function()
             local text = switch.text .. "\n\n" .. L["A text that shows only %s becomes Blizzard's stack count."]
+              .. "\n\n" .. L["A text that shows only %p becomes Blizzard's timer in the text's own time format, and Remaining Time conditions that color or hide it carry over. A glow that is always on and a Square Full White border, plain or colored by Debuff Type, are drawn by Blizzard too."]
               .. "\n\n" .. switch.fallback .. "\n\n" .. L["It is on by default wherever it works."]
             local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
             if type(trigger) == "table" and trigger.matchesShowOn == "showAlways" and regionType == "icon" then
