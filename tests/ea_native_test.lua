@@ -57,6 +57,8 @@ local function NewWidget(parent)
   return widget
 end
 
+world.uiParent = NewWidget(nil)
+
 local function NewContainer()
   local container = NewWidget(nil)
   container.shown = true
@@ -90,6 +92,7 @@ local function NewContainer()
 end
 
 local function CreateFrame(kind, _, parent, template)
+  world.frameCount = (world.frameCount or 0) + 1
   if kind == "AuraContainer" then
     if world.failContainer then
       error("no AuraContainer")
@@ -103,6 +106,9 @@ local function CreateFrame(kind, _, parent, template)
   frame.kind = kind
   frame.RegisterEvent = function(self, event) self.events = self.events or {}; self.events[event] = true end
   frame.SetScript = function(self, name, handler) self.scripts = self.scripts or {}; self.scripts[name] = handler end
+  if parent and parent == world.uiParent then
+    world.lastTopFrame = frame
+  end
   return frame
 end
 
@@ -161,7 +167,8 @@ local env = setmetatable({
     IsPaused = function() return world.paused end,
   },
   C_Secrets = { ShouldAurasBeSecret = function() return world.secret end },
-  C_Spell = { GetSpellInfo = function(name) if name == "Seal of Righteousness" then return { spellID = 20293 } end end },
+  C_Spell = { GetSpellInfo = function(name) if name == "Seal of Righteousness" then return { spellID = 20293 } end end,
+    GetSpellTexture = function(id) return id and 900000 + id or nil end },
   UnitExists = function(unit) return world.units[unit] ~= nil end,
   UnitCanAssist = function(_, unit) return world.units[unit] == "friend" end,
   UnitIsPlayerControlledOrGroupMember = function(unit) return unit == "player" end,
@@ -179,7 +186,7 @@ local env = setmetatable({
   Enum = { UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 },
     StatusBarTimerDirection = { ElapsedTime = 0, RemainingTime = 1 } },
   CreateFrame = CreateFrame,
-  UIParent = NewWidget(nil),
+  UIParent = world.uiParent,
   STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF",
   issecretvalue = function() return false end,
   geterrorhandler = function() return function(err) errors[#errors + 1] = err end end,
@@ -262,7 +269,7 @@ T.expect(not qualifies(With({ debuffType = "BOTH" })), "buff and debuff together
 T.expect(not qualifies(With({ matchesShowOn = "showOnMissing" })), "Missing does not")
 T.expect(not qualifies(With({ showClones = true })), "Auto-Clone does not")
 T.expect(not qualifies(With({ useStacks = true })), "a stacks filter does not")
-T.expect(not qualifies(With({ use_stealable = false })), "a set tristate filter does not, even when false")
+T.expect(qualifies(With({ use_stealable = false })), "a stealable, boss or cast by you filter qualifies, even when false (0.7.0)")
 T.expect(not qualifies(With({ auranames = { "" } })), "no names or IDs does not")
 local two = With({})
 two.triggers[2] = { trigger = { type = "aura2" } }
@@ -794,5 +801,99 @@ waitingRegion.states = { [1] = { show = true, spellId = 20293 } }
 private.RunConditions(waitingRegion, "Waiting")
 T.expect(waiting.eaNativeIds == nil and not waitingRegion.eaNativeWanted,
   "switched off while still waiting for an ID: nothing is learned for it any more")
+
+T.section("Filters Blizzard applies (0.7.0)")
+T.expect(qualifies(With({ useTotal = true, total = "30", totalOperator = "<=" })), "Total Time <= qualifies")
+T.expect(not qualifies(With({ useTotal = true, total = "30", totalOperator = ">=" }))
+  and not qualifies(With({ useTotal = true, total = "x", totalOperator = "<=" })), "another operator or no number does not")
+T.expect(qualifies(With({ use_debuffClass = true, debuffClass = { magic = true, poison = true, curse = false } })),
+  "Debuff Type with named types qualifies")
+T.expect(not qualifies(With({ use_debuffClass = true, debuffClass = { enrage = true } }))
+  and not qualifies(With({ use_debuffClass = true, debuffClass = { magic = true, none = true } })),
+  "Enrage or None does not, since Blizzard has no name to list for them")
+local filtered = NewAura("Filtered", { type = "aura2", unit = "target", debuffType = "HARMFUL", useExactSpellId = true,
+  auraspellids = { "5588" }, useTotal = true, total = "30", totalOperator = "<=", use_debuffClass = true,
+  debuffClass = { magic = true }, use_isBossDebuff = true, use_castByPlayer = false })
+private.loaded.Filtered = true
+local filteredRegion = Add(filtered)
+local filteredContainer = world.created[#world.created]
+local candidate = filteredContainer.slot.options.candidateFilters
+T.expect(candidate.includeSpellIDs[5588] and candidate.maxDuration == 30 and candidate.includeDispelTypes.Magic
+  and candidate.isBossAura == true and candidate.isFromPlayerOrPlayerPet == false and candidate.isStealable == nil,
+  "the slot gets Blizzard's own filters for them")
+T.expect(filteredRegion.eaNativeOn, "Blizzard draws it")
+local filterUpdates = Count(filteredContainer, "SetAuraSlotCandidateFilters")
+Add(filtered)
+T.expect(Count(filteredContainer, "SetAuraSlotCandidateFilters") == filterUpdates, "no change, no new filters")
+filtered.triggers[1].trigger.total = "20"
+Add(filtered)
+local refiltered = Last(filteredContainer, "SetAuraSlotCandidateFilters")
+T.expect(refiltered and refiltered[2].maxDuration == 20 and refiltered[2].includeSpellIDs[5588], "a changed filter reaches the slot")
+
+T.section("Show On Always (0.7.0)")
+local function AlwaysAura(id, conditions, extra)
+  local aura = NewAura(id, { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true,
+    auraspellids = { "20154" }, matchesShowOn = "showAlways" }, extra)
+  aura.conditions = conditions
+  return aura
+end
+local missingLook = {
+  { check = { trigger = 1, variable = "buffed", value = 0 },
+    changes = { { property = "desaturate", value = true }, { property = "alpha", value = 0.5 } } },
+  { check = { trigger = 1, variable = "buffed", value = 1 },
+    changes = { { property = "color", value = { 1, 0.5, 0.5, 1 } } } },
+}
+T.expect(qualifies(AlwaysAura("A1", missingLook)), "an icon whose missing look is only desaturate, color or alpha qualifies")
+T.expect(qualifies(AlwaysAura("A2", nil)), "with no conditions too")
+local alwaysBar = AlwaysAura("A3", nil)
+alwaysBar.regionType = "aurabar"
+T.expect(not qualifies(alwaysBar), "not on a Progress Bar for now")
+T.expect(not qualifies(AlwaysAura("A4", { { check = { trigger = 1, variable = "stacks", value = 2 },
+  changes = { { property = "desaturate", value = true } } } })), "a condition on something else does not")
+T.expect(not qualifies(AlwaysAura("A5", { { check = { trigger = 1, variable = "buffed", value = 0 },
+  changes = { { property = "sub.2.text_text", value = "MISSING" } } } })), "a text, glow or sound for the missing state does not")
+T.expect(not qualifies(AlwaysAura("A6", { { check = { trigger = -2, variable = "OR", checks = {} },
+  changes = { { property = "alpha", value = 0.5 } } } })), "a combined check does not")
+local missingOk, missingReason = qualifies(With({ matchesShowOn = "showOnMissing" }))
+T.expect(not missingOk and missingReason:find("Missing reminder", 1, true), "a Missing reminder still does not, and says why")
+
+local always = AlwaysAura("Always", missingLook, { alpha = 1, desaturate = false, color = { 1, 1, 1, 1 },
+  actions = { start = { do_sound = true, sound = "Interface\\Alert.ogg" } } })
+private.loaded.Always = true
+local framesBefore, soundMark = world.frameCount, world.nextSound
+local alwaysRegion = NewRegion("Always")
+alwaysRegion.icon.GetTexture = function() return 135961 end
+-- Built while missing, so the aura's own icon already wears the desaturated missing look.
+alwaysRegion.icon.GetDesaturation = function() return 1 end
+modify(nil, alwaysRegion, always)
+local alwaysContainer = world.created[#world.created]
+local under = world.lastTopFrame
+T.expect(world.frameCount > framesBefore and under and under.parent == env.UIParent and under.icon,
+  "an Always icon gets a frame of its own for the missing look")
+T.expect(alwaysRegion.eaNativeOn and under.visible and alwaysContainer.shown and not alwaysRegion.icon.visible,
+  "Blizzard draws, the missing look shows under it, the aura's own icon steps aside")
+T.expect(under.level == 8 and alwaysContainer.level == 9, "the missing look sits under Blizzard's button")
+local underIcon = under.icon
+T.expect(Last(underIcon, "SetDesaturated")[1] == true and under.alpha == 0.5 and Last(underIcon, "SetTexture")[1] == 135961,
+  "the missing look: the aura's icon, desaturated and at its missing alpha")
+local blizzardIcon = alwaysContainer.button.iconWidget
+T.expect(Last(blizzardIcon, "SetDesaturated")[1] == false and blizzardIcon.color[2] == 0.5,
+  "Blizzard's icon wears the found look from the settings")
+T.expect(alwaysContainer.alpha == 1, "Blizzard's icon at the found alpha")
+local desaturations = Count(blizzardIcon, "SetDesaturated")
+alwaysRegion.icon:SetDesaturated(true)
+T.expect(Count(blizzardIcon, "SetDesaturated") == desaturations, "the aura's own missing look is never copied onto Blizzard's icon")
+alwaysRegion.icon:SetTexCoord(0.2, 0.8, 0.2, 0.8)
+T.expect(Last(underIcon, "SetTexCoord")[1] == 0.2, "a zoom change reaches the missing look")
+T.expect(not private.EANativeSound(always, "start"), "its On Show sound stays its own, it means the icon showing")
+T.expect(world.nextSound == soundMark, "no Blizzard sound is registered for it")
+private.loaded.Always = false
+private.callbacks:Fire("ScanForLoads")
+T.expect(not under.visible and not alwaysContainer.shown, "unloaded: neither the missing look nor Blizzard's icon shows")
+private.loaded.Always = true
+private.callbacks:Fire("ScanForLoads")
+T.expect(under.visible, "loaded again: the missing look is back")
+private.callbacks:Fire("Delete", "Always")
+T.expect(not under.visible, "deleted: the missing look goes too")
 T.expect(#errors == 0, "no errors at all" .. (errors[1] and (": " .. tostring(errors[1])) or ""))
 T.finish()

@@ -79,6 +79,13 @@ tinsert(OptionsPrivate.registerRegions, function()
           desc = function()
             local text = switch.text .. "\n\n" .. L["A text that shows only %s becomes Blizzard's stack count."]
               .. "\n\n" .. switch.fallback .. "\n\n" .. L["It is on by default wherever it works."]
+            local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
+            if type(trigger) == "table" and trigger.matchesShowOn == "showAlways" and regionType == "icon" then
+              text = text .. "\n\n" .. L["With Show On Always, Everything Auras shows the icon's missing look, and Blizzard draws the icon over it while the aura is there, in combat too."]
+            end
+            if type(trigger) == "table" and trigger.useTotal then
+              text = text .. "\n\n" .. L["With a Total Time limit, Blizzard never shows an aura that lasts until canceled."]
+            end
             local ok, reason = Private.EANativeQualifies(data)
             if not ok then
               text = text .. "\n\n|cffff5555" .. L["Not available:"] .. "|r " .. reason

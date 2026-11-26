@@ -86,6 +86,13 @@ local option = result.icon.eaNative
 T.expect(option and option.type == "toggle" and option.name() == "Blizzard Draws This Icon" and option.order < 1,
   "an Icon gets the switch at the top of Icon Settings")
 T.expect(not option.desc():find("Not available", 1, true), "available: no reason in the tooltip")
+T.expect(not option.desc():find("Show On Always", 1, true) and not option.desc():find("Total Time", 1, true),
+  "no Show On Always or Total Time note when the trigger uses neither")
+data.triggers[1].trigger.matchesShowOn = "showAlways"
+data.triggers[1].trigger.useTotal = true
+T.expect(option.desc():find("missing look", 1, true) and option.desc():find("lasts until canceled", 1, true),
+  "Show On Always and a Total Time limit each add their note (0.7.0)")
+data.triggers[1].trigger.matchesShowOn, data.triggers[1].trigger.useTotal = nil, nil
 T.expect(option.disabled == nil, "never disabled, so its tooltip always shows (a disabled checkbox gets no mouse-over in game)")
 qualifies = false
 T.expect(option.name():find("(not available)", 1, true) and option.name():find("^|cff808080"), "unavailable: gray label marked not available")

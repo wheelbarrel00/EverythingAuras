@@ -95,8 +95,10 @@ function OptionsPrivate.EACombatStatus(data, trigger)
   end
   local native, always = Native(data)
   if always then
-    return "|cff55ff55" .. (IsBar(data) and L["In combat: exact. Blizzard draws this bar."]
-      or L["In combat: exact. Blizzard draws this icon."]) .. "|r "
+    local status = IsBar(data) and L["In combat: exact. Blizzard draws this bar."]
+      or trigger.matchesShowOn == "showAlways" and L["In combat: exact. Blizzard draws this icon over its missing look."]
+      or L["In combat: exact. Blizzard draws this icon."]
+    return "|cff55ff55" .. status .. "|r "
       .. L["Its texts, borders and glows hide while Everything Auras is unsure."]
   elseif native then
     return "|cff55ff55" .. (IsBar(data) and L["In combat: exact where Blizzard draws this bar."]

@@ -8,10 +8,15 @@ local UNITS = { player = true, target = true, focus = true, pet = true }
 local UNIT_EVENTS = { PLAYER_TARGET_CHANGED = "target", PLAYER_FOCUS_CHANGED = "focus" }
 local SOUND_ACTIONS = { { when = "start", trigger = "Added" }, { when = "finish", trigger = "Removed" } }
 local COOLDOWN_UPDATES = { "UpdateValue", "UpdateTime", "UpdateDuration", "PreShow" }
-local FLAG_FILTERS = { "useStacks", "useRem", "useTotal", "useNamePattern", "use_debuffClass", "useIgnoreName" }
-local TRISTATE_FILTERS = { "use_stealable", "use_isBossDebuff", "use_castByPlayer" }
+local FLAG_FILTERS = { "useStacks", "useRem", "useNamePattern", "useIgnoreName" }
+-- Blizzard's candidate flags test the same aura fields the trigger reads (BuffTrigger2.lua UpdateMatchData).
+local TRISTATE_FILTERS = { { "use_stealable", "isStealable" }, { "use_isBossDebuff", "isBossAura" },
+  { "use_castByPlayer", "isFromPlayerOrPlayerPet" } }
+-- Blizzard keys dispel types by name (AuraUtil.lua DEBUFF_DISPLAY_INFO), and an aura with no type has no name to list.
+local DISPEL_TYPES = { magic = "Magic", curse = "Curse", disease = "Disease", poison = "Poison", bleed = "Bleed" }
 local LOOK_PROPERTIES = { iconSource = true, displayIcon = true, progressSource = true, adjustedMin = true,
   adjustedMax = true }
+local ALWAYS_LOOK = { desaturate = true, color = true, alpha = true }
 local SQUARE = "Interface\\AddOns\\EverythingAuras\\Media\\Textures\\Square_FullWhite"
 -- The same fill as the bar's own secret bar for each orientation (AuraBar.lua SetOrientation).
 local FILL = { HORIZONTAL = { "HORIZONTAL", false }, HORIZONTAL_INVERSE = { "HORIZONTAL", true },
@@ -66,6 +71,76 @@ local function IsBar(data)
   return data.regionType == "aurabar"
 end
 
+-- Blizzard's maxDuration is an inclusive cap on the full duration (CustomAuraContainer.lua:106-108).
+local function TotalLimit(trigger)
+  if not trigger.useTotal or trigger.total == nil then
+    return nil, true
+  end
+  local total = tonumber(trigger.total)
+  if trigger.totalOperator == "<=" and total and total >= 0 then
+    return total, true
+  end
+  return nil, false
+end
+
+local function DispelTypes(trigger)
+  if not trigger.use_debuffClass then
+    return nil, true
+  end
+  local types = {}
+  for key, on in pairs(type(trigger.debuffClass) == "table" and trigger.debuffClass or {}) do
+    if on then
+      if not DISPEL_TYPES[key] then
+        return nil, false
+      end
+      types[DISPEL_TYPES[key]] = true
+    end
+  end
+  return types, true
+end
+
+local function IsAlways(data)
+  local trigger = data.triggers[1].trigger
+  return not IsBar(data) and trigger.matchesShowOn == "showAlways"
+end
+
+-- Blizzard's icon covers Everything Auras' missing look, so that look may change only by whether the aura is found.
+local function AlwaysConditions(data)
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    local check = type(condition) == "table" and condition.check
+    if type(check) ~= "table" or check.trigger ~= 1 or check.variable ~= "buffed" or check.checks ~= nil then
+      return false
+    end
+    for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
+      if type(change) ~= "table" or not ALWAYS_LOOK[change.property] then
+        return false
+      end
+    end
+  end
+  return true
+end
+
+local function AlwaysLook(data, found)
+  local color = type(data.color) == "table" and data.color or {}
+  local look = { desaturate = data.desaturate and true or false, r = color[1] or 1, g = color[2] or 1,
+    b = color[3] or 1, a = color[4] or 1, alpha = tonumber(data.alpha) or 1 }
+  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+    if (tonumber(condition.check.value) == 1) == found then
+      for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
+        local value = change.value
+        if change.property == "desaturate" then
+          look.desaturate = value and true or false
+        elseif change.property == "color" and type(value) == "table" then
+          look.r, look.g, look.b, look.a = value[1] or 1, value[2] or 1, value[3] or 1, value[4] or 1
+        elseif change.property == "alpha" and tonumber(value) then
+          look.alpha = tonumber(value)
+        end
+      end
+    end
+  end
+  return look
+end
+
 -- Anything Blizzard's slot cannot match exactly would make its icon and the trigger disagree (probes N1, N8).
 function Private.EANativeQualifies(data)
   if data.regionType ~= "icon" and not IsBar(data) then
@@ -98,7 +173,17 @@ function Private.EANativeQualifies(data)
   if unit ~= "target" and unit ~= "focus" and debuffType == "HARMFUL" then
     return false, L["Blizzard does not draw debuffs on your pet or your group for addons."]
   end
-  if (trigger.matchesShowOn or "showOnActive") ~= "showOnActive" then
+  local showOn = trigger.matchesShowOn or "showOnActive"
+  if showOn == "showOnMissing" then
+    return false, L["A Missing reminder holds what it showed when the fight started, because Blizzard draws an aura only while it is there."]
+  elseif showOn == "showAlways" then
+    if IsBar(data) then
+      return false, L["Blizzard draws Show On Always only on icons for now."]
+    end
+    if not AlwaysConditions(data) then
+      return false, L["With Show On Always, Blizzard draws the icon over its missing look, so conditions may only change Desaturate, Color or Alpha by Aura(s) Found."]
+    end
+  elseif showOn ~= "showOnActive" then
     return false, L["Needs Show On set to Aura(s) Found."]
   end
   -- Blizzard shows only the aura's own icon and time, and Everything Auras hides its own while Blizzard draws.
@@ -119,11 +204,10 @@ function Private.EANativeQualifies(data)
   for _, key in ipairs(FLAG_FILTERS) do
     filtered = filtered or trigger[key]
   end
-  for _, key in ipairs(TRISTATE_FILTERS) do
-    filtered = filtered or trigger[key] ~= nil
-  end
-  if filtered then
-    return false, L["Blizzard cannot apply this trigger's extra filters, such as stacks, remaining time or ignore lists."]
+  local _, totalOk = TotalLimit(trigger)
+  local _, dispelOk = DispelTypes(trigger)
+  if filtered or not totalOk or not dispelOk then
+    return false, L["Blizzard cannot apply some of this trigger's filters: stacks, remaining time, name patterns, ignored names, a Total Time other than <=, or the Enrage and None debuff types."]
   end
   if not HasSpells(trigger) then
     return false, L["Needs Name(s) or Exact Spell ID(s)."]
@@ -225,6 +309,26 @@ local function Key(ids)
   end
   table.sort(list)
   return table.concat(list, ",")
+end
+
+local function CandidateFilters(trigger, ids)
+  local filters = { includeSpellIDs = ids, maxDuration = (TotalLimit(trigger)),
+    includeDispelTypes = (DispelTypes(trigger)) }
+  for _, pair in ipairs(TRISTATE_FILTERS) do
+    if trigger[pair[1]] ~= nil then
+      filters[pair[2]] = trigger[pair[1]] and true or false
+    end
+  end
+  return filters
+end
+
+local function FiltersKey(filters)
+  local parts = { Key(filters.includeSpellIDs), tostring(filters.maxDuration),
+    filters.includeDispelTypes and Key(filters.includeDispelTypes) or "-" }
+  for _, pair in ipairs(TRISTATE_FILTERS) do
+    parts[#parts + 1] = tostring(filters[pair[2]])
+  end
+  return table.concat(parts, ";")
 end
 
 local function Filter(trigger)
@@ -378,12 +482,32 @@ function Style(record, data, region)
   record.overlay:SetFrameLevel(level + 2)
 
   icon:SetTexCoord(region.icon:GetTexCoord())
-  icon:SetDesaturation(region.icon:GetDesaturation())
+  if record.always then
+    -- The aura's own icon shows its missing look whenever it is missing, so Blizzard's takes the found look from the settings.
+    local found, missing, under = AlwaysLook(data, true), AlwaysLook(data, false), record.under
+    icon:SetDesaturated(found.desaturate)
+    icon:SetVertexColor(found.r, found.g, found.b, found.a)
+    local texture = region.icon:GetTexture()
+    if issecretvalue(texture) or not texture then
+      texture = record.ids and next(record.ids) and C_Spell.GetSpellTexture((next(record.ids)))
+    end
+    if texture then
+      under.icon:SetTexture(texture)
+    end
+    under.icon:SetTexCoord(region.icon:GetTexCoord())
+    under.icon:SetDesaturated(missing.desaturate)
+    under.icon:SetVertexColor(missing.r, missing.g, missing.b, missing.a)
+    under:SetAlpha(missing.alpha)
+  else
+    icon:SetDesaturation(region.icon:GetDesaturation())
+  end
   if record.variant == "icon" then
     record.cooldown:SetFrameLevel(level)
-    -- A texture's alpha is its vertex color's alpha, so the color comes from the aura's setting, not its icon.
-    local r, g, b, a = region:GetColor()
-    icon:SetVertexColor(r or 1, g or 1, b or 1, a or 1)
+    if not record.always then
+      -- A texture's alpha is its vertex color's alpha, so the color comes from the aura's setting, not its icon.
+      local r, g, b, a = region:GetColor()
+      icon:SetVertexColor(r or 1, g or 1, b or 1, a or 1)
+    end
     StyleCooldown(record.cooldown, data)
   else
     StyleBar(record, region)
@@ -426,7 +550,9 @@ local function UpdateSounds(record, data, force)
   local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
   -- Blizzard's aura sounds have no caster filter (UnitAuraSoundInfo), so an Own Only trigger keeps its own sound.
   local anyCaster = type(trigger) == "table" and trigger.ownOnly == nil
-  local want = record.drawn and anyCaster and C_UnitAuras.AddAuraSound and SoundKey(record, data) or nil
+  -- With Show On Always the icon shows the whole time, so its On Show and On Hide are not the aura coming or going.
+  local want = record.drawn and anyCaster and not record.always and C_UnitAuras.AddAuraSound and SoundKey(record, data)
+    or nil
   if want == record.soundKey and not force then
     return
   end
@@ -523,6 +649,9 @@ local function SetActive(record, data, active)
   local drawn = active and Drawable(record) or false
   record.drawn = drawn
   record.container:SetShown(drawn)
+  if record.under then
+    record.under:SetShown(drawn and record.always or false)
+  end
   local region = record.region
   if region then
     local wasDrawn = region.eaNativeOn
@@ -558,7 +687,13 @@ local function Mirror(region)
     hooksecurefunc(region.icon, method, function(_, ...)
       local record = region.eaNativeRecord
       if record and record.icon and not Secret() then
-        pcall(record.icon[method], record.icon, ...)
+        if method == "SetTexCoord" and record.always then
+          pcall(record.under.icon.SetTexCoord, record.under.icon, ...)
+        end
+        -- The aura's own icon wears the missing look while missing, which Blizzard's icon must never copy.
+        if method == "SetTexCoord" or not record.always then
+          pcall(record.icon[method], record.icon, ...)
+        end
       end
     end)
   end
@@ -609,7 +744,7 @@ local function Release(uid)
   end
   records[uid] = nil
   record.region, record.unit, record.filter, record.idsKey, record.ids, record.styled = nil, nil, nil, nil, nil, nil
-  record.data = nil
+  record.data, record.filtersKey, record.always = nil, nil, nil
   wipe(record.hidden)
   if record.button then
     spare[record.variant] = spare[record.variant] or {}
@@ -673,13 +808,23 @@ local function Configure(data, region)
   end
   region.eaNativeRecord = record
   record.data = data
+  record.always = IsAlways(data)
+  if record.always and not record.under then
+    local under = CreateFrame("Frame", nil, UIParent)
+    under:Hide()
+    under.icon = under:CreateTexture(nil, "ARTWORK")
+    under.icon:SetAllPoints(under)
+    record.under = under
+  end
   Mirror(region)
 
   local container, idsKey = record.container, Key(ids)
+  local filters = CandidateFilters(trigger, ids)
+  local filtersKey = FiltersKey(filters)
   if not record.button then
     container:SetUnit(unit)
     record.button = container:AddAuraSlot(SLOT, filter, {
-      candidateFilters = { includeSpellIDs = ids },
+      candidateFilters = filters,
       initializeFrame = function(button) BuildButton(record, button) end,
     })
   else
@@ -689,18 +834,26 @@ local function Configure(data, region)
     if record.filter ~= filter then
       container:SetAuraSlotFilterString(SLOT, filter)
     end
-    if record.idsKey ~= idsKey then
-      container:SetAuraSlotCandidateFilters(SLOT, { includeSpellIDs = ids })
+    if record.filtersKey ~= filtersKey then
+      container:SetAuraSlotCandidateFilters(SLOT, filters)
     end
   end
-  record.unit, record.filter, record.ids, record.idsKey = unit, filter, ids, idsKey
+  record.unit, record.filter, record.ids, record.idsKey, record.filtersKey = unit, filter, ids, idsKey, filtersKey
 
   container:ClearAllPoints()
   container:SetAllPoints(region)
   container:SetFrameStrata(region:GetFrameStrata())
   -- One level under the region, so the button lands on the region's own level, under its texts and borders.
   container:SetFrameLevel(math.max(0, region:GetFrameLevel() - 1))
-  container:SetAlpha(data.alpha or 1)
+  container:SetAlpha(record.always and AlwaysLook(data, true).alpha or data.alpha or 1)
+  if record.always then
+    -- Under Blizzard's button, so its icon covers the missing look whenever the aura is there (probe P5).
+    local under = record.under
+    under:ClearAllPoints()
+    under:SetAllPoints(region)
+    under:SetFrameStrata(region:GetFrameStrata())
+    under:SetFrameLevel(math.max(0, region:GetFrameLevel() - 2))
+  end
   if record.variant == "icon" then
     KeepCooldownHidden(region)
   end

@@ -86,6 +86,9 @@ T.expect(has(nativeLine, "In combat: exact. Blizzard draws this icon.") and not 
   "an aura Blizzard draws says so instead of last known")
 T.expect(has(status({}, { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } }), "last known"),
   "without the switch it is last known as before")
+local alwaysLine = status(NativeData("player"), { unit = "player", debuffType = "HELPFUL", matchesShowOn = "showAlways",
+  useExactSpellId = true, auraspellids = { "6673" } })
+T.expect(has(alwaysLine, "Blizzard draws this icon over its missing look."), "a Show On Always icon says Blizzard draws over its missing look (0.7.0)")
 corePrivate.EANativeWanted = nil
 
 T.section("Look follows the When Unsure option")
