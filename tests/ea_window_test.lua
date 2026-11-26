@@ -185,7 +185,8 @@ local function rowsOf(label)
   return out
 end
 T.expect(#rowsOf("What else works in combat") == 6, "six things that work in combat, Range on Retail too since 0.6.1")
-T.expect(hasLine("Blizzard draws your Icon and Progress Bar auras") and hasLine("debuffs on you, your pet or your group")
+T.expect(hasLine("Blizzard draws your Icon, Progress Bar, Texture, Text and Progress Texture auras")
+  and hasLine("debuffs on you, your pet or your group")
   and hasLine("stack count"), "In Combat explains what Blizzard draws, bars, the new units and the stack count (decision 24)")
 
 local whatsNewBox = rec.checkboxes["Show What's New after an update"]

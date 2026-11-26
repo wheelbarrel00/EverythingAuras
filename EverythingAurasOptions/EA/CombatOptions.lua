@@ -14,8 +14,10 @@ local function Native(data)
   return true, unit ~= "target" and unit ~= "focus"
 end
 
-local function IsBar(data)
-  return data.regionType == "aurabar"
+local AURA_NOUNS = { aurabar = "bar", texture = "aura", text = "aura", progresstexture = "aura" }
+
+local function Noun(data)
+  return AURA_NOUNS[data.regionType] or "icon"
 end
 
 local PositionOptions = OptionsPrivate.commonOptions.PositionOptions
@@ -36,14 +38,15 @@ OptionsPrivate.commonOptions.PositionOptions = function(id, data, ...)
       desc = function()
         local text = L["In combat WoW Forever hides most auras from addons, so Everything Auras shows what it last knew. Dim fades it and adds a small corner marker. Sounds, glows, chat and custom actions never fire for it, whatever you pick."]
         local native, always = Native(data)
-        if always and IsBar(data) then
-          text = text .. "\n\n" .. L["Blizzard draws this bar, so its other parts always hide while unsure."]
-        elseif always then
-          text = text .. "\n\n" .. L["Blizzard draws this icon, so its other parts always hide while unsure."]
-        elseif native and IsBar(data) then
-          text = text .. "\n\n" .. L["Blizzard draws this bar for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."]
+        local noun = Noun(data)
+        if always then
+          text = text .. "\n\n" .. ({ bar = L["Blizzard draws this bar, so its other parts always hide while unsure."],
+            icon = L["Blizzard draws this icon, so its other parts always hide while unsure."],
+            aura = L["Blizzard draws this aura, so its other parts always hide while unsure."] })[noun]
         elseif native then
-          text = text .. "\n\n" .. L["Blizzard draws this icon for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."]
+          text = text .. "\n\n" .. ({ bar = L["Blizzard draws this bar for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."],
+            icon = L["Blizzard draws this icon for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."],
+            aura = L["Blizzard draws this aura for buffs on friendly units and debuffs on enemies, and its other parts then hide while unsure. This setting applies when Everything Auras draws it instead."] })[noun]
         end
         return text
       end,
@@ -95,13 +98,17 @@ function OptionsPrivate.EACombatStatus(data, trigger)
   end
   local native, always = Native(data)
   if always then
-    local status = IsBar(data) and L["In combat: exact. Blizzard draws this bar."]
+    local noun = Noun(data)
+    local status = noun == "bar" and L["In combat: exact. Blizzard draws this bar."]
+      or noun == "aura" and L["In combat: exact. Blizzard draws this aura."]
       or trigger.matchesShowOn == "showAlways" and L["In combat: exact. Blizzard draws this icon over its missing look."]
       or L["In combat: exact. Blizzard draws this icon."]
     return "|cff55ff55" .. status .. "|r "
       .. L["Its texts, borders and glows hide while Everything Auras is unsure."]
   elseif native then
-    return "|cff55ff55" .. (IsBar(data) and L["In combat: exact where Blizzard draws this bar."]
+    local noun = Noun(data)
+    return "|cff55ff55" .. (noun == "bar" and L["In combat: exact where Blizzard draws this bar."]
+      or noun == "aura" and L["In combat: exact where Blizzard draws this aura."]
       or L["In combat: exact where Blizzard draws this icon."]) .. "|r "
       .. L["That is buffs on friendly units and debuffs on enemies. Otherwise it is last known, as without the option."]
   end

@@ -594,7 +594,7 @@ local function Imported(trigger)
 end
 local import = Imported({ unit = "player", debuffType = "HELPFUL", useName = true, auranames = { "Seal" } })
 private.EAModernize(import)
-T.expect(import.eaNative == true and import.eaVersion == 7, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
+T.expect(import.eaNative == true and import.eaVersion == 8, "a converted Aura (Modern) icon that qualifies is drawn by Blizzard")
 local mine = NewAura("Mine", base)
 mine.eaVersion, mine.eaNative = 2, nil
 private.EAModernize(mine)
@@ -609,10 +609,15 @@ T.expect(missing.eaNative == true and not private.EANativeWanted(missing),
   "one Blizzard cannot draw is switched on, yet Everything Auras draws it until it qualifies")
 local fresh = { id = "Fresh", uid = "Fresh", regionType = "aurabar", triggers = {} }
 private.EAModernize(fresh)
-T.expect(fresh.eaNative == true and fresh.eaVersion == 7, "a new Progress Bar starts with it on")
+T.expect(fresh.eaNative == true and fresh.eaVersion == 8, "a new Progress Bar starts with it on")
 local textAura = { id = "Text", uid = "Text", regionType = "text", triggers = {} }
 private.EAModernize(textAura)
-T.expect(textAura.eaNative == nil, "other region types are left alone")
+local saved = { id = "Saved", uid = "Saved", regionType = "progresstexture", triggers = {}, eaVersion = 7 }
+private.EAModernize(saved)
+local model = { id = "Model", uid = "Model", regionType = "model", triggers = {} }
+private.EAModernize(model)
+T.expect(textAura.eaNative == true and saved.eaNative == true, "Texts, Textures and Progress Textures start with it on too, saved ones as well (0.7.0)")
+T.expect(model.eaNative == nil, "other region types are left alone")
 local kept = { id = "Kept", uid = "Kept", regionType = "icon", eaVersion = 3, eaNative = false, triggers = {} }
 private.EAModernize(kept)
 T.expect(kept.eaNative == false, "an icon switched off before the update stays off")

@@ -3,7 +3,7 @@ if not EverythingAuras.IsLibsOK() then return end
 local Private = select(2, ...)
 
 -- Everything Auras' own migration counter, kept apart from the internalVersion shared with WeakAuras.
-local EA_VERSION = 7
+local EA_VERSION = 8
 
 local FA_INTERNAL_VERSION = 91
 local OLD_ADDON_FOLDERS = { "WeakAuras", "M33kAuras", "ForeverAuras" }
@@ -770,6 +770,10 @@ function Private.EAModernize(data)
     end
   end
   if version < 4 and data.eaNative == nil and (data.regionType == "icon" or data.regionType == "aurabar") then
+    data.eaNative = true
+  end
+  if version < 8 and data.eaNative == nil
+    and (data.regionType == "texture" or data.regionType == "text" or data.regionType == "progresstexture") then
     data.eaNative = true
   end
   if version < 5 and type(data.triggers) == "table" then

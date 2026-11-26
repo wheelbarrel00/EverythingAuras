@@ -576,6 +576,23 @@ for _, anim in ipairs(antsButton.shownGroups[1].anims) do
 end
 T.expect(book and book.frames == 22 and book.frameWidth == 48 and book.rows == 5, "Action Button Glow's ants run 22 frames of 48 pixels")
 
+T.section("Stacking like the aura's own sub-regions (round 4 LOOKS)")
+local function Stacked(id, subRegions)
+  local data = Seal(id, { subRegions = subRegions })
+  local region = Add(data)
+  return region.eaNativeRecord
+end
+local glowFirst = Stacked("GlowFirst", { { type = "subglow", glow = true, glowType = "Pixel" },
+  { type = "subborder", border_edge = "Square Full White", border_color = { 1, 0, 0, 1 }, border_size = 2 },
+  { type = "subtext", text_text = "%p" } })
+T.expect(glowFirst.kits[2].host.level > glowFirst.kits[1].host.level, "a border listed after a glow draws over it")
+T.expect(glowFirst.overlay.level > glowFirst.kits[2].host.level, "a text listed after both draws over them")
+local textFirst = Stacked("TextFirst", { { type = "subtext", text_text = "%p" },
+  { type = "subglow", glow = true, glowType = "Pixel" } })
+T.expect(textFirst.kits[2].host.level > textFirst.overlay.level, "a glow listed after a text draws over it")
+local plainIcon = Stacked("NoTexts", { { type = "subglow", glow = true, glowType = "Pixel" } })
+T.expect(plainIcon.overlay.level == 12, "with no text taken over the texts keep their old place")
+
 T.section("Borders (round 3 Q5)")
 local plainBorder = Seal("PlainBorder", { subRegions = { { type = "subborder", border_edge = "Square Full White",
   border_color = { 1, 0, 0, 1 }, border_size = 3, border_offset = 2 } } })

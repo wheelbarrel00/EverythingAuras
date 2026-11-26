@@ -57,11 +57,26 @@ tinsert(OptionsPrivate.registerRegions, function()
       text = L["Blizzard draws this aura's bar and icon, and a text that shows only %n or %p, in combat too. Everything Auras' other texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
       fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the bar as usual."],
     },
+    texture = {
+      label = L["Blizzard Draws This Texture"],
+      text = L["Blizzard draws this texture while the aura is there, in combat too, with its color, rotation and mirror. Everything Auras' other texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the texture as usual."],
+    },
+    text = {
+      label = L["Blizzard Draws This Text"],
+      text = L["Blizzard draws this text while the aura is there, in combat too, when it shows one %p, %s or %n with fixed words around it: %p as a timer in its own time format, %s as the stack count and %n as the spell's name. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the text as usual."],
+    },
+    progresstexture = {
+      label = L["Blizzard Draws This Progress Texture"],
+      text = L["Blizzard fills this texture, in combat too, straight or round, with its crop, mirror and background. Everything Auras' other texts, borders and glows still follow the trigger and hide while it is unsure in combat. On Show and On Hide sound files play through Blizzard, so they play in combat too. Blizzard stops a sound after 5 seconds, and with Own Only set the aura keeps its own sounds."],
+      fallback = L["On Target or Focus, Blizzard draws buffs only on friendly units and debuffs only on enemies. Otherwise Everything Auras draws the texture as usual."],
+    },
   }
 
   for regionType, switch in pairs(SWITCHES) do
-    local regionOptions = Private.regionOptions[regionType]
-    local create = regionOptions.create
+    local regionOptions = Private.regionOptions[regionType] or {}
+    local create = regionOptions.create or function() return {} end
     regionOptions.create = function(id, data)
       local result = create(id, data)
       local group = result[regionType]

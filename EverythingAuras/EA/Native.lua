@@ -37,6 +37,20 @@ local GLOW_TYPES = { buttonOverlay = true, Pixel = true, ACShine = true, Proc = 
 -- The smallest positive number, so a formatter's 0 breakpoint covers exactly 0 (Types.lua GetTimeFormatter).
 local MIN_POSITIVE = 2 ^ -1074
 local SORT_EXPIRATION = AuraContainerSortMethod and AuraContainerSortMethod.Expiration or 4
+local REGION_KINDS = { icon = "icon", aurabar = "bar", texture = "texture", text = "text", progresstexture = "progress" }
+local VARIANT_KINDS = { icon = "icon", remaining = "bar", elapsed = "bar", texture = "texture", ["text-p"] = "text",
+  ["text-s"] = "text", ["text-n"] = "text", ["fill-remaining"] = "progress", ["fill-elapsed"] = "progress",
+  ["circle-remaining"] = "progress", ["circle-elapsed"] = "progress" }
+-- Condition properties whose change Blizzard's copy of the region cannot follow.
+local REGION_LOOKS = {
+  progresstexture = { orientation = true, auraRotation = true, inverse = true, mirror = true, rotation = true,
+    crop_x = true, crop_y = true, width = true, height = true, desaturateForeground = true, desaturateBackground = true },
+  text = { fontSize = true, displayText = true },
+}
+local ORIENTATIONS = { HORIZONTAL = true, HORIZONTAL_INVERSE = true, VERTICAL = true, VERTICAL_INVERSE = true,
+  CLOCKWISE = true, ANTICLOCKWISE = true }
+local TEXTURE_COPIES = { "SetTexture", "SetAtlas", "SetTexCoord", "SetVertexColor", "SetDesaturated", "SetDesaturation",
+  "SetBlendMode" }
 
 local records = {}
 local spare = {}
@@ -71,6 +85,26 @@ local function AnyAura(trigger)
   return not trigger.useName and not trigger.useExactSpellId
 end
 
+-- Blizzard fills one placeholder per text piece, so a Text shows one %p, %s or %n with fixed words around it.
+local function TextParts(text)
+  if type(text) ~= "string" then
+    return nil
+  end
+  local first, last, symbol = text:find("%%([psn])")
+  if not first or text:sub(last + 1, last + 1):find("[%w_%.]") then
+    return nil
+  end
+  local prefix, suffix = text:sub(1, first - 1), text:sub(last + 1)
+  if prefix:find("%%") or suffix:find("%%") or symbol == "p" and (prefix .. suffix):find("[{}]") then
+    return nil
+  end
+  return symbol, prefix, suffix
+end
+
+local function IsRound(data)
+  return data.orientation == "CLOCKWISE" or data.orientation == "ANTICLOCKWISE"
+end
+
 -- A container watches one unit, so the units that clone an aura for each group member stay Everything Auras' own.
 local function UnitOf(trigger)
   local unit = trigger.unit or "player"
@@ -83,10 +117,6 @@ local function UnitOf(trigger)
     return nil
   end
   return UNITS[unit] and unit or nil
-end
-
-local function IsBar(data)
-  return data.regionType == "aurabar"
 end
 
 -- Blizzard's maxDuration is an inclusive cap on the full duration (CustomAuraContainer.lua:106-108).
@@ -119,7 +149,7 @@ end
 
 local function IsAlways(data)
   local trigger = data.triggers[1].trigger
-  return not IsBar(data) and trigger.matchesShowOn == "showAlways"
+  return data.regionType == "icon" and trigger.matchesShowOn == "showAlways"
 end
 
 -- Blizzard's icon covers Everything Auras' missing look, so that look may change only by whether the aura is found.
@@ -159,7 +189,8 @@ local function AlwaysLook(data, found)
   return look
 end
 
-local MEMBER_TEXTS = { icon = { ["%s"] = true, ["%p"] = true }, aurabar = { ["%s"] = true, ["%n"] = true, ["%p"] = true } }
+local MEMBER_TEXTS = { icon = { ["%s"] = true, ["%p"] = true }, aurabar = { ["%s"] = true, ["%n"] = true, ["%p"] = true },
+  texture = { ["%s"] = true, ["%n"] = true, ["%p"] = true }, progresstexture = { ["%s"] = true, ["%n"] = true, ["%p"] = true } }
 local GROWS = { RIGHT = true, LEFT = true, UP = true, DOWN = true, HORIZONTAL = true, VERTICAL = true, GRID = true }
 local CENTER_TYPES = { LR = true, RL = true }
 local GRID_TYPES = { RD = true, RU = true, LD = true, LU = true, DR = true, DL = true, UR = true, UL = true }
@@ -260,8 +291,8 @@ local function OnlyBlizzardParts(data)
 end
 
 local function Check(data, inGroup)
-  if data.regionType ~= "icon" and not IsBar(data) then
-    return false, L["Only an Icon or a Progress Bar can be drawn by Blizzard."]
+  if not REGION_KINDS[data.regionType] then
+    return false, L["Only an Icon, Progress Bar, Texture, Text or Progress Texture can be drawn by Blizzard."]
   end
   if type(data.triggers) ~= "table" or #data.triggers ~= 1 then
     return false, L["Needs exactly one trigger."]
@@ -294,7 +325,7 @@ local function Check(data, inGroup)
     if inGroup then
       return false, L["In a dynamic group Blizzard draws only auras set to show while found."]
     end
-    if IsBar(data) then
+    if data.regionType ~= "icon" then
       return false, L["Blizzard draws Show On Always only on icons for now."]
     end
     if not AlwaysConditions(data) then
@@ -325,6 +356,38 @@ local function Check(data, inGroup)
   end
   if changed then
     return false, L["Blizzard shows the aura's own icon and time, so it cannot follow a manual icon, Set Minimum or Maximum Progress, or a progress source other than Automatic, set directly or by a condition."]
+  end
+  local looks = REGION_LOOKS[data.regionType]
+  for _, condition in ipairs(looks and type(data.conditions) == "table" and data.conditions or {}) do
+    for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
+      if type(change) == "table" and looks[change.property] then
+        return false, L["Blizzard cannot follow a condition that changes this aura's shape, size, direction or text."]
+      end
+    end
+  end
+  if data.regionType == "text" then
+    local symbol = TextParts(data.displayText)
+    if not symbol then
+      return false, L["A Text Blizzard draws shows one %p, %s or %n with fixed words, with no custom text or other placeholders."]
+    end
+    local format = data["displayText_format_" .. symbol .. "_format"]
+    if symbol == "p" and format ~= nil and format ~= "timed" then
+      return false, L["Blizzard shows %p as a time, so its format must be Time Format."]
+    elseif symbol ~= "p" and format ~= nil and format ~= "none" then
+      return false, L["Blizzard shows %s and %n as they are, so their format must be None."]
+    end
+    if inGroup then
+      return false, L["Blizzard lays out a group by one fixed size, so a group with a Text aura stays as it is."]
+    end
+  elseif data.regionType == "progresstexture" then
+    if not ORIENTATIONS[data.orientation or "VERTICAL"] or data.slanted or data.compress or data.smoothProgress
+      or (tonumber(data.auraRotation) or 0) ~= 0 or type(data.overlays) == "table" and next(data.overlays) ~= nil then
+      return false, L["Blizzard fills a Progress Texture straight or round, without Slant, Compress, Smooth Progress, Rotation or overlays."]
+    end
+    -- A circle's crop moves its corners equally, keeping the angles (ProgressTexture.lua UpdateSecretTexCoords).
+    if IsRound(data) and (tonumber(data.crop_x) or 0.41) ~= (tonumber(data.crop_y) or 0.41) then
+      return false, L["Blizzard draws a round Progress Texture only with equal Crop X and Crop Y."]
+    end
   end
   if trigger.showClones and not inGroup then
     return false, L["Auto-Clone works only inside a dynamic group, where Blizzard lists every match."]
@@ -385,7 +448,7 @@ local function GroupQualifies(group)
       return false, L["The group has no auras."]
     end
     if not child.eaNative then
-      return false, L["Every aura in the group needs Blizzard Draws This Icon or Blizzard Draws This Bar switched on."]
+      return false, L["Every aura in the group needs its Blizzard Draws switch on, such as Blizzard Draws This Icon."]
     end
     local ok, reason = Check(child, true)
     if not ok then
@@ -427,10 +490,16 @@ end
 
 -- A duration bar's direction is set once, when it is handed to Blizzard, so each direction keeps its own buttons.
 local function Variant(data)
-  if not IsBar(data) then
-    return "icon"
+  local kind = REGION_KINDS[data.regionType] or "icon"
+  local direction = data.inverse and "elapsed" or "remaining"
+  if kind == "bar" then
+    return direction
+  elseif kind == "progress" then
+    return (IsRound(data) and "circle-" or "fill-") .. direction
+  elseif kind == "text" then
+    return "text-" .. (TextParts(data.displayText) or "p")
   end
-  return data.inverse and "elapsed" or "remaining"
+  return kind
 end
 
 local function AddId(ids, value)
@@ -564,6 +633,17 @@ local function SubText(region, format)
   end
 end
 
+-- Texts, glows and borders stack by their place in the list, as the aura's own sub-regions do (ApplyFrameLevel).
+local function FirstTextIndex(region)
+  for index, subRegion in ipairs(region.subRegions or {}) do
+    for _, takeover in ipairs(TAKEOVERS) do
+      if subRegion.type == "subtext" and subRegion.text_text == takeover.format then
+        return index
+      end
+    end
+  end
+end
+
 -- Conditions name a text by its place in the settings, which the region skips for a type this client lacks.
 local function TimerIndex(data)
   for index, settings in ipairs(type(data.subRegions) == "table" and data.subRegions or {}) do
@@ -591,11 +671,11 @@ end
 
 local formatters = {}
 -- The same time format the aura's own %p text uses (Types.lua timed CreateFormatter), or nil for Blizzard's default.
-local function TimeFormatter(settings)
+local function TimeFormatter(settings, prefix)
   if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Private.GetTimeFormatter) then
     return nil, "default"
   end
-  local prefix = "text_text_format_p_"
+  prefix = prefix or "text_text_format_p_"
   local kind = settings[prefix .. "format"]
   if kind ~= nil and kind ~= "timed" then
     return nil, "default"
@@ -619,8 +699,20 @@ local function TimeFormatter(settings)
   return formatters[key], key
 end
 
+-- Blizzard's stack count shows 2 and up unless given a format, and the aura's own %s shows 1 and up, blank at 0.
+local function CountFormatter(before, after)
+  local key = "count:" .. before .. "%d" .. after
+  if formatters[key] == nil and C_StringUtil and C_StringUtil.CreateNumericRuleFormatter then
+    local formatter = C_StringUtil.CreateNumericRuleFormatter()
+    formatter:SetBreakpoints({ { threshold = 0, format = before .. after },
+      { threshold = MIN_POSITIVE, format = before .. "%d" .. after } })
+    formatters[key] = formatter
+  end
+  return formatters[key], key
+end
+
 -- Remaining Time conditions that color or hide the %p text, the only ones Blizzard's color curve can follow.
-local function TimerSteps(data, index)
+local function TimerSteps(data, colorProperty, visibleProperty)
   local steps = {}
   for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
     local check = type(condition) == "table" and condition.check
@@ -630,9 +722,9 @@ local function TimerSteps(data, index)
     if at then
       local step = { test = test, at = at, op = check.op }
       for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
-        if type(change) == "table" and change.property == "sub." .. index .. ".text_color" and type(change.value) == "table" then
+        if type(change) == "table" and change.property == colorProperty and type(change.value) == "table" then
           step.color = change.value
-        elseif type(change) == "table" and change.property == "sub." .. index .. ".text_visible" then
+        elseif type(change) == "table" and visibleProperty and change.property == visibleProperty then
           step.visible = change.value and true or false
         end
       end
@@ -1005,7 +1097,7 @@ local function DropKit(button, kit)
   kit.host:Hide()
 end
 
-local function BuildKit(record, data, region, part, level)
+local function BuildKit(record, data, region, part)
   local settings, button = part.settings, record.button
   local x, y, w, h = Measure(part.live, region)
   if not x then
@@ -1037,7 +1129,6 @@ local function BuildKit(record, data, region, part, level)
   local key = table.concat(parts, ";")
   local kit = record.kits[part.index]
   if kit and kit.key == key then
-    kit.host:SetFrameLevel(level + 1)
     return kit
   end
   if kit then
@@ -1046,7 +1137,6 @@ local function BuildKit(record, data, region, part, level)
   local host = CreateFrame("Frame", nil, button)
   host:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", x - ex, y - ey)
   host:SetSize(w + 2 * ex, h + 2 * ey)
-  host:SetFrameLevel(level + 1)
   kit = { key = key, host = host, groups = {}, dispel = {} }
   if part.kind == "blizzard" then
     kit.groups = GLOW_BUILDERS[glowType](host, w + 2 * ex, h + 2 * ey, settings, color)
@@ -1091,7 +1181,8 @@ local function StyleLooks(record, data, region, level)
   record.kits = record.kits or {}
   local wanted, dimmed = {}, {}
   for _, part in ipairs(LookParts(data, region)) do
-    record.kits[part.index] = BuildKit(record, data, region, part, level)
+    record.kits[part.index] = BuildKit(record, data, region, part)
+    record.kits[part.index].host:SetFrameLevel(level + part.index)
     wanted[part.index] = true
     dimmed[part.index] = part.live
   end
@@ -1122,7 +1213,16 @@ local function Remaining(region)
   return expiration - GetTime()
 end
 
-local StyleTimer
+local StyleTimer, StyleText
+
+-- An outline widens every FontString by the same amount, so two joined pieces sit that much further apart than one text (probe FW).
+local function OutlinePad(piece)
+  piece:SetText("l")
+  local one = piece:GetStringWidth()
+  piece:SetText("ll")
+  local pad = 2 * (tonumber(one) or 0) - (tonumber(piece:GetStringWidth()) or 0)
+  return pad > 0 and pad or 0
+end
 
 -- A condition that colors a text Blizzard took over reaches Blizzard's copy out of combat, and holds in combat.
 local function OnTextColor(text, r, g, b, a)
@@ -1132,9 +1232,11 @@ local function OnTextColor(text, r, g, b, a)
     return
   end
   local region, data = record.region, record.data
-  if owner.key == "timer" and region and data then
-    local index = TimerIndex(data)
-    local steps = index and TimerSteps(data, index) or {}
+  local main = owner.key == "main"
+  if region and data and (owner.key == "timer" or main and record.variant == "text-p") then
+    local index = not main and TimerIndex(data)
+    local steps = main and TimerSteps(data, "color")
+      or index and TimerSteps(data, "sub." .. index .. ".text_color", "sub." .. index .. ".text_visible") or {}
     if #steps > 0 then
       local remaining = Remaining(region)
       if not remaining then
@@ -1148,15 +1250,14 @@ local function OnTextColor(text, r, g, b, a)
       record.timerBase = { r or 1, g or 1, b or 1, a or 1 }
       for _, target in ipairs(record.parts or { record }) do
         if target.button then
-          StyleTimer(target, data, region)
+          (main and StyleText or StyleTimer)(target, data, region)
         end
       end
       return
     end
   end
   for _, target in ipairs(record.parts or { record }) do
-    local widget = target.texts and target.texts[owner.key]
-    if widget then
+    for _, widget in pairs(main and target.pieces or { target.texts and target.texts[owner.key] }) do
       widget:SetTextColor(r or 1, g or 1, b or 1, a or 1)
     end
   end
@@ -1170,7 +1271,7 @@ function StyleTimer(record, data, region)
   local index, settings = TimerIndex(data)
   settings = settings or {}
   local formatter, formatKey = TimeFormatter(settings)
-  local steps = index and TimerSteps(data, index) or {}
+  local steps = index and TimerSteps(data, "sub." .. index .. ".text_color", "sub." .. index .. ".text_visible") or {}
   local curve, curveKey
   if #steps > 0 and C_CurveUtil and CreateColor then
     local owner = record.member or record
@@ -1193,7 +1294,196 @@ function StyleTimer(record, data, region)
   record.timerKey = key
 end
 
-local Style
+local function StyleTexture(record, data, region)
+  local source, art = region.texture and region.texture.texture, record.art
+  if not (source and art) then
+    return
+  end
+  local atlas = source:GetAtlas()
+  if atlas then
+    art:SetAtlas(atlas)
+  else
+    local file = source:GetTexture()
+    if file and not issecretvalue(file) then
+      art:SetTexture(file, data.textureWrapMode, data.textureWrapMode)
+    end
+  end
+  art:SetTexCoord(source:GetTexCoord())
+  art:SetVertexColor(source:GetVertexColor())
+  art:SetDesaturation(source:GetDesaturation())
+  art:SetBlendMode(source:GetBlendMode())
+end
+
+local VERTICES = { { UPPER_LEFT_VERTEX or 1, 0, 0 }, { LOWER_LEFT_VERTEX or 2, 0, 1 }, { UPPER_RIGHT_VERTEX or 3, 1, 0 },
+  { LOWER_RIGHT_VERTEX or 4, 1, 1 } }
+
+-- The point transform the aura's own progress texture uses (TextureCoords.lua TransformPoint), angles in degrees.
+local function TransformPoint(x, y, cropX, cropY, rotation, mirror, userX, userY)
+  x, y = (x - 0.5) * 1.4142 / cropX, (y - 0.5) * 1.4142 / cropY
+  if mirror then
+    x = -x
+  end
+  local cosine, sine = math.cos(math.rad(rotation)), math.sin(math.rad(rotation))
+  x, y = cosine * x - sine * y, sine * x + cosine * y
+  return x + 0.5 + userX, y + 0.5 + userY
+end
+
+-- The radial fill shares the texture's coordinates, so a circle keeps them whole and moves its corners (UpdateSecretTexCoords).
+local function Round(texture, file, w, h, look)
+  Private.SetTextureOrAtlas(texture, file, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  texture:SetTexCoord(0, 1, 0, 1)
+  local cosine, sine = math.cos(math.rad(look.rotation)), math.sin(math.rad(look.rotation))
+  local scaleX, scaleY = look.cropX / 1.4142 * (look.mirror and -1 or 1), look.cropY / 1.4142
+  for _, vertex in ipairs(VERTICES) do
+    local u, v = vertex[2] - 0.5, vertex[3] - 0.5
+    local x, y = (cosine * u + sine * v) * scaleX, (-sine * u + cosine * v) * scaleY
+    texture:SetVertexOffset(vertex[1], (x - u) * w, -(y - v) * h)
+  end
+  local origin = look.reverse and look.endAngle or look.startAngle
+  origin = look.rotation + (look.mirror and -origin or origin)
+  texture:SetRadialProgressBarStartOffset(((origin + 180) % 360) / 360)
+  texture:SetRadialProgressBarEndOffset(1 - (look.endAngle - look.startAngle) / 360)
+  texture:SetRadialProgressBarReverse(look.reverse ~= look.mirror)
+  texture:SetRadialProgressBarFeather(0)
+end
+
+local function StyleProgress(record, data, region, level)
+  local button, art, backdrop = record.button, record.art, record.backdrop
+  local w, h = tonumber(data.width) or 200, tonumber(data.height) or 200
+  local offset = tonumber(data.backgroundOffset) or 0
+  local file = region.currentTexture or data.foregroundTexture
+  local backFile = data.sameTexture and file or data.backgroundTexture
+  local startAngle, endAngle = (tonumber(data.startAngle) or 0) % 360, (tonumber(data.endAngle) or 360) % 360
+  if endAngle <= startAngle then
+    endAngle = endAngle + 360
+  end
+  local look = { cropX = 1 + (tonumber(data.crop_x) or 0.41), cropY = 1 + (tonumber(data.crop_y) or 0.41),
+    rotation = tonumber(region.effectiveTexRotation or data.rotation) or 0, mirror = data.mirror and true or false,
+    startAngle = startAngle, endAngle = endAngle, reverse = data.orientation == "ANTICLOCKWISE" }
+  local back = type(data.backgroundColor) == "table" and data.backgroundColor or {}
+  local front = type(data.foregroundColor) == "table" and data.foregroundColor or {}
+  local r, g, b, a = region:GetColor()
+  if record.variant:find("^circle") then
+    backdrop:ClearAllPoints()
+    backdrop:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -offset, -offset)
+    backdrop:SetPoint("TOPRIGHT", button, "TOPRIGHT", offset, offset)
+    backdrop:SetFrameLevel(level)
+    record.bar:SetFrameLevel(level + 1)
+    Round(art, file, w, h, look)
+    Round(record.backdropArt, backFile, w + 2 * offset, h + 2 * offset, look)
+  else
+    local orientation = data.orientation or "VERTICAL"
+    local horizontal = orientation == "HORIZONTAL" or orientation == "HORIZONTAL_INVERSE"
+    local reverse = orientation == "HORIZONTAL_INVERSE" or orientation == "VERTICAL_INVERSE"
+    local origin = horizontal and (reverse and "TOPRIGHT" or "TOPLEFT") or (reverse and "TOPLEFT" or "BOTTOMLEFT")
+    local bar = record.bar
+    bar:ClearAllPoints()
+    bar:SetPoint(origin, button, origin)
+    bar:SetSize(w, h)
+    bar:SetOrientation(horizontal and "HORIZONTAL" or "VERTICAL")
+    bar:SetReverseFill(reverse)
+    local userX, userY = -(tonumber(data.user_x) or 0), tonumber(data.user_y) or 0
+    local coords = {}
+    for _, vertex in ipairs({ { 0, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 } }) do
+      local x, y = TransformPoint(vertex[1], vertex[2], look.cropX, look.cropY, look.rotation, look.mirror, userX, userY)
+      coords[#coords + 1], coords[#coords + 2] = x, y
+    end
+    local wrap = data.textureWrapMode or "CLAMPTOBLACKADDITIVE"
+    Private.SetTextureOrAtlas(art, file, wrap, wrap)
+    art:SetTexCoord(unpack(coords))
+    Private.SetTextureOrAtlas(backdrop, backFile, wrap, wrap)
+    backdrop:SetTexCoord(unpack(coords))
+    backdrop:ClearAllPoints()
+    backdrop:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", -offset, -offset)
+    backdrop:SetPoint("TOPRIGHT", button, "TOPRIGHT", offset, offset)
+  end
+  art:SetVertexColor(r or front[1] or 1, g or front[2] or 1, b or front[3] or 1, a or front[4] or 1)
+  art:SetDesaturated(data.desaturateForeground and true or false)
+  art:SetBlendMode(data.blendMode or "BLEND")
+  local backArt = record.backdropArt
+  backArt:SetVertexColor(back[1] or 0.5, back[2] or 0.5, back[3] or 0.5, back[4] or 0.5)
+  backArt:SetDesaturated(data.desaturateBackground and true or false)
+  backArt:SetBlendMode(data.blendMode or "BLEND")
+end
+
+function StyleText(record, data, region)
+  local pieces, text, button = record.pieces, region.text, record.button
+  local symbol, before, after = TextParts(data.displayText)
+  if not (pieces and text and symbol) then
+    return
+  end
+  local hidden = record.hidden.main
+  if hidden and hidden ~= text then
+    hidden:Show()
+  end
+  record.hidden.main = text
+  textOwners[text] = { record = record, key = "main" }
+  if not hookedTexts[text] then
+    hookedTexts[text] = true
+    hooksecurefunc(text, "SetTextColor", OnTextColor)
+  end
+  local font, size, flags = text:GetFont()
+  local justify = data.justify or "LEFT"
+  for _, piece in pairs(pieces) do
+    if font then
+      piece:SetFont(font, size, flags)
+    end
+    piece:SetShadowColor(text:GetShadowColor())
+    piece:SetShadowOffset(text:GetShadowOffset())
+    piece:SetTextColor(text:GetTextColor())
+    piece:ClearAllPoints()
+  end
+  if symbol == "n" then
+    local pad = OutlinePad(pieces.after)
+    local beforePad, afterPad = before ~= "" and pad or 0, after ~= "" and pad or 0
+    pieces.before:SetText(before)
+    pieces.after:SetText(after)
+    -- The name's width is secret in combat, so the words are anchored to it rather than placed by measuring (probe 074 T2).
+    if justify == "RIGHT" then
+      pieces.after:SetPoint("RIGHT", button, "RIGHT")
+      pieces.main:SetPoint("RIGHT", pieces.after, "LEFT", afterPad, 0)
+      pieces.before:SetPoint("RIGHT", pieces.main, "LEFT", beforePad, 0)
+    else
+      pieces.before:SetPoint("LEFT", button, "LEFT")
+      pieces.main:SetPoint("LEFT", pieces.before, "RIGHT", -beforePad, 0)
+      pieces.after:SetPoint("LEFT", pieces.main, "RIGHT", -afterPad, 0)
+    end
+  else
+    pieces.before:SetText("")
+    pieces.after:SetText("")
+    pieces.main:SetPoint(justify, button, justify)
+    pieces.main:SetJustifyH(justify)
+  end
+  local key = "n"
+  if symbol == "s" then
+    local formatter
+    formatter, key = CountFormatter(before, after)
+    if record.textKey ~= key then
+      button:SetApplicationCount(pieces.main, { formatter = formatter })
+    end
+  elseif symbol == "p" then
+    local formatter, formatKey = TimeFormatter(data, "displayText_format_p_")
+    local steps = TimerSteps(data, "color")
+    local curve, curveKey
+    if #steps > 0 and C_CurveUtil and CreateColor then
+      curve, curveKey = TimerCurve(steps, record.timerBase or type(data.color) == "table" and data.color or { 1, 1, 1, 1 },
+        true)
+    end
+    key = before .. "{}" .. after .. "|" .. tostring(formatKey) .. "|" .. tostring(curveKey)
+    local property = Enum.DurationTextBindingProperty and Enum.DurationTextBindingProperty.RemainingDuration
+    if record.textKey ~= key and property and formatter then
+      local options = { textFormat = { formatString = before .. "{}" .. after,
+        components = { { property = property, formatter = formatter } } } }
+      if curve then
+        options.textColor = { curve = curve, property = property }
+      end
+      button:SetDurationText(pieces.main, options)
+    end
+  end
+  record.textKey = key
+end
+
+local Style, StyleIcon
 
 -- A group's button sits where Blizzard puts it, so a part copies its place inside the aura's own frame, not that frame.
 local function Corner(frame, point)
@@ -1218,6 +1508,60 @@ local function Relocate(widget, source, region, button)
   end
 end
 
+local function BuildProgress(record, button)
+  local direction = record.variant:find("elapsed$") and Enum.StatusBarTimerDirection.ElapsedTime
+    or Enum.StatusBarTimerDirection.RemainingTime
+  if record.variant:find("^circle") then
+    local backdrop = CreateFrame("StatusBar", nil, button)
+    backdrop:SetStatusBarTexture(SQUARE)
+    backdrop:SetRenderMode(Enum.StatusBarRenderMode.Radial)
+    backdrop:SetMinMaxValues(0, 1)
+    backdrop:SetValue(1)
+    local bar = CreateFrame("StatusBar", nil, button)
+    bar:SetAllPoints(button)
+    bar:SetStatusBarTexture(SQUARE)
+    bar:SetRenderMode(Enum.StatusBarRenderMode.Radial)
+    record.backdrop, record.backdropArt, record.bar, record.art = backdrop, backdrop:GetStatusBarTexture(), bar,
+      bar:GetStatusBarTexture()
+    button:SetDurationBar(bar, { direction = direction })
+    return
+  end
+  local backdrop = button:CreateTexture(nil, "BACKGROUND")
+  local bar = CreateFrame("StatusBar", nil, button)
+  bar:SetStatusBarTexture(SQUARE)
+  bar:SetStatusBarColor(1, 1, 1, 0)
+  -- The bar only measures the time left: its fill carries a mask over the aura's own texture (probe 074 L2).
+  local fill = CreateFrame("Frame", nil, button)
+  fill:SetAllPoints(bar:GetStatusBarTexture())
+  local holder = CreateFrame("Frame", nil, button)
+  holder:SetAllPoints(button)
+  local art = holder:CreateTexture(nil, "ARTWORK")
+  art:SetAllPoints(holder)
+  local mask = holder:CreateMaskTexture()
+  mask:SetTexture(SQUARE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE", "NEAREST")
+  mask:SetAllPoints(fill)
+  art:AddMaskTexture(mask)
+  record.backdrop, record.backdropArt, record.bar, record.art = backdrop, backdrop, bar, art
+  button:SetDurationBar(bar, { direction = direction })
+end
+
+local function BuildText(record, button)
+  local pieces = {}
+  for _, key in ipairs({ "before", "main", "after" }) do
+    pieces[key] = button:CreateFontString(nil, "OVERLAY")
+    pieces[key]:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
+    pieces[key]:SetPoint("CENTER", button, "CENTER")
+  end
+  record.pieces = pieces
+  if record.variant == "text-p" then
+    button:SetDurationText(pieces.main, {})
+  elseif record.variant == "text-s" then
+    button:SetApplicationCount(pieces.main)
+  else
+    button:SetSpellName(pieces.main)
+  end
+end
+
 -- Runs once per button, before Blizzard locks it while auras are secret, so all art is handed over here.
 local function BuildButton(record, button)
   record.button = button
@@ -1228,11 +1572,22 @@ local function BuildButton(record, button)
     button:SetAllPoints(button:GetParent())
   end
   button:EnableMouse(false)
-  local icon = button:CreateTexture(nil, "ARTWORK")
-  icon:SetAllPoints(button)
-  button:SetIcon(icon)
-  record.icon = icon
-  if record.variant == "icon" then
+  local kind = VARIANT_KINDS[record.variant] or "icon"
+  record.kind = kind
+  if kind == "icon" or kind == "bar" then
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(button)
+    button:SetIcon(icon)
+    record.icon = icon
+  end
+  if kind == "texture" then
+    record.art = button:CreateTexture(nil, "ARTWORK")
+    record.art:SetAllPoints(button)
+  elseif kind == "progress" then
+    BuildProgress(record, button)
+  elseif kind == "text" then
+    BuildText(record, button)
+  elseif kind == "icon" then
     local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
     cooldown:SetAllPoints(button)
     cooldown:SetDrawBling(false)
@@ -1250,16 +1605,20 @@ local function BuildButton(record, button)
     button:SetDurationBar(fill, { direction = direction })
     record.background, record.fill = background, fill
   end
-  local overlay = CreateFrame("Frame", nil, button)
-  overlay:SetAllPoints(button)
-  record.overlay, record.texts = overlay, {}
-  record.texts.count = NewText(overlay, button)
-  button:SetApplicationCount(record.texts.count)
-  record.texts.timer = NewText(overlay, button)
-  button:SetDurationText(record.texts.timer, {})
-  if record.variant ~= "icon" then
-    record.texts.name = NewText(overlay, button)
-    button:SetSpellName(record.texts.name)
+  record.texts = {}
+  -- A button has one count, one timer and one name, which a Text aura's own text already uses.
+  if kind ~= "text" then
+    local overlay = CreateFrame("Frame", nil, button)
+    overlay:SetAllPoints(button)
+    record.overlay = overlay
+    record.texts.count = NewText(overlay, button)
+    button:SetApplicationCount(record.texts.count, { formatter = (CountFormatter("", "")) })
+    record.texts.timer = NewText(overlay, button)
+    button:SetDurationText(record.texts.timer, {})
+    if kind ~= "icon" then
+      record.texts.name = NewText(overlay, button)
+      button:SetSpellName(record.texts.name)
+    end
   end
   -- A button built while auras are secret cannot be styled until they can be read again, so it is styled now.
   local region, data = record.region or record.member and record.member.region, record.data or record.member and record.member.data
@@ -1354,11 +1713,36 @@ local function StyleBar(record, region)
 end
 
 function Style(record, data, region)
-  local button, icon = record.button, record.icon
+  local button, icon, kind = record.button, record.icon, record.kind
   local level = record.member and record.member.group.container:GetFrameLevel() + 1 or region:GetFrameLevel()
   button:SetFrameLevel(level)
-  record.overlay:SetFrameLevel(level + 2)
+  if record.overlay then
+    record.overlay:SetFrameLevel(level + (FirstTextIndex(region) or 2))
+  end
+  if kind == "texture" then
+    StyleTexture(record, data, region)
+  elseif kind == "progress" then
+    StyleProgress(record, data, region, level)
+  elseif kind == "text" then
+    StyleText(record, data, region)
+  else
+    StyleIcon(record, data, region, icon, level)
+  end
+  for _, takeover in ipairs(TAKEOVERS) do
+    TakeOver(record, region, takeover)
+  end
+  StyleTimer(record, data, region)
+  StyleLooks(record, data, region, level)
 
+  button:EnableMouse(false)
+  if data.useTooltip then
+    button:EnableMouseMotion(true)
+    button:SetMouseClickEnabled(false)
+  end
+  record.styled = true
+end
+
+function StyleIcon(record, data, region, icon, level)
   icon:SetTexCoord(region.icon:GetTexCoord())
   if record.always then
     -- The aura's own icon shows its missing look whenever it is missing, so Blizzard's takes the found look from the settings.
@@ -1379,7 +1763,7 @@ function Style(record, data, region)
   else
     icon:SetDesaturation(region.icon:GetDesaturation())
   end
-  if record.variant == "icon" then
+  if record.kind == "icon" then
     record.cooldown:SetFrameLevel(level)
     if not record.always then
       -- A texture's alpha is its vertex color's alpha, so the color comes from the aura's setting, not its icon.
@@ -1390,18 +1774,6 @@ function Style(record, data, region)
   else
     StyleBar(record, region)
   end
-  for _, takeover in ipairs(TAKEOVERS) do
-    TakeOver(record, region, takeover)
-  end
-  StyleTimer(record, data, region)
-  StyleLooks(record, data, region, level)
-
-  button:EnableMouse(false)
-  if data.useTooltip then
-    button:EnableMouseMotion(true)
-    button:SetMouseClickEnabled(false)
-  end
-  record.styled = true
 end
 
 local function SoundFile(options)
@@ -1514,15 +1886,47 @@ local function Drawable(record)
   return not canAssist
 end
 
-local function ShowOwnParts(record, region, shown)
-  if record.variant == "icon" then
-    -- Hidden, not faded: color conditions and animations set its vertex color, which would bring the alpha back.
-    region.icon:SetShown(shown)
-  else
-    region.bar:SetShown(shown)
-    region.bar.bg:SetShown(shown)
-    region.iconFrame:SetShown(shown)
+-- Showing every part would draw the straight and the round fill together, so only its orientation's set comes back.
+local function ShowProgress(region, shown)
+  for _, part in ipairs({ "foreground", "background" }) do
+    if region[part] then
+      region[part][shown and not region.circular and "Show" or "Hide"](region[part])
+    end
   end
+  for _, part in ipairs({ "foregroundSpinner", "backgroundSpinner" }) do
+    if region[part] then
+      region[part][shown and region.circular and "Show" or "Hide"](region[part])
+    end
+  end
+end
+
+local function ShowOwnKind(kind, region, shown)
+  if kind == "icon" then
+    -- Hidden, not faded: color conditions and animations set its vertex color, which would bring the alpha back.
+    if region.icon then
+      region.icon:SetShown(shown)
+    end
+  elseif kind == "bar" then
+    if region.bar then
+      region.bar:SetShown(shown)
+      region.bar.bg:SetShown(shown)
+      region.iconFrame:SetShown(shown)
+    end
+  elseif kind == "texture" then
+    if region.texture and region.texture.texture then
+      region.texture.texture:SetShown(shown)
+    end
+  elseif kind == "text" then
+    if region.text then
+      region.text:SetShown(shown)
+    end
+  elseif kind == "progress" then
+    ShowProgress(region, shown)
+  end
+end
+
+local function ShowOwnParts(record, region, shown)
+  ShowOwnKind(record.kind or VARIANT_KINDS[record.variant], region, shown)
   for _, text in pairs(record.hidden) do
     text:SetShown(shown)
   end
@@ -1542,7 +1946,7 @@ local function SetActive(record, data, active)
     local wasDrawn = region.eaNativeOn
     region.eaNativeOn = drawn or nil
     ShowOwnParts(record, region, not drawn)
-    if record.variant == "icon" then
+    if record.kind == "icon" then
       if drawn and region.cooldown then
         region.cooldown:Hide()
       elseif wasDrawn and region.state and region.UpdateProgress then
@@ -1568,7 +1972,42 @@ local function Mirror(region)
     return
   end
   region.eaNativeMirror = true
-  for _, method in ipairs({ "SetTexCoord", "SetDesaturation", "SetDesaturated", "SetVertexColor" }) do
+  local source = region.regionType == "texture" and region.texture and region.texture.texture
+  for _, method in ipairs(source and TEXTURE_COPIES or {}) do
+    hooksecurefunc(source, method, function(_, ...)
+      local record = region.eaNativeRecord
+      if record and not Secret() then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.art then
+            pcall(target.art[method], target.art, ...)
+          end
+        end
+      end
+    end)
+  end
+  if region.regionType == "progresstexture" then
+    hooksecurefunc(region, "Color", function(self)
+      local record = region.eaNativeRecord
+      if record and not Secret() then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.art then
+            pcall(target.art.SetVertexColor, target.art, self:GetColor())
+          end
+        end
+      end
+    end)
+    hooksecurefunc(region, "SetBackgroundColor", function(_, ...)
+      local record = region.eaNativeRecord
+      if record and not Secret() then
+        for _, target in ipairs(record.parts or { record }) do
+          if target.backdropArt then
+            pcall(target.backdropArt.SetVertexColor, target.backdropArt, ...)
+          end
+        end
+      end
+    end)
+  end
+  for _, method in ipairs(region.icon and { "SetTexCoord", "SetDesaturation", "SetDesaturated", "SetVertexColor" } or {}) do
     hooksecurefunc(region.icon, method, function(_, ...)
       local record = region.eaNativeRecord
       if not record or Secret() then
@@ -1618,7 +2057,8 @@ local function NewRecord(variant)
   end
   container:Hide()
   pcall(container.SetEditModePreviewEnabled, container, false)
-  return { container = container, variant = variant, sounds = {}, soundHandles = {}, hidden = {}, dimmed = {} }
+  return { container = container, variant = variant, kind = VARIANT_KINDS[variant], sounds = {}, soundHandles = {},
+    hidden = {}, dimmed = {} }
 end
 
 -- Slots and containers cannot be removed (CustomAuraContainer.lua:641), so a freed one is reused out of combat.
@@ -1853,19 +2293,12 @@ end
 
 local function HideClone(region, drawn, variant, data)
   region.eaNativeOn = drawn or nil
-  if variant == "icon" then
-    if region.icon then
-      region.icon:SetShown(not drawn)
-    end
-    if drawn and region.cooldown then
-      region.cooldown:Hide()
-    end
-  elseif region.bar then
-    region.bar:SetShown(not drawn)
-    region.bar.bg:SetShown(not drawn)
-    region.iconFrame:SetShown(not drawn)
+  local kind = VARIANT_KINDS[variant] or "icon"
+  ShowOwnKind(kind, region, not drawn)
+  if kind == "icon" and drawn and region.cooldown then
+    region.cooldown:Hide()
   end
-  local allowed = MEMBER_TEXTS[variant == "icon" and "icon" or "aurabar"]
+  local allowed = MEMBER_TEXTS[data and data.regionType or kind == "icon" and "icon" or "aurabar"] or {}
   local list = {}
   for _, takeover in ipairs(TAKEOVERS) do
     local sub = allowed[takeover.format] and SubText(region, takeover.format)
@@ -2234,8 +2667,7 @@ local function RefreshAll(force)
   end
 end
 
-for _, regionType in ipairs({ "icon", "aurabar" }) do
-  local regionData = Private.regionTypes[regionType]
+local function WrapModify(regionData)
   local modify = regionData.modify
   regionData.modify = function(parent, region, data)
     -- Modify returns sub-regions to a shared pool, so a text Blizzard replaced must be visible again first.
@@ -2276,6 +2708,11 @@ for _, regionType in ipairs({ "icon", "aurabar" }) do
     else
       region.eaNativeWanted = nil
     end
+  end
+end
+for regionType in pairs(REGION_KINDS) do
+  if Private.regionTypes[regionType] then
+    WrapModify(Private.regionTypes[regionType])
   end
 end
 
@@ -2340,7 +2777,7 @@ Private.callbacks:RegisterCallback("Add", function(_, uid, id, data)
   if not records[uid] then
     return
   end
-  if data.regionType ~= "icon" and not IsBar(data) then
+  if not REGION_KINDS[data.regionType] then
     Release(uid)
   else
     SafeConfigure(data, EverythingAuras.GetRegion(id))

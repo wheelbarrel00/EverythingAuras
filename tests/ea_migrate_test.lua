@@ -149,7 +149,7 @@ private.EAModernize(data)
 T.expect(saved.totalOperator == "==" and saved.ownOnly == true, "auras imported before 0.5.1 are fixed too")
 T.expect(saved.useName and saved.auranames[1] == "Demon Skin" and not saved.useExactSpellId and #saved.auraspellids == 0,
   "a name stored as an exact ID moves to the names")
-T.expect(data.eaVersion == 7, "and they reach the new counter")
+T.expect(data.eaVersion == 8, "and they reach the new counter")
 
 local dispel = { type = "secretAura", debuffType = "Debuff", auraspellids = { "1" }, includeDispelTypes = { Magic = true } }
 private.EAModernize({ triggers = { { trigger = dispel } } })
@@ -480,8 +480,8 @@ warningRuns = 0
 data = { triggers = {}, eaVersion = 3, texture = "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square" }
 private.EAModernize(data)
 T.expect(data.texture == "Interface\\AddOns\\WeakAuras\\Media\\Textures\\Square", "an aura already at version 3 is not migrated again")
-T.expect(data.eaVersion == 7 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
-data = { triggers = {}, eaVersion = 7 }
+T.expect(data.eaVersion == 8 and warningRuns == 1, "only the later steps run, and its warnings are refreshed at every load")
+data = { triggers = {}, eaVersion = 9 }
 private.EAModernize(data)
-T.expect(data.eaVersion == 7, "a newer counter from a later build is never lowered")
+T.expect(data.eaVersion == 9, "a newer counter from a later build is never lowered")
 T.finish()
