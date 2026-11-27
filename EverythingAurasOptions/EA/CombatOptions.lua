@@ -3,15 +3,21 @@ if not EverythingAuras.IsLibsOK() then return end
 local OptionsPrivate = select(2, ...)
 local L = EverythingAuras.L
 
--- On Target or Focus Blizzard can refuse the unit's reaction (Native.lua Drawable), so only those are not always drawn.
+-- On Target or Focus Blizzard can refuse the unit's reaction when its slot lists spell IDs (Native.lua Drawable), so only those are not always drawn.
 local function Native(data)
   local Private = OptionsPrivate.Private
   if not (Private and Private.EANativeWanted and Private.EANativeWanted(data)) then
     return false, false
   end
   local trigger = type(data.triggers) == "table" and data.triggers[1] and data.triggers[1].trigger
-  local unit = type(trigger) == "table" and trigger.unit or "player"
-  return true, unit ~= "target" and unit ~= "focus"
+  trigger = type(trigger) == "table" and trigger or {}
+  local unit = trigger.unit or "player"
+  local ignored = false
+  for _, value in ipairs(trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" and trigger.ignoreAuraSpellids or {}) do
+    ignored = ignored or (tonumber(value) or 0) > 0
+  end
+  local anyUnit = not trigger.useName and not trigger.useExactSpellId and not ignored
+  return true, unit ~= "target" and unit ~= "focus" or anyUnit
 end
 
 local AURA_NOUNS = { aurabar = "bar", texture = "aura", text = "aura", progresstexture = "aura" }

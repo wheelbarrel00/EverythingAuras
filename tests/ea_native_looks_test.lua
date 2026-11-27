@@ -54,6 +54,8 @@ end
 function NewWidget(parent, rect)
   local widget = Object({ parent = parent, alpha = 1, visible = true, color = { 1, 1, 1 }, rect = rect })
   widget.GetParent = function(self) return self.parent end
+  widget.IsShown = function(self) return self.visible end
+  widget.GetEffectiveScale = function(self) return self.scale or 1 end
   widget.SetAlpha = function(self, alpha) self.alpha = alpha end
   widget.SetVertexColor = function(self, r, g, b, a)
     self.color = { r, g, b }
@@ -72,11 +74,15 @@ function NewWidget(parent, rect)
   widget.SetWidth = function(self, w) self.w = w end
   widget.SetPoint = function(self, point, relative, relativePoint, x, y)
     self.point, self.relative, self.relativePoint, self.x, self.y = point, relative, relativePoint or point, x or 0, y or 0
+    self.points = self.points or {}
+    self.points[point] = { relative = relative, x = x or 0, y = y or 0 }
   end
   widget.GetLeft = function(self) return self.rect and self.rect[1] end
   widget.GetBottom = function(self) return self.rect and self.rect[2] end
   widget.GetRight = function(self) return self.rect and self.rect[3] end
   widget.GetTop = function(self) return self.rect and self.rect[4] end
+  widget.GetWidth = function(self) return self.rect and self.rect[3] - self.rect[1] end
+  widget.GetHeight = function(self) return self.rect and self.rect[4] - self.rect[2] end
   widget.CreateTexture = function(self) local t = NewWidget(self) self.textures = self.textures or {} table.insert(self.textures, t) return t end
   widget.CreateFontString = function(self) return NewWidget(self) end
   widget.CreateAnimationGroup = function(self) return NewAnimationGroup(self) end
@@ -205,6 +211,7 @@ local env = setmetatable({
   GetTime = function() return world.now end,
   issecretvalue = function() return false end,
   geterrorhandler = function() return function(err) errors[#errors + 1] = err end end,
+  C_Timer = { After = function(_, callback) callback() end },
   hooksecurefunc = function(object, method, hook)
     local original = object[method]
     object[method] = function(...)
@@ -230,8 +237,11 @@ local function NewRegion(id, subSettings)
   region.GetFrameLevel = function() return 10 end
   region.GetFrameStrata = function() return "MEDIUM" end
   region.subRegions = {}
+  -- ApplyFrameLevel puts a background on the region itself and every other part at the base level plus its place.
+  local background = subSettings and subSettings[1] and subSettings[1].type == "subbackground"
   for index, settings in ipairs(subSettings or {}) do
     local live = NewWidget(region, { 100, 100, 132, 132 })
+    live.level = (background and 9 or 10) + index
     live.type = settings.type
     if settings.type == "subtext" then
       live.text_text = settings.text_text
@@ -308,7 +318,7 @@ local _, anyContainer = Add(NewAura("Any", AnyTrigger({ use_debuffClass = true, 
 local anyFilters = anyContainer.slot.options.candidateFilters
 T.expect(anyContainer.slot.filter == "HARMFUL" and anyFilters.includeSpellIDs == nil and anyFilters.includeDispelTypes.Magic,
   "built with no spell IDs, any debuff narrowed by its type")
-T.expect(anyContainer.slot.options.sortMethod == 4, "sorted so the one ending soonest shows")
+T.expect(anyContainer.slot.options.sortMethod == 5, "sorted by time left only, as the trigger picks")
 T.expect(anyContainer.shown and regions.Any.eaNativeOn, "drawn by Blizzard")
 local _, exclContainer = Add(NewAura("AnyExcl", AnyTrigger({ unit = "target", useIgnoreExactSpellId = true,
   ignoreAuraSpellids = { "5588", "x" } })))
@@ -600,8 +610,10 @@ local plainRegion, _, plainBorderButton = Add(plainBorder)
 T.expect(#plainBorderButton.dispel == 0, "a plain border needs no dispel colors")
 T.expect(plainRegion.subRegions[1].alpha == 0, "the aura's own border hides while Blizzard draws")
 local borderHost = plainRegion.eaNativeRecord.kits[1].host
-T.expect(borderHost.w == 36 and borderHost.h == 36 and borderHost.x == -2 and borderHost.y == -2,
-  "Blizzard's border covers the aura's own border frame, offset included")
+local corners = borderHost.points or {}
+T.expect(corners.BOTTOMLEFT and corners.BOTTOMLEFT.x == -2 and corners.BOTTOMLEFT.y == -2 and corners.TOPRIGHT
+  and corners.TOPRIGHT.x == 2 and corners.TOPRIGHT.y == 2,
+  "Blizzard's border covers the aura's own border frame, offset included, held by two corners so it follows the size")
 local colored4 = 0
 for _, texture in ipairs(borderHost.textures or {}) do
   if texture.colorTexture and texture.colorTexture[1] == 1 and texture.colorTexture[2] == 0 then
@@ -636,6 +648,250 @@ local skippedRegion = NewRegion("Skipped", { { type = "subborder" }, { type = "s
 modify(nil, skippedRegion, skipped)
 T.expect(skippedRegion.subRegions[2].alpha == 1 and not next(skippedRegion.eaNativeRecord.kits),
   "a sub-region type this client lacks shifts the region's list, so a mismatched place is left alone")
+
+T.section("Pre-ship scan fixes (0.7.0)")
+-- Its own function, so its locals stay under Lua 5.1's limit of 200 in one function.
+local function ScanFixes()
+local highest = Seal("Highest")
+highest.triggers[1].trigger.combineMode = "showHighest"
+T.expect(not qualifies(highest), "a named aura with a Preferred Match other than Least remaining time stays Everything Auras' own")
+
+local function AlwaysSeal(id, extra)
+  local data = Seal(id, extra)
+  data.triggers[1].trigger.matchesShowOn = "showAlways"
+  return data
+end
+local alwaysSkipped = AlwaysSeal("AlwaysSkipped")
+local skippedTrigger = alwaysSkipped.triggers[1].trigger
+skippedTrigger.use_castByPlayer, skippedTrigger.useTotal, skippedTrigger.total, skippedTrigger.totalOperator = true, true, "30", "<="
+skippedTrigger.useStacks, skippedTrigger.stacks = true, "2"
+skippedTrigger.useIgnoreExactSpellId, skippedTrigger.ignoreAuraSpellids = true, { "20154" }
+T.expect(qualifies(alwaysSkipped), "Show On Always is not refused over filters its trigger skips")
+local skippedRecord = Add(alwaysSkipped).eaNativeRecord
+local skippedFilters = skippedRecord and skippedRecord.container.slot.options.candidateFilters or {}
+T.expect(skippedRecord and skippedRecord.ids[20154] and skippedFilters.isFromPlayerOrPlayerPet == nil
+  and skippedFilters.maxDuration == nil and skippedFilters.includeSpellIDs and skippedFilters.includeSpellIDs[20154],
+  "and Blizzard gets none of them, the ignored ID included")
+skippedTrigger.useNamePattern = true
+T.expect(not qualifies(alwaysSkipped), "a name pattern still applies there, so it still refuses")
+T.expect(not qualifies(AlwaysSeal("AlwaysGlow", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })),
+  "Show On Always with an always-on glow stays Everything Auras' own, as the glow would vanish while missing")
+T.expect(not qualifies(AlwaysSeal("AlwaysBorder", { subRegions = { { type = "subborder", border_edge = "Square Full White" } } })),
+  "so does one with a border Blizzard would draw")
+T.expect(not qualifies(AlwaysSeal("AlwaysLinked", { conditions = {
+  { check = { trigger = 1, variable = "buffed", value = 0 }, changes = { { property = "alpha", value = 0.5 } } },
+  { linked = true, check = { trigger = 1, variable = "buffed", value = 1 }, changes = { { property = "alpha", value = 1 } } } } })),
+  "and one whose conditions run as else-if")
+
+local function StepTimer(id, op, at, property, value)
+  return Seal(id, { subRegions = { { type = "subtext", text_text = "%p" } },
+    conditions = { { check = { trigger = 1, variable = "expirationTime", op = op, value = at },
+      changes = { { property = property, value = value } } } } })
+end
+local mixed = StepTimer("Mixed", "<=", "10", "sub.1.text_color", { 1, 0, 0, 1 })
+local mixedRegion, _, mixedButton = Add(mixed)
+mixedRegion.state = { progressType = "timed", expirationTime = world.now + 5 }
+mixedRegion.subRegions[1]:Hide()
+local mixedPoints = LastTimer(mixedButton).textColor.curve.points
+T.expect(mixedPoints[1].color.a == 0 and mixedPoints[#mixedPoints].color.a == 0,
+  "another condition hiding the timer reaches Blizzard's while a step only colors it")
+local veiled = StepTimer("Veiled", "<=", "3", "sub.1.text_visible", false)
+local veiledRegion, _, veiledButton = Add(veiled)
+veiledRegion.state = { progressType = "timed", expirationTime = world.now + 2 }
+veiledRegion.subRegions[1].text:SetTextColor(0, 1, 0, 1)
+local veiledPoints = LastTimer(veiledButton).textColor.curve.points
+T.expect(veiledPoints[#veiledPoints].color.g == 1 and veiledPoints[#veiledPoints].color.r == 0,
+  "and another condition's color reaches it while a step only hides it")
+local fadeA = StepTimer("FadeA", "<=", "10", "sub.1.text_color", { 1, 0, 0, 1 })
+local fadeRegion = Add(fadeA)
+fadeRegion.state = { progressType = "timed", expirationTime = world.now + 30 }
+fadeRegion.subRegions[1]:Hide()
+local fadeRecord = fadeRegion.eaNativeRecord
+T.expect(fadeRecord.timerVisible == false, "a hidden timer is remembered")
+private.callbacks.events.Delete[1](nil, "FadeA")
+local fadeBRegion = Add(StepTimer("FadeB", "<=", "10", "sub.1.text_color", { 1, 0, 0, 1 }))
+T.expect(fadeBRegion.eaNativeRecord == fadeRecord and fadeRecord.timerVisible == nil,
+  "a freed record taken by the next aura forgets it")
+
+local editing = Seal("Editing", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+Add(editing)
+world.paused = true
+editing.subRegions[2] = { type = "subtext", text_text = "%p" }
+local editingRegion = NewRegion("Editing", editing.subRegions)
+modify(nil, editingRegion, editing)
+local editingRecord = editingRegion.eaNativeRecord
+local editingKits = 0
+for _ in pairs(editingRecord.kitCache[1]) do
+  editingKits = editingKits + 1
+end
+T.expect(editingRecord.texts.timer.alpha == 1 and editingKits == 1,
+  "with the options open a new %p text is handed to Blizzard at once, while glows wait")
+world.paused = false
+T.expect(qualifies(AlwaysSeal("AlwaysFirstLinked", { conditions = {
+  { linked = true, check = { trigger = 1, variable = "buffed", value = 0 }, changes = { { property = "alpha", value = 0.5 } } } } })),
+  "the first condition is never else-if, so a stray mark on it changes nothing")
+
+local reuse = Seal("Reuse", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+local reuseRegion, _, reuseButton = Add(reuse)
+local reuseRecord = reuseRegion.eaNativeRecord
+local firstKit = reuseRecord.kits[1]
+reuse.subRegions[1].glowLines = 4
+modify(nil, reuseRegion, reuse)
+local secondKit = reuseRecord.kits[1]
+T.expect(secondKit ~= firstKit and not firstKit.host.visible and #reuseButton.shownGroups == 1,
+  "a changed glow puts the old one aside")
+reuse.subRegions[1].glowLines = nil
+modify(nil, reuseRegion, reuse)
+T.expect(reuseRecord.kits[1] == firstKit and firstKit.host.visible and #reuseButton.shownGroups == 1
+  and reuseButton.shownGroups[1] == firstKit.groups[1], "and the old look comes back as the same kit, not a new one")
+reuseRegion.scalex = 1.5
+reuseRegion.subRegions[1].rect = { 100, 100, 148, 148 }
+modify(nil, reuseRegion, reuse)
+T.expect(reuseRecord.kits[1] == firstKit, "while a scale animation runs, the glow keeps the kit it has")
+reuse.subRegions[1].glowLines = 6
+modify(nil, reuseRegion, reuse)
+T.expect(reuseRecord.kits[1] ~= firstKit, "but a changed look still gets its own")
+reuseRegion.scalex = 1
+reuseRegion.subRegions[1].rect = { 100, 100, 132, 132 }
+reuse.subRegions[1].glowLines = nil
+
+local grown = Seal("Grown", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+local grownRegion = Add(grown)
+local grownRecord = grownRegion.eaNativeRecord
+local smallKit = grownRecord.kits[1]
+local function Resized(rect)
+  grownRegion.rect, grownRegion.subRegions[1].rect = rect, rect
+  for _, call in ipairs(grownRegion.calls.HookScript or {}) do
+    if call[1] == "OnSizeChanged" then
+      call[2](grownRegion)
+    end
+  end
+end
+Resized({ 100, 100, 148, 148 })
+T.expect(grownRecord.kits[1] ~= smallKit, "a condition that resizes the aura gets Blizzard's glow built again at the new size")
+Resized({ 100, 100, 132, 132 })
+T.expect(grownRecord.kits[1] == smallKit, "and back at the old size it gets the old glow back")
+local styles, timers = 0, 0
+local enableMouse, after = grownRecord.button.EnableMouse, env.C_Timer.After
+grownRecord.button.EnableMouse = function(...)
+  styles = styles + 1
+  return enableMouse(...)
+end
+env.C_Timer.After = function(...)
+  timers = timers + 1
+  return after(...)
+end
+Resized({ 100, 100, 132, 132 })
+T.expect(styles == 0, "a size change event with the same size restyles nothing")
+timers = 0
+grownRegion.scalex = 1.4
+Resized({ 100, 100, 145, 145 })
+T.expect(grownRecord.kits[1] == smallKit and timers == 0 and styles == 0, "a scale animation's resizing schedules and builds nothing")
+grownRegion.scalex = 1
+grownRecord.button.EnableMouse, env.C_Timer.After = enableMouse, after
+
+local slider = Seal("Slider", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+local sliderRegion = Add(slider)
+local sliderRecord = sliderRegion.eaNativeRecord
+world.paused = true
+for lines = 2, 6 do
+  slider.subRegions[1].glowLines = lines
+  modify(nil, sliderRegion, slider)
+end
+local built = 0
+for _ in pairs(sliderRecord.kitCache[1]) do
+  built = built + 1
+end
+T.expect(built == 1, "dragging a slider with the options open builds nothing")
+world.paused = false
+private.callbacks.events.ScanForLoads[1]()
+T.expect(sliderRecord.kits[1].key:find(";6;", 1, true) ~= nil, "closing the options styles it once, with the last value")
+
+local scaledRegion = NewRegion("Scaled", {})
+scaledRegion.scale = 1.5
+modify(nil, scaledRegion, Seal("Scaled"))
+local setScale = scaledRegion.eaNativeRecord.container.calls.SetScale
+T.expect(setScale and setScale[#setScale][1] == 1.5, "a standalone aura's container takes the aura's own scale, as a group's does")
+
+local based = Seal("Based", { subRegions = { { type = "subtext", text_text = "%p" } },
+  conditions = { { check = { trigger = 1, variable = "expirationTime", op = "<=", value = "10" },
+    changes = { { property = "sub.1.text_color", value = { 1, 0, 0, 1 } } } } } })
+local basedRegion, _, basedButton = Add(based)
+basedRegion.state = { progressType = "timed", expirationTime = world.now + 30 }
+basedRegion.subRegions[1].text:SetTextColor(0, 1, 0, 1)
+local function TopColor(button)
+  local points = LastTimer(button).textColor.curve.points
+  return points[#points].color
+end
+T.expect(TopColor(basedButton).g == 1 and TopColor(basedButton).r == 0, "another condition's color is the timer's above the step")
+private.callbacks.events.ScanForLoads[1]()
+T.expect(TopColor(basedButton).g == 1 and TopColor(basedButton).r == 0, "and stays after a refresh, such as the one when a fight ends")
+local timerSets = #basedButton.timerOptions
+basedRegion.subRegions[1].text:SetTextColor(0, 1, 0, 1)
+T.expect(#basedButton.timerOptions == timerSets, "the same color again changes nothing, so a color animation costs nothing")
+
+local made = 0
+local makeCurve = env.C_CurveUtil.CreateColorCurve
+env.C_CurveUtil.CreateColorCurve = function()
+  made = made + 1
+  return makeCurve()
+end
+private.callbacks.events.ScanForLoads[1]()
+T.expect(made == 0, "a refresh that changes nothing builds no color curve")
+env.C_CurveUtil.CreateColorCurve = makeCurve
+local fading = Seal("Fading", { subRegions = { { type = "subtext", text_text = "%p" } },
+  conditions = { { check = { trigger = 1, variable = "expirationTime", op = "<=", value = "5" },
+    changes = { { property = "sub.1.text_visible", value = false } } } } })
+local fadingRegion = NewRegion("Fading", fading.subRegions)
+fadingRegion.subRegions[1].visible = false
+modify(nil, fadingRegion, fading)
+T.expect(fadingRegion.eaNativeRecord.texts.timer.alpha == 1,
+  "a timer a Remaining Time step hides right now stays visible, since its color curve does the hiding")
+
+local quiet = Seal("Quiet", { subRegions = { { type = "subtext", text_text = "%s" } } })
+local quietRegion = NewRegion("Quiet", quiet.subRegions)
+quietRegion.subRegions[1].visible = false
+modify(nil, quietRegion, quiet)
+local quietCount = quietRegion.eaNativeRecord.texts.count
+T.expect(quietCount.alpha == 0, "a text hidden by its settings stays hidden on Blizzard's side")
+quietRegion.subRegions[1]:Show()
+T.expect(quietCount.alpha == 1, "shown by a condition out of combat, Blizzard's copy shows too")
+quietRegion.subRegions[1]:Hide()
+T.expect(quietCount.alpha == 0, "and hides again with it")
+world.secret = true
+quietRegion.subRegions[1]:Show()
+T.expect(quietCount.alpha == 0, "in combat it holds")
+world.secret = false
+
+local pixelPerfect = Seal("PixelPerfect", { subRegions = { { type = "subborder", border_edge = "Square Full White",
+  border_ppscale = true } } })
+local ppRegion = Add(pixelPerfect)
+T.expect(not next(ppRegion.eaNativeRecord.kits) and ppRegion.subRegions[1].alpha == 1, "a pixel perfect border stays the aura's own")
+
+local combatEdit = Seal("CombatEdit", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+local editRegion = Add(combatEdit)
+world.secret = true
+modify(nil, editRegion, combatEdit)
+T.expect(editRegion.subRegions[1].alpha == 0, "an edit in combat keeps the aura's own glow hidden behind Blizzard's")
+world.secret = false
+
+local swapped = Seal("Swapped", { subRegions = { { type = "subglow", glow = true, glowType = "Pixel" } } })
+local swappedRegion = Add(swapped)
+world.secret = true
+swapped.subRegions[1].glowType = "Proc"
+modify(nil, swappedRegion, swapped)
+T.expect(swappedRegion.subRegions[1].alpha == 1,
+  "a glow changed while its kit cannot be rebuilt keeps showing the aura's own, since Blizzard's has the old look")
+world.secret = false
+
+local anyStore = NewAura("AnyStore", { type = "aura2", unit = "player", debuffType = "HARMFUL" })
+local anyRegion = Add(anyStore)
+anyRegion.states = { { show = true, spellId = 25771 } }
+private.RunConditions(anyRegion, "AnyStore")
+T.expect(anyStore.eaNativeIds == nil, "an aura that names no spell keeps no spell IDs")
+
+end
+ScanFixes()
 
 T.section("Restoring before a modify")
 pixelRegion.subRegions[1].alpha = 0

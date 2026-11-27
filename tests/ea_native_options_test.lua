@@ -22,6 +22,7 @@ local corePrivate = {
   regionOptions = {
     icon = { create = function() return { icon = { color = { order = 1 } } } end },
     aurabar = { create = function() return { aurabar = { texture = { order = 1 } } } end },
+    text = { create = function() return { text = { displayText = { order = 1 } } } end },
   },
   EANativeQualifies = function()
     if qualifies then
@@ -93,6 +94,13 @@ data.triggers[1].trigger.useTotal = true
 T.expect(option.desc():find("missing look", 1, true) and option.desc():find("lasts until canceled", 1, true),
   "Show On Always and a Total Time limit each add their note (0.7.0)")
 data.triggers[1].trigger.matchesShowOn, data.triggers[1].trigger.useTotal = nil, nil
+T.expect(option.desc():find("except on an aura that names no spell or shows always", 1, true),
+  "the sound sentence names the auras whose sounds stay their own (0.7.0 scan)")
+T.expect(option.desc():find("a named buff only on friendly units", 1, true), "the reaction rule is for named auras")
+T.expect(not option.desc():find("never ends last", 1, true), "one named aura gets no note about which aura shows")
+data.triggers[1].trigger.useName = nil
+T.expect(option.desc():find("never ends last", 1, true), "an aura that names none says which one Blizzard shows")
+data.triggers[1].trigger.useName = true
 T.expect(option.disabled == nil, "never disabled, so its tooltip always shows (a disabled checkbox gets no mouse-over in game)")
 qualifies = false
 T.expect(option.name():find("(not available)", 1, true) and option.name():find("^|cff808080"), "unavailable: gray label marked not available")
@@ -122,6 +130,11 @@ T.expect(barOption.desc():find("%n or %p", 1, true) and barOption.desc():find("%
   and barOption.desc():find("on by default", 1, true), "its tooltip names the texts Blizzard fills and the default")
 Fire("Add", "Bar", "Bar", barData)
 T.expect(table.concat(barData.eaNativeIds or {}, ",") == "21082", "a bar stores its ranks too")
+local textOption = corePrivate.regionOptions.text and corePrivate.regionOptions.text.create("Words",
+  { regionType = "text", triggers = { { trigger = { useName = true, auranames = { "Seal of Righteousness" } } } } }).text
+textOption = textOption and textOption.eaNative
+T.expect(textOption and not textOption.desc():find("%s becomes", 1, true) and not textOption.desc():find("Square Full White", 1, true),
+  "a Text's tooltip leaves out sub-texts, glows and borders, which a Text cannot have")
 
 T.section("Rank IDs from the spell cache")
 data.eaNative = true

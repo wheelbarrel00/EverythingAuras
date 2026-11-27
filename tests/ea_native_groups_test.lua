@@ -32,6 +32,7 @@ end
 local function NewWidget(parent)
   local widget = Object({ parent = parent, alpha = 1, visible = true, color = { 1, 1, 1 } })
   widget.GetParent = function(self) return self.parent end
+  widget.IsShown = function(self) return self.visible end
   widget.SetAlpha = function(self, alpha) self.alpha = alpha end
   widget.SetVertexColor = function(self, r, g, b, a) self.color = { r, g, b }; self.alpha = a or 1 end
   widget.GetVertexColor = function(self) return self.color[1], self.color[2], self.color[3], self.alpha end
@@ -205,7 +206,9 @@ local function NewRegion(id, regionType)
   text.GetPoint = function() return "BOTTOMRIGHT", region, "BOTTOMRIGHT", -2, 2 end
   text.GetLeft, text.GetBottom, text.GetRight, text.GetTop = function() return 120 end,
     function() return 202 end, function() return 130 end, function() return 214 end
-  region.subRegions = { { type = "subtext", text_text = "%s", text = text } }
+  local sub = NewWidget(region)
+  sub.type, sub.text_text, sub.text = "subtext", "%s", text
+  region.subRegions = { sub }
   region.countText = text
   regions[id] = region
   return region
@@ -336,7 +339,7 @@ T.expect(container.groups[keyA] and container.groups[keyB], "one Blizzard aura g
 local layoutA, layoutB = container.groups[keyA].options.layout, container.groups[keyB].options.layout
 T.expect(layoutA.layoutIndex == 1 and layoutB.layoutIndex == 2 and layoutA.elementSpacing == 4
   and layoutA.elementWidth == 32, "in list order, with the group's spacing and the auras' size")
-T.expect(container.groups[keyA].options.maxFrameCount == 1 and container.groups[keyA].options.sortMethod == 4,
+T.expect(container.groups[keyA].options.maxFrameCount == 1 and container.groups[keyA].options.sortMethod == 5,
   "one aura each, by time left")
 T.expect(Last(container, "SetFlowLayoutAxis")[1] == 0 and Last(container, "SetFlowLayoutGrowthDirection")[1] == 1
   and Last(container, "SetFlowLayoutAnchorPoint")[1] == "TOPLEFT", "grow Right: a row from the top left")
@@ -448,12 +451,61 @@ Modify(group)
 T.expect(container.groups[keyB].options.maxFrameCount == math.huge, "an Auto-Clone aura becomes a list showing every match")
 T.expect(clone.eaNativeOn and not clone.icon.visible and not clone.countText.visible, "its own clones step aside")
 T.expect(cloneGlow.alpha == 0, "with their always-on glow, which Blizzard draws on each button")
+clone.state = { progressType = "timed" }
+clone.UpdateProgress = function(self) self.swipeBack = true end
 world.paused = true
 Modify(group)
 T.expect(clone.icon.visible and not clone.eaNativeOn and cloneGlow.alpha == 1, "paused: the clones draw themselves, glow too")
+T.expect(clone.swipeBack, "and their own swipe comes back")
 world.paused = false
 Modify(group)
 auras.B.subRegions[3].glow = false
+
+T.section("Pre-ship scan fixes (0.7.0)")
+local limitGroup = Group("LG", { "ListOnly" }, { useLimit = true, limit = 3 })
+Member("ListOnly", "LG", nil, { type = "aura2", unit = "player", debuffType = "HELPFUL", showClones = true })
+T.expect(qualifies(auras.ListOnly), "one Auto-Clone aura under a Limit qualifies")
+private.loaded.ListOnly = true
+Modify(limitGroup)
+local limitContainer = world.created[#world.created]
+T.expect(limitContainer.groups["ListOnly:icon"] and limitContainer.groups["ListOnly:icon"].options.maxFrameCount == 3,
+  "and Blizzard's list stops at the Limit")
+Member("Beside", "LG")
+limitGroup.controlledChildren = { "ListOnly", "Beside" }
+T.expect(not qualifies(auras.ListOnly), "with another aura beside it the Limit cannot be kept, so the group stays as it is")
+
+local screenGroup = Group("UG", { "U1" }, { anchorFrameType = "UIPARENT" })
+Member("U1", "UG")
+T.expect(qualifies(auras.U1), "a group anchored to Screen (UIParent) is laid out by Blizzard too")
+
+local sizeGroup = Group("SG", { "Grows" })
+Member("Grows", "SG", { conditions = { { check = { trigger = 1, variable = "stacks", op = ">", value = "1" },
+  changes = { { property = "width", value = 40 } } } } })
+T.expect(not qualifies(auras.Grows), "a condition that resizes a member keeps the group as it is")
+
+local resizeGroup = Group("RG", { "R1" })
+Member("R1", "RG")
+private.loaded.R1 = true
+Modify(resizeGroup)
+local resizeMember = regions.R1.eaNativeRecord
+auras.R1.width, auras.R1.height = 40, 40
+Modify(resizeGroup)
+local resized = resizeMember.parts[1] and resizeMember.parts[1].button
+T.expect(resized and resized.width == 40 and resized.height == 40, "resizing a group's auras resizes Blizzard's buttons")
+
+local lateGroup = Group("Late", { "Early", "LateChild" })
+Member("Early", "Late")
+Member("LateChild", "Late")
+regions.LateChild = nil
+private.loaded.Early, private.loaded.LateChild = true, true
+Modify(lateGroup)
+local lateContainer = world.created[#world.created]
+T.expect(lateContainer.groups["Early:icon"] and not lateContainer.groups["LateChild:icon"],
+  "a child with no region yet gets no list, since its buttons would be built unstyled")
+NewRegion("LateChild")
+Modify(auras.LateChild)
+T.expect(lateContainer.groups["LateChild:icon"] and regions.LateChild.eaNativeRecord.parts[1].styled ~= false,
+  "its list is added once its region exists, and styled as it is built")
 
 T.section("Delete and failure")
 private.callbacks:Fire("Delete", "G")

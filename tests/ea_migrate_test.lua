@@ -289,10 +289,17 @@ local grid = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFl
 row(grid, { {}, {}, {} })
 T.expect(dynamicAs(grid, "GRID", "BOTTOMRIGHT") and grid.gridType == "LU" and grid.gridWidth == 2 and grid.rowSpace == 5
   and grid.columnSpace == 6, "a grid keeps its direction, row width and spacing")
-local odd = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowGridType = "HV" }
+local odd = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowGridType = "ZZ" }
 row(odd, { {} })
 T.expect(odd.gridType == "RD" and odd.selfPoint == "TOPLEFT" and odd.gridWidth == 6,
   "a grid code dynamic groups lack falls back to right, then down")
+local holding = { blizzardFlowOrigin = "group" }
+row(holding, { {}, { regionType = "group", controlledChildren = {} } })
+T.expect(holding.regionType == "group" and not holding.eaFlowDynamic and holding.eaFlowLaidOut,
+  "one holding a group stays a group laid out as a row, since a dynamic group cannot hold a group")
+local centeredGrid = { blizzardFlowOrigin = "group", blizzardFlowGrid = true, blizzardFlowGridType = "HV" }
+row(centeredGrid, { {} })
+T.expect(centeredGrid.gridType == "HV" and centeredGrid.selfPoint == "CENTER", "a centered grid keeps its code and starts from the center")
 local limited = { blizzardFlowOrigin = "group", blizzardFlowUseLimit = true, blizzardFlowLimit = 3 }
 row(limited, { {}, {} })
 T.expect(limited.useLimit == true and limited.limit == 3, "its limit carries over")

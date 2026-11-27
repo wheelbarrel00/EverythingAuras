@@ -69,7 +69,7 @@ T.expect(has(status(data, { unit = "multi" }), "not available"), "multi-target n
 T.section("Icons Blizzard draws (0.3.0)")
 corePrivate.EANativeWanted = function(d) return d.eaNative == true end
 local function NativeData(unit)
-  return { eaNative = true, triggers = { { trigger = { unit = unit } } } }
+  return { eaNative = true, triggers = { { trigger = { unit = unit, useExactSpellId = true, auraspellids = { "6673" } } } } }
 end
 local unsureOption = options.commonOptions.PositionOptions("Seal", NativeData("player")).eaUnsureDisplay
 T.expect(unsureOption.disabled == nil and unsureOption.name():find("(not used)", 1, true)
@@ -81,6 +81,13 @@ T.expect(options.commonOptions.PositionOptions("Seal", {}).eaUnsureDisplay.name(
 local targetLine = status(NativeData("target"), { unit = "target", debuffType = "HARMFUL", useExactSpellId = true, auraspellids = { "6673" } })
 T.expect(targetLine:find("exact where Blizzard draws this icon", 1, true) and targetLine:find("Otherwise it is last known", 1, true),
   "the status line on Target says where it is exact")
+local unnamed = { eaNative = true, triggers = { { trigger = { unit = "target" } } } }
+T.expect(status(unnamed, { unit = "target", debuffType = "HARMFUL" }):find("In combat: exact. Blizzard draws this icon.", 1, true),
+  "an aura on Target that names no spell is drawn on any unit, so it is always exact")
+local blankIgnore = { eaNative = true, triggers = { { trigger = { unit = "target", useIgnoreExactSpellId = true,
+  ignoreAuraSpellids = { "" } } } } }
+T.expect(status(blankIgnore, { unit = "target", debuffType = "HARMFUL" }):find("In combat: exact. Blizzard draws this icon.", 1, true),
+  "a blank ignore list excludes nothing, as Blizzard's slot sees it")
 local nativeLine = status(NativeData("player"), { unit = "player", debuffType = "HELPFUL", useExactSpellId = true, auraspellids = { "6673" } })
 T.expect(has(nativeLine, "In combat: exact. Blizzard draws this icon.") and not has(nativeLine, "last known"),
   "an aura Blizzard draws says so instead of last known")

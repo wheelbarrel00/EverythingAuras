@@ -54,6 +54,8 @@ end
 function NewWidget(parent, rect)
   local widget = Object({ parent = parent, alpha = 1, visible = true, color = { 1, 1, 1 }, rect = rect })
   widget.GetParent = function(self) return self.parent end
+  widget.IsShown = function(self) return self.visible end
+  widget.GetEffectiveScale = function(self) return self.scale or 1 end
   widget.SetAlpha = function(self, alpha) self.alpha = alpha end
   widget.SetVertexColor = function(self, r, g, b, a)
     self.color = { r, g, b }
@@ -77,6 +79,8 @@ function NewWidget(parent, rect)
   widget.GetBottom = function(self) return self.rect and self.rect[2] end
   widget.GetRight = function(self) return self.rect and self.rect[3] end
   widget.GetTop = function(self) return self.rect and self.rect[4] end
+  widget.GetWidth = function(self) return self.rect and self.rect[3] - self.rect[1] end
+  widget.GetHeight = function(self) return self.rect and self.rect[4] - self.rect[2] end
   widget.CreateTexture = function(self) local t = NewWidget(self) self.textures = self.textures or {} table.insert(self.textures, t) return t end
   widget.CreateFontString = function(self) return NewWidget(self) end
   widget.CreateAnimationGroup = function(self) return NewAnimationGroup(self) end
@@ -235,6 +239,7 @@ local env = setmetatable({
     IsLibsOK = function() return true end,
     IsForever = function() return true end,
     SafeToNumber = function(v) return tonumber(v) end,
+    ReplaceRaidMarkerSymbols = function(text) return (text:gsub("{rt1}", "|Tstar|t")) end,
     L = setmetatable({}, { __index = function(_, key) return key end }),
     GetData = function(id) return auras[id] end,
     GetRegion = function(id) return regions[id] end,
@@ -543,6 +548,16 @@ local before = #world.created
 stackText.displayText = "Stacks: %p"
 AddKind(stackText)
 T.expect(#world.created == before + 1, "a text that changes placeholder gets a button built for it")
+
+local centered = Kind("text", { displayText = "Up: %n is up", justify = "CENTER" })
+local _, _, _, centerRecord = AddKind(centered)
+local centerMain = centerRecord.pieces.main.points.CENTER
+T.expect(centerMain and centerMain.x == -4 and centerRecord.pieces.before.points.RIGHT.x == 3
+  and centerRecord.pieces.after.points.LEFT.x == -3,
+  "centered, the name is placed so the whole line is centered, by the widths of the words around it")
+local marked = Kind("text", { displayText = "{rt1} %n" })
+local _, _, _, markedRecord = AddKind(marked)
+T.expect(markedRecord.pieces.before.text == "|Tstar|t ", "raid marker codes in the words become their icons, as in the aura's own text")
 
 T.section("Stack count from 1 (round 4 Q7)")
 local counted = Seal("Counted", { subRegions = { { type = "subtext", text_text = "%s" } } })

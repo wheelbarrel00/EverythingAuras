@@ -41,6 +41,8 @@ end
 local function NewWidget(parent)
   local widget = Object({ parent = parent, alpha = 1, visible = true, color = { 1, 1, 1 } })
   widget.GetParent = function(self) return self.parent end
+  widget.IsShown = function(self) return self.visible end
+  widget.GetEffectiveScale = function(self) return self.scale or 1 end
   widget.SetAlpha = function(self, alpha) self.alpha = alpha end
   widget.SetVertexColor = function(self, r, g, b, a)
     Record(self, "SetVertexColor", r, g, b, a)
@@ -376,7 +378,9 @@ T.expect(container.shown and #world.created == before, "switched on again: the s
 
 T.section("Stack count (0.5.0, decision 24)")
 local text = NewWidget(region)
-region.subRegions = { { type = "subtext", text_text = "%s", text = text } }
+local countSub = NewWidget(region)
+countSub.type, countSub.text_text, countSub.text = "subtext", "%s", text
+region.subRegions = { countSub }
 Add(data)
 T.expect(button.countWidget and button.countWidget.alpha == 1 and not text.visible, "Blizzard's count takes over the aura's %s text")
 region.subRegions = {}
@@ -650,7 +654,8 @@ events.scripts.OnEvent(events, "UNIT_PET", "player")
 T.expect(petContainer.unit == "pet" and Count(petContainer, "UpdateAllAuras") == petCalls + 1, "a new pet refreshes pet slots")
 
 local function SubText(region, format)
-  local sub = { type = "subtext", text_text = format, color_r = 1, color_g = 0.5, color_b = 0, color_a = 1 }
+  local sub = NewWidget(region)
+  sub.type, sub.text_text, sub.color_r, sub.color_g, sub.color_b, sub.color_a = "subtext", format, 1, 0.5, 0, 1
   sub.text = NewWidget(region)
   sub.text.GetFont = function() return "font", 14, "OUTLINE" end
   sub.text.GetShadowColor = function() return 0, 0, 0, 1 end
@@ -900,5 +905,49 @@ private.callbacks:Fire("ScanForLoads")
 T.expect(under.visible, "loaded again: the missing look is back")
 private.callbacks:Fire("Delete", "Always")
 T.expect(not under.visible, "deleted: the missing look goes too")
+T.section("Pre-ship scan fixes (0.7.0)")
+local fallbackOk, fallbackReason = qualifies(NewAura("Fallback", { type = "aura2", unit = "target", debuffType = "HARMFUL",
+  useExactSpellId = true, auraspellids = { "853" }, unitExists = true }))
+T.expect(not fallbackOk and fallbackReason:find("Show If Unit Does Not Exist", 1, true),
+  "Show If Unit Does Not Exist stays Everything Auras' own, and says why")
+world.units.target = "enemy"
+local alwaysTarget = NewAura("AlwaysTarget", { type = "aura2", unit = "target", debuffType = "HARMFUL",
+  useExactSpellId = true, auraspellids = { "853" }, matchesShowOn = "showAlways" })
+private.loaded.AlwaysTarget = true
+local targetRegion = NewRegion("AlwaysTarget")
+modify(nil, targetRegion, alwaysTarget)
+local targetUnder = targetRegion.eaNativeRecord.under
+T.expect(targetUnder and targetUnder.visible, "Show On Always on Target: the missing look shows while there is a target")
+world.units.target = nil
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(not targetUnder.visible, "and goes with the target, as the trigger shows nothing then")
+world.units.target = "enemy"
+events.scripts.OnEvent(events, "PLAYER_TARGET_CHANGED")
+T.expect(targetUnder.visible, "and comes back with the next one")
+private.callbacks:Fire("Delete", "AlwaysTarget")
+
+local unset = NewAura("AlwaysUnset", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true,
+  auraspellids = { "20154" }, matchesShowOn = "showAlways" })
+unset.conditions = { { check = { trigger = 1, variable = "buffed" }, changes = { { property = "alpha", value = 0.3 } } } }
+private.loaded.AlwaysUnset = true
+local unsetRegion = NewRegion("AlwaysUnset")
+modify(nil, unsetRegion, unset)
+T.expect(unsetRegion.eaNativeRecord.under.alpha == 1,
+  "a condition with no value picked never applies, so the missing look leaves it out too")
+private.callbacks:Fire("Delete", "AlwaysUnset")
+
+local tipAura = NewAura("TipAura", { type = "aura2", unit = "player", debuffType = "HELPFUL", useExactSpellId = true,
+  auraspellids = { "20154" } }, { useTooltip = true })
+private.loaded.TipAura = true
+local tipRegion = NewRegion("TipAura")
+tipRegion.tooltipFrame = NewWidget(tipRegion)
+modify(nil, tipRegion, tipAura)
+auras.TipGroup = { id = "TipGroup", uid = "TipGroup", regionType = "dynamicgroup", sort = "ascending",
+  controlledChildren = { "TipAura" } }
+tipAura.parent = "TipGroup"
+modify(nil, tipRegion, tipAura)
+T.expect(Last(tipRegion.tooltipFrame, "EnableMouseMotion")[1] == true,
+  "moved into a group Blizzard cannot lay out, its own Tooltip on Mouseover stays on")
+
 T.expect(#errors == 0, "no errors at all" .. (errors[1] and (": " .. tostring(errors[1])) or ""))
 T.finish()

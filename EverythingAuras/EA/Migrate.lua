@@ -145,13 +145,18 @@ local DYNAMIC_POINTS = { RIGHT = "TOPLEFT", LEFT = "TOPRIGHT", UP = "BOTTOMLEFT"
   VERTICAL = "LEFT" }
 local GRID_POINTS = { RU = "BOTTOMLEFT", UR = "BOTTOMLEFT", LU = "BOTTOMRIGHT", UL = "BOTTOMRIGHT", RD = "TOPLEFT",
   DR = "TOPLEFT", LD = "TOPRIGHT", DL = "TOPRIGHT", HD = "TOP", HU = "BOTTOM", VR = "LEFT", VL = "RIGHT", DH = "TOP",
-  UH = "BOTTOM", LV = "RIGHT", RV = "LEFT" }
+  UH = "BOTTOM", LV = "RIGHT", RV = "LEFT", HV = "CENTER", VH = "CENTER" }
 
 -- A dynamic group closes gaps itself, and Blizzard can lay it out in combat (decision 27).
 local function ConvertModernGroup(group, members)
   if group.regionType ~= "group" or group.blizzardFlow ~= true or FLOW_FRAMES[group.blizzardFlowFrames or ""]
     or #members == 0 then
-    return
+    return false
+  end
+  for _, member in ipairs(members) do
+    if type(member.controlledChildren) == "table" then
+      return false
+    end
   end
   local spacing = tonumber(group.blizzardFlowSpacing) or 2
   local grow, point
@@ -180,6 +185,14 @@ local function ConvertModernGroup(group, members)
   group.useLimit = group.blizzardFlowUseLimit and true or false
   group.limit = tonumber(group.blizzardFlowLimit) or 5
   group.eaFlowDynamic = true
+  return true
+end
+
+-- A dynamic group cannot hold a group (EverythingAuras.lua SyncParentChildRelationships), so such a one keeps the fixed row.
+local function ConvertOrLayout(group, members)
+  if not ConvertModernGroup(group, members) then
+    LayoutModernRow(group, members)
+  end
 end
 
 -- Members that no longer share one place were arranged by hand after an earlier import, so they stay.
@@ -235,10 +248,10 @@ function Private.EANormalizeImport(data, children)
       end
     end
     if EverythingAuras.IsForever() then
-      ConvertModernGroup(data, ChildrenOf(data, byId))
+      ConvertOrLayout(data, ChildrenOf(data, byId))
       for _, child in ipairs(children) do
         if type(child) == "table" and child.regionType == "group" then
-          ConvertModernGroup(child, ChildrenOf(child, byId))
+          ConvertOrLayout(child, ChildrenOf(child, byId))
         end
       end
     end

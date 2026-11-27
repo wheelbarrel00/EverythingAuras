@@ -36,12 +36,13 @@ local PLAIN_EDGES = { ["Square Full White"] = true }
 local GLOW_TYPES = { buttonOverlay = true, Pixel = true, ACShine = true, Proc = true }
 -- The smallest positive number, so a formatter's 0 breakpoint covers exactly 0 (Types.lua GetTimeFormatter).
 local MIN_POSITIVE = 2 ^ -1074
-local SORT_EXPIRATION = AuraContainerSortMethod and AuraContainerSortMethod.Expiration or 4
+-- Expiration puts your own auras first (AuraUtil.lua), while the trigger picks the least time left, an aura that never ends aside.
+local SORT_TIME_LEFT = AuraContainerSortMethod and (AuraContainerSortMethod.ExpirationOnly or AuraContainerSortMethod.Expiration) or 5
 local REGION_KINDS = { icon = "icon", aurabar = "bar", texture = "texture", text = "text", progresstexture = "progress" }
 local VARIANT_KINDS = { icon = "icon", remaining = "bar", elapsed = "bar", texture = "texture", ["text-p"] = "text",
   ["text-s"] = "text", ["text-n"] = "text", ["fill-remaining"] = "progress", ["fill-elapsed"] = "progress",
   ["circle-remaining"] = "progress", ["circle-elapsed"] = "progress" }
--- Condition properties whose change Blizzard's copy of the region cannot follow.
+-- Blizzard's copy keeps the shape it was given out of combat, so a condition may not change these.
 local REGION_LOOKS = {
   progresstexture = { orientation = true, auraRotation = true, inverse = true, mirror = true, rotation = true,
     crop_x = true, crop_y = true, width = true, height = true, desaturateForeground = true, desaturateBackground = true },
@@ -54,7 +55,6 @@ local TEXTURE_COPIES = { "SetTexture", "SetAtlas", "SetTexCoord", "SetVertexColo
 
 local records = {}
 local spare = {}
--- Dynamic groups Blizzard lays out, by the group's uid, and their members, by the member's uid.
 local groups, members = {}, {}
 local wrappers = setmetatable({}, { __mode = "k" })
 
@@ -83,6 +83,11 @@ end
 -- A trigger that names no aura matches any aura of its kind, as a slot with no spell IDs does (probe P6).
 local function AnyAura(trigger)
   return not trigger.useName and not trigger.useExactSpellId
+end
+
+-- With Show On Always and no Auto-Clone the trigger skips every filter but Own Only and the name pattern (BuffTrigger2.lua CanHaveMatchCheck).
+local function MatchCheck(trigger)
+  return trigger.matchesShowOn ~= "showAlways" or trigger.showClones and true or false
 end
 
 -- Blizzard fills one placeholder per text piece, so a Text shows one %p, %s or %n with fixed words around it.
@@ -154,9 +159,10 @@ end
 
 -- Blizzard's icon covers Everything Auras' missing look, so that look may change only by whether the aura is found.
 local function AlwaysConditions(data)
-  for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
+  for index, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
     local check = type(condition) == "table" and condition.check
-    if type(check) ~= "table" or check.trigger ~= 1 or check.variable ~= "buffed" or check.checks ~= nil then
+    if type(check) ~= "table" or check.trigger ~= 1 or check.variable ~= "buffed" or check.checks ~= nil
+      or condition.linked and index > 1 then
       return false
     end
     for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
@@ -173,7 +179,8 @@ local function AlwaysLook(data, found)
   local look = { desaturate = data.desaturate and true or false, r = color[1] or 1, g = color[2] or 1,
     b = color[3] or 1, a = color[4] or 1, alpha = tonumber(data.alpha) or 1 }
   for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
-    if (tonumber(condition.check.value) == 1) == found then
+    local value = tonumber(condition.check.value)
+    if value ~= nil and (value == 1) == found then
       for _, change in ipairs(type(condition.changes) == "table" and condition.changes or {}) do
         local value = change.value
         if change.property == "desaturate" then
@@ -194,7 +201,7 @@ local MEMBER_TEXTS = { icon = { ["%s"] = true, ["%p"] = true }, aurabar = { ["%s
 local GROWS = { RIGHT = true, LEFT = true, UP = true, DOWN = true, HORIZONTAL = true, VERTICAL = true, GRID = true }
 local CENTER_TYPES = { LR = true, RL = true }
 local GRID_TYPES = { RD = true, RU = true, LD = true, LU = true, DR = true, DL = true, UR = true, UL = true }
-local GROUP_ANCHORS = { SCREEN = true, SELECTFRAME = true }
+local GROUP_ANCHORS = { SCREEN = true, UIPARENT = true, SELECTFRAME = true }
 
 local function SubChanges(data, index)
   local prefix, list = "sub." .. index .. ".", {}
@@ -220,7 +227,7 @@ local function GlowKind(data, index)
   return GLOW_TYPES[sub.glowType or "buttonOverlay"] and "blizzard" or "own"
 end
 
--- Debuff Type conditions become the colors Blizzard picks by the aura's dispel type, later conditions winning.
+-- Blizzard picks a strip's color by the aura's dispel type, so only Debuff Type tests can carry over.
 local function DispelColors(data, index)
   local sub = data.subRegions[index]
   local colors = {}
@@ -246,13 +253,24 @@ end
 
 local function BorderKind(data, index)
   local sub = data.subRegions[index]
-  if not PLAIN_EDGES[sub.border_edge or "Square Full White"] then
+  -- A pixel perfect border ignores its parent's scale (Border.lua modify), so it cannot be measured against the aura.
+  if not PLAIN_EDGES[sub.border_edge or "Square Full White"] or sub.border_ppscale then
     return "own"
   end
   if #SubChanges(data, index) == 0 then
     return sub.border_visible ~= false and "plain" or nil
   end
   return sub.border_visible ~= false and DispelColors(data, index) and "dispel" or "own"
+end
+
+local function HasBlizzardLooks(data)
+  for index, sub in ipairs(type(data.subRegions) == "table" and data.subRegions or {}) do
+    if type(sub) == "table" and (sub.type == "subglow" and GlowKind(data, index) == "blizzard"
+      or sub.type == "subborder" and (BorderKind(data, index) == "plain" or BorderKind(data, index) == "dispel")) then
+      return true
+    end
+  end
+  return false
 end
 
 -- Blizzard places a group's buttons itself, so any part it does not draw would stay where Everything Auras put the aura.
@@ -305,6 +323,9 @@ local function Check(data, inGroup)
   if not unit then
     return false, L["Works on Player, Target, Focus, Pet, or a Specific Unit from party1 to party4 or raid1 to raid40."]
   end
+  if unit ~= "player" and trigger.unitExists then
+    return false, L["Blizzard draws nothing while the unit is not there, so Show If Unit Does Not Exist must be off."]
+  end
   local debuffType = trigger.debuffType or "HELPFUL"
   if debuffType ~= "HELPFUL" and debuffType ~= "HARMFUL" then
     return false, L["Needs Buff or Debuff, not both."]
@@ -331,6 +352,9 @@ local function Check(data, inGroup)
     if not AlwaysConditions(data) then
       return false, L["With Show On Always, Blizzard draws the icon over its missing look, so conditions may only change Desaturate, Color or Alpha by Aura(s) Found."]
     end
+    if HasBlizzardLooks(data) then
+      return false, L["With Show On Always, an always-on glow or a border would vanish while the aura is missing, so Everything Auras draws this icon."]
+    end
   elseif showOn ~= "showOnActive" then
     return false, L["Needs Show On set to Aura(s) Found."]
   end
@@ -338,13 +362,12 @@ local function Check(data, inGroup)
     if showOn ~= "showOnActive" then
       return false, L["An aura that names none needs Show On set to Aura(s) Found."]
     end
-    -- One slot sorted by expiration shows the aura ending soonest, the trigger's default pick.
-    if not trigger.showClones and (trigger.combineMode or "showLowest") ~= "showLowest" then
-      return false, L["Blizzard shows the aura that ends soonest, so Preferred Match must be Least remaining time."]
-    end
     if restricted and trigger.useIgnoreExactSpellId then
       return false, L["Blizzard cannot ignore spell IDs on debuffs on you, your pet or your group."]
     end
+  end
+  if not trigger.showClones and (trigger.combineMode or "showLowest") ~= "showLowest" then
+    return false, L["Blizzard shows the aura that ends soonest, so Preferred Match must be Least remaining time."]
   end
   -- Blizzard shows only the aura's own icon and time, and Everything Auras hides its own while Blizzard draws.
   local progressSource = type(data.progressSource) == "table" and data.progressSource[1] or -1
@@ -365,6 +388,13 @@ local function Check(data, inGroup)
       end
     end
   end
+  for _, condition in ipairs(inGroup and type(data.conditions) == "table" and data.conditions or {}) do
+    for _, change in ipairs(type(condition) == "table" and type(condition.changes) == "table" and condition.changes or {}) do
+      if type(change) == "table" and (change.property == "width" or change.property == "height") then
+        return false, L["Blizzard lays out a group by one fixed size, so a condition may not change an aura's width or height."]
+      end
+    end
+  end
   if data.regionType == "text" then
     local symbol = TextParts(data.displayText)
     if not symbol then
@@ -382,7 +412,7 @@ local function Check(data, inGroup)
   elseif data.regionType == "progresstexture" then
     if not ORIENTATIONS[data.orientation or "VERTICAL"] or data.slanted or data.compress or data.smoothProgress
       or (tonumber(data.auraRotation) or 0) ~= 0 or type(data.overlays) == "table" and next(data.overlays) ~= nil then
-      return false, L["Blizzard fills a Progress Texture straight or round, without Slant, Compress, Smooth Progress, Rotation or overlays."]
+      return false, L["Blizzard fills a Progress Texture straight or round, without Slanted, Compress, Smooth Progress, Rotation or overlays."]
     end
     -- A circle's crop moves its corners equally, keeping the angles (ProgressTexture.lua UpdateSecretTexCoords).
     if IsRound(data) and (tonumber(data.crop_x) or 0.41) ~= (tonumber(data.crop_y) or 0.41) then
@@ -393,15 +423,16 @@ local function Check(data, inGroup)
     return false, L["Auto-Clone works only inside a dynamic group, where Blizzard lists every match."]
   end
   if inGroup and not OnlyBlizzardParts(data) then
-    return false, L["In a dynamic group Blizzard places each aura itself, so the aura may show only what Blizzard draws: a text that shows only %s or %p (or %n on a bar), a glow that is always on, and a Square Full White border, plain or colored by Debuff Type."]
+    return false, L["In a dynamic group Blizzard places each aura itself, so the aura may show only what Blizzard draws: a text that shows only %s or %p (or %n on anything but an icon), a glow that is always on, and a Square Full White border, plain or colored by Debuff Type."]
   end
-  local filtered = trigger.fetchTooltip and (trigger.use_tooltip or trigger.use_tooltipValue)
+  local matchCheck = MatchCheck(trigger)
+  local filtered = matchCheck and trigger.fetchTooltip and (trigger.use_tooltip or trigger.use_tooltipValue)
   for _, key in ipairs(FLAG_FILTERS) do
-    filtered = filtered or trigger[key]
+    filtered = filtered or (matchCheck or key == "useNamePattern") and trigger[key]
   end
   local _, totalOk = TotalLimit(trigger)
   local _, dispelOk = DispelTypes(trigger)
-  if filtered or not totalOk or not dispelOk then
+  if filtered or matchCheck and (not totalOk or not dispelOk) then
     return false, L["Blizzard cannot apply some of this trigger's filters: stacks, remaining time, name patterns, ignored names, a Total Time other than <=, or the Enrage and None debuff types."]
   end
   if not any and not HasSpells(trigger) then
@@ -429,7 +460,7 @@ local function GroupQualifies(group)
     return false, L["Blizzard cannot stagger a group's auras."]
   end
   if not GROUP_ANCHORS[group.anchorFrameType or "SCREEN"] or group.useAnchorPerUnit then
-    return false, L["The group must be anchored to the screen or a frame, not to nameplates, unit frames or the mouse."]
+    return false, L["The group must be anchored to the screen or a frame, not to nameplates, unit frames, the Personal Resource Display, the mouse or a custom anchor."]
   end
   if group.border then
     return false, L["Blizzard cannot draw the group's border."]
@@ -438,10 +469,11 @@ local function GroupQualifies(group)
   if #children == 0 then
     return false, L["The group has no auras."]
   end
-  if group.useLimit and (tonumber(group.limit) or 0) < #children then
+  local limit = group.useLimit and tonumber(group.limit) or nil
+  if limit and limit < #children then
     return false, L["Blizzard cannot limit the whole group, so its Limit must be at least its number of auras."]
   end
-  local first
+  local first, clones
   for _, id in ipairs(children) do
     local child = EverythingAuras.GetData(id)
     if type(child) ~= "table" then
@@ -461,6 +493,10 @@ local function GroupQualifies(group)
     if UnitOf(child.triggers[1].trigger) ~= UnitOf(first.triggers[1].trigger) then
       return false, L["Every aura in the group must watch the same unit."]
     end
+    clones = clones or child.triggers[1].trigger.showClones
+  end
+  if limit and clones and #children > 1 then
+    return false, L["Blizzard limits each aura's list, not the whole group, so a group with a Limit may hold an Auto-Clone aura only as its one aura."]
   end
   return true
 end
@@ -537,7 +573,7 @@ local function SpellIds(data)
     end
   end
   -- The slot only ever matches the IDs listed here, so leaving one out ignores it exactly.
-  if trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" then
+  if MatchCheck(trigger) and trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" then
     for _, value in ipairs(trigger.ignoreAuraSpellids) do
       local id = tonumber(value)
       if id then
@@ -588,6 +624,9 @@ end
 
 local function CandidateFilters(trigger, ids)
   local any = AnyAura(trigger)
+  if not MatchCheck(trigger) then
+    return { includeSpellIDs = not any and ids or nil }
+  end
   local filters = { includeSpellIDs = not any and ids or nil, maxDuration = (TotalLimit(trigger)),
     includeDispelTypes = (DispelTypes(trigger)) }
   if any and trigger.useIgnoreExactSpellId and type(trigger.ignoreAuraSpellids) == "table" then
@@ -633,12 +672,17 @@ local function SubText(region, format)
   end
 end
 
--- Texts, glows and borders stack by their place in the list, as the aura's own sub-regions do (ApplyFrameLevel).
-local function FirstTextIndex(region)
-  for index, subRegion in ipairs(region.subRegions or {}) do
+-- Texts, glows and borders stack like the aura's own sub-regions, whose levels ApplyFrameLevel sets by their place.
+local function LevelOffset(sub, region)
+  local own, base = sub:GetFrameLevel(), region:GetFrameLevel()
+  return math.max(1, (tonumber(own) or 0) - (tonumber(base) or 0))
+end
+
+local function FirstTextOffset(region)
+  for _, subRegion in ipairs(region.subRegions or {}) do
     for _, takeover in ipairs(TAKEOVERS) do
       if subRegion.type == "subtext" and subRegion.text_text == takeover.format then
-        return index
+        return LevelOffset(subRegion, region)
       end
     end
   end
@@ -670,7 +714,7 @@ local function CeilFormatter(precision, threshold)
 end
 
 local formatters = {}
--- The same time format the aura's own %p text uses (Types.lua timed CreateFormatter), or nil for Blizzard's default.
+-- Blizzard formats the timer itself, so it gets a formatter built from the aura's own %p settings (Types.lua timed).
 local function TimeFormatter(settings, prefix)
   if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Private.GetTimeFormatter) then
     return nil, "default"
@@ -711,7 +755,7 @@ local function CountFormatter(before, after)
   return formatters[key], key
 end
 
--- Remaining Time conditions that color or hide the %p text, the only ones Blizzard's color curve can follow.
+-- A color curve reads nothing but the time left, so only Remaining Time tests can become one.
 local function TimerSteps(data, colorProperty, visibleProperty)
   local steps = {}
   for _, condition in ipairs(type(data.conditions) == "table" and data.conditions or {}) do
@@ -749,8 +793,8 @@ local function StepAt(steps, value, base, baseVisible)
   return color, visible
 end
 
--- Each condition applies over a stretch of time left, in list order like the aura's own conditions.
-local function TimerCurve(steps, base, baseVisible)
+-- Later conditions in the aura's own list win, so each stretch of time left takes the last step that covers it.
+local function TimerPoints(steps, base, baseVisible)
   local starts, seen = { 0 }, { [0] = true }
   for _, step in ipairs(steps) do
     if step.at > 0 and not seen[step.at] then
@@ -759,16 +803,24 @@ local function TimerCurve(steps, base, baseVisible)
     end
   end
   table.sort(starts)
-  local curve, parts = C_CurveUtil.CreateColorCurve(), {}
-  curve:SetType(Enum.LuaCurveType.Step)
+  local points, parts = {}, {}
   for i, start in ipairs(starts) do
     local stop = starts[i + 1]
     local color, visible = StepAt(steps, stop and (start + stop) / 2 or start + 1, base, baseVisible)
     local alpha = visible and (color[4] or 1) or 0
-    curve:AddPoint(start, CreateColor(color[1] or 1, color[2] or 1, color[3] or 1, alpha))
+    points[#points + 1] = { start, color[1] or 1, color[2] or 1, color[3] or 1, alpha }
     parts[#parts + 1] = string.format("%s=%s,%s,%s,%s", start, color[1] or 1, color[2] or 1, color[3] or 1, alpha)
   end
-  return curve, table.concat(parts, ";")
+  return points, table.concat(parts, ";")
+end
+
+local function TimerCurve(points)
+  local curve = C_CurveUtil.CreateColorCurve()
+  curve:SetType(Enum.LuaCurveType.Step)
+  for _, point in ipairs(points) do
+    curve:AddPoint(point[1], CreateColor(point[2], point[3], point[4], point[5]))
+  end
+  return curve
 end
 
 local function StyleCooldown(cooldown, data)
@@ -1086,7 +1138,7 @@ local function Measure(source, region)
   end
 end
 
-local function DropKit(button, kit)
+local function ParkKit(button, kit)
   for _, group in ipairs(kit.groups) do
     pcall(group.Stop, group)
     pcall(button.RemoveAuraShownAnimation, button, group)
@@ -1097,6 +1149,40 @@ local function DropKit(button, kit)
   kit.host:Hide()
 end
 
+local function UseKit(button, kit)
+  kit.host:Show()
+  for _, group in ipairs(kit.groups) do
+    button:AddAuraShownAnimation(group)
+    -- Blizzard starts these only when the aura appears, and it may already be showing.
+    if not Secret() then
+      pcall(group.Play, group)
+    end
+  end
+  for _, strip in ipairs(kit.dispel) do
+    button:AddDispelTypeTexture(strip, kit.options)
+  end
+end
+
+-- Frames cannot be destroyed, so a kit put aside is kept by its size and look and used again when both come back.
+local function LookKey(data, part)
+  local settings = part.settings
+  local color = settings.useGlowColor and type(settings.glowColor) == "table" and settings.glowColor or nil
+  local parts = { part.kind, ColorText(color), ColorText(settings.border_color) }
+  for _, field in ipairs(LOOK_FIELDS) do
+    parts[#parts + 1] = tostring(settings[field])
+  end
+  local colors = part.kind == "dispel" and DispelColors(data, part.index)
+  local entries = {}
+  for name, value in pairs(colors or {}) do
+    entries[#entries + 1] = name .. "=" .. ColorText(value)
+  end
+  table.sort(entries)
+  for _, entry in ipairs(entries) do
+    parts[#parts + 1] = entry
+  end
+  return table.concat(parts, ";"), colors
+end
+
 local function BuildKit(record, data, region, part)
   local settings, button = part.settings, record.button
   local x, y, w, h = Measure(part.live, region)
@@ -1105,8 +1191,10 @@ local function BuildKit(record, data, region, part)
   end
   local glowType = settings.glowType or "buttonOverlay"
   local color = settings.useGlowColor and type(settings.glowColor) == "table" and settings.glowColor or nil
-  local ex, ey = 0, 0
-  if part.kind == "blizzard" then
+  local glow = part.kind == "blizzard"
+  local ex, ey, right, top = 0, 0, 0, 0
+  local geometry
+  if glow then
     local xo, yo = tonumber(settings.glowXOffset) or 0, tonumber(settings.glowYOffset) or 0
     if glowType == "buttonOverlay" then
       ex, ey = w * 0.2, h * 0.2
@@ -1115,57 +1203,59 @@ local function BuildKit(record, data, region, part)
     else
       ex, ey = xo, yo
     end
+    geometry = string.format("%.1f:%.1f:%.1f:%.1f", x, y, w, h)
+  else
+    local regionWidth, regionHeight = region:GetWidth(), region:GetHeight()
+    right, top = x + w - (tonumber(regionWidth) or w), y + h - (tonumber(regionHeight) or h)
+    geometry = string.format("%.1f:%.1f:%.1f:%.1f", x, y, right, top)
   end
-  local parts = { part.kind, string.format("%.1f:%.1f:%.1f:%.1f", x, y, w, h), ColorText(color),
-    ColorText(settings.border_color) }
-  for _, field in ipairs(LOOK_FIELDS) do
-    parts[#parts + 1] = tostring(settings[field])
+  local look, colors = LookKey(data, part)
+  local key = geometry .. ";" .. look
+  local current = record.kits[part.index]
+  if current and current.key == key then
+    return current
   end
-  local colors = part.kind == "dispel" and DispelColors(data, part.index)
-  for key, value in pairs(colors or {}) do
-    parts[#parts + 1] = key .. "=" .. ColorText(value)
+  if current then
+    ParkKit(button, current)
   end
-  table.sort(parts, function(a, b) return a < b end)
-  local key = table.concat(parts, ";")
-  local kit = record.kits[part.index]
-  if kit and kit.key == key then
-    return kit
-  end
-  if kit then
-    DropKit(button, kit)
-  end
-  local host = CreateFrame("Frame", nil, button)
-  host:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", x - ex, y - ey)
-  host:SetSize(w + 2 * ex, h + 2 * ey)
-  kit = { key = key, host = host, groups = {}, dispel = {} }
-  if part.kind == "blizzard" then
-    kit.groups = GLOW_BUILDERS[glowType](host, w + 2 * ex, h + 2 * ey, settings, color)
-    for _, group in ipairs(kit.groups) do
-      button:AddAuraShownAnimation(group)
-      -- Blizzard starts these only when the aura appears, and it may already be showing.
-      if not Secret() then
-        pcall(group.Play, group)
+  record.kitCache = record.kitCache or {}
+  local cache = record.kitCache[part.index] or {}
+  record.kitCache[part.index] = cache
+  local kit = cache[key]
+  if not kit then
+    local host = CreateFrame("Frame", nil, button)
+    kit = { key = key, look = look, host = host, groups = {}, dispel = {} }
+    if glow then
+      host:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", x - ex, y - ey)
+      host:SetSize(w + 2 * ex, h + 2 * ey)
+      kit.groups = GLOW_BUILDERS[glowType](host, w + 2 * ex, h + 2 * ey, settings, color)
+    else
+      -- Held by two corners, a border follows the aura's size by itself.
+      host:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", x, y)
+      host:SetPoint("TOPRIGHT", button, "TOPRIGHT", right, top)
+      local strips = Strips(host, tonumber(settings.border_size) or 2)
+      if part.kind == "plain" then
+        local border = type(settings.border_color) == "table" and settings.border_color or {}
+        for _, strip in ipairs(strips) do
+          strip:SetColorTexture(border[1] or 1, border[2] or 1, border[3] or 1, border[4] or 1)
+        end
+      else
+        local map = {}
+        for name, value in pairs(colors) do
+          map[name] = CreateColor(value[1] or 1, value[2] or 1, value[3] or 1, value[4] or 1)
+        end
+        -- PreserveAsset keeps the strip's texture and colors it by the aura's dispel type, buffs too (probe 073).
+        kit.options = { style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset, showWhenHarmful = true,
+          showWhenHelpful = true, showWithoutDispelType = true, customDispelColorMap = map }
+        for _, strip in ipairs(strips) do
+          strip:SetTexture(SQUARE)
+        end
+        kit.dispel = strips
       end
     end
-  elseif part.kind == "plain" then
-    local border = type(settings.border_color) == "table" and settings.border_color or {}
-    for _, strip in ipairs(Strips(host, tonumber(settings.border_size) or 2)) do
-      strip:SetColorTexture(border[1] or 1, border[2] or 1, border[3] or 1, border[4] or 1)
-    end
-  else
-    local map = {}
-    for name, value in pairs(colors) do
-      map[name] = CreateColor(value[1] or 1, value[2] or 1, value[3] or 1, value[4] or 1)
-    end
-    -- PreserveAsset keeps the strip's texture and colors it by the aura's dispel type, buffs too (probe 073).
-    local options = { style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset, showWhenHarmful = true,
-      showWhenHelpful = true, showWithoutDispelType = true, customDispelColorMap = map }
-    for _, strip in ipairs(Strips(host, tonumber(settings.border_size) or 2)) do
-      strip:SetTexture(SQUARE)
-      button:AddDispelTypeTexture(strip, options)
-      kit.dispel[#kit.dispel + 1] = strip
-    end
+    cache[key] = kit
   end
+  UseKit(button, kit)
   return kit
 end
 
@@ -1176,19 +1266,45 @@ local function DimLooks(owner, drawn)
   end
 end
 
+local function Animated(region)
+  return math.abs(tonumber(region.scalex) or 1) ~= 1 or math.abs(tonumber(region.scaley) or 1) ~= 1
+end
+
+local function SizeKey(region)
+  local width, height = region:GetWidth(), region:GetHeight()
+  return string.format("%.1fx%.1f", tonumber(width) or 0, tonumber(height) or 0)
+end
+
+-- While the kits cannot be rebuilt, the aura's own glow or border stays wherever Blizzard has none with its look.
+local function DimMatching(owner, kits, data, region)
+  for _, part in ipairs(LookParts(data, region)) do
+    local kit = kits and kits[part.index]
+    if kit and kit.look == LookKey(data, part) then
+      owner.dimmed[part.index] = part.live
+    end
+  end
+end
+
 local function StyleLooks(record, data, region, level)
   local owner = record.member or record
   record.kits = record.kits or {}
+  record.lookSize = SizeKey(region)
+  -- A scale animation resizes the aura every frame, so meanwhile its kits keep the size they were built at.
+  local animated = Animated(region)
   local wanted, dimmed = {}, {}
   for _, part in ipairs(LookParts(data, region)) do
-    record.kits[part.index] = BuildKit(record, data, region, part)
-    record.kits[part.index].host:SetFrameLevel(level + part.index)
+    local kit = record.kits[part.index]
+    if not (animated and kit and kit.look == LookKey(data, part)) then
+      kit = BuildKit(record, data, region, part)
+      record.kits[part.index] = kit
+    end
+    kit.host:SetFrameLevel(level + LevelOffset(part.live, region))
     wanted[part.index] = true
     dimmed[part.index] = part.live
   end
   for index, kit in pairs(record.kits) do
     if not wanted[index] then
-      DropKit(record.button, kit)
+      ParkKit(record.button, kit)
       record.kits[index] = nil
     end
   end
@@ -1224,7 +1340,7 @@ local function OutlinePad(piece)
   return pad > 0 and pad or 0
 end
 
--- A condition that colors a text Blizzard took over reaches Blizzard's copy out of combat, and holds in combat.
+-- Blizzard's copy cannot see the aura's conditions, so their colors reach it through the aura's own text, out of combat only.
 local function OnTextColor(text, r, g, b, a)
   local owner = textOwners[text]
   local record = owner and owner.record
@@ -1243,11 +1359,15 @@ local function OnTextColor(text, r, g, b, a)
         return
       end
       for _, step in ipairs(steps) do
-        if step.test(remaining, step.at) then
+        if step.color and step.test(remaining, step.at) then
           return
         end
       end
-      record.timerBase = { r or 1, g or 1, b or 1, a or 1 }
+      local base, old = { r or 1, g or 1, b or 1, a or 1 }, record.timerBase
+      if old and old[1] == base[1] and old[2] == base[2] and old[3] == base[3] and old[4] == base[4] then
+        return
+      end
+      record.timerBase = base
       for _, target in ipairs(record.parts or { record }) do
         if target.button then
           (main and StyleText or StyleTimer)(target, data, region)
@@ -1256,9 +1376,57 @@ local function OnTextColor(text, r, g, b, a)
       return
     end
   end
+  local hidden = owner.sub and not owner.sub:IsShown()
   for _, target in ipairs(record.parts or { record }) do
     for _, widget in pairs(main and target.pieces or { target.texts and target.texts[owner.key] }) do
       widget:SetTextColor(r or 1, g or 1, b or 1, a or 1)
+      -- Should a text's color alpha reach it, a text its settings hide must still stay hidden.
+      if hidden then
+        widget:SetAlpha(0)
+      end
+    end
+  end
+end
+
+local hookedSubs = setmetatable({}, { __mode = "k" })
+
+-- Blizzard's copy cannot see Show Text or a condition either, so visibility reaches it the same way, out of combat only.
+local function OnTextVisible(sub, visible)
+  local owner = sub.text and textOwners[sub.text]
+  local record = owner and owner.record
+  if not record or Secret() or record.hidden[owner.key] ~= sub.text then
+    return
+  end
+  local region, data = record.region, record.data
+  if owner.key == "timer" and region and data then
+    local index = TimerIndex(data)
+    local steps = index and TimerSteps(data, "sub." .. index .. ".text_color", "sub." .. index .. ".text_visible") or {}
+    if #steps > 0 then
+      local remaining = Remaining(region)
+      if not remaining then
+        return
+      end
+      for _, step in ipairs(steps) do
+        if step.visible ~= nil and step.test(remaining, step.at) then
+          return
+        end
+      end
+      if record.timerVisible == visible then
+        return
+      end
+      record.timerVisible = visible
+      for _, target in ipairs(record.parts or { record }) do
+        if target.button then
+          StyleTimer(target, data, region)
+        end
+      end
+      return
+    end
+  end
+  for _, target in ipairs(record.parts or { record }) do
+    local widget = target.texts and target.texts[owner.key]
+    if widget then
+      widget:SetAlpha(visible and 1 or 0)
     end
   end
 end
@@ -1272,11 +1440,17 @@ function StyleTimer(record, data, region)
   settings = settings or {}
   local formatter, formatKey = TimeFormatter(settings)
   local steps = index and TimerSteps(data, "sub." .. index .. ".text_color", "sub." .. index .. ".text_visible") or {}
-  local curve, curveKey
+  local points, curveKey
   if #steps > 0 and C_CurveUtil and CreateColor then
     local owner = record.member or record
     local base = owner.timerBase or type(settings.text_color) == "table" and settings.text_color or { 1, 1, 1, 1 }
-    curve, curveKey = TimerCurve(steps, base, settings.text_visible ~= false)
+    local visible = owner.timerVisible
+    if visible == nil then
+      visible = settings.text_visible ~= false
+    end
+    points, curveKey = TimerPoints(steps, base, visible)
+    -- The curve hides the timer itself, so the text stays visible.
+    timer:SetAlpha(1)
   end
   local key = tostring(formatKey) .. "|" .. tostring(curveKey)
   if record.timerKey == key then
@@ -1287,8 +1461,8 @@ function StyleTimer(record, data, region)
   if formatter and property then
     options.textFormat = { formatString = "{}", components = { { property = property, formatter = formatter } } }
   end
-  if curve and property then
-    options.textColor = { curve = curve, property = property }
+  if points and property then
+    options.textColor = { curve = TimerCurve(points), property = property }
   end
   record.button:SetDurationText(timer, options)
   record.timerKey = key
@@ -1412,6 +1586,7 @@ function StyleText(record, data, region)
   if not (pieces and text and symbol) then
     return
   end
+  before, after = EverythingAuras.ReplaceRaidMarkerSymbols(before), EverythingAuras.ReplaceRaidMarkerSymbols(after)
   local hidden = record.hidden.main
   if hidden and hidden ~= text then
     hidden:Show()
@@ -1443,6 +1618,12 @@ function StyleText(record, data, region)
       pieces.after:SetPoint("RIGHT", button, "RIGHT")
       pieces.main:SetPoint("RIGHT", pieces.after, "LEFT", afterPad, 0)
       pieces.before:SetPoint("RIGHT", pieces.main, "LEFT", beforePad, 0)
+    elseif justify == "CENTER" then
+      local beforeWidth = before ~= "" and (tonumber(pieces.before:GetStringWidth()) or 0) - beforePad or 0
+      local afterWidth = after ~= "" and (tonumber(pieces.after:GetStringWidth()) or 0) - afterPad or 0
+      pieces.main:SetPoint("CENTER", button, "CENTER", (beforeWidth - afterWidth) / 2, 0)
+      pieces.before:SetPoint("RIGHT", pieces.main, "LEFT", beforePad, 0)
+      pieces.after:SetPoint("LEFT", pieces.main, "RIGHT", -afterPad, 0)
     else
       pieces.before:SetPoint("LEFT", button, "LEFT")
       pieces.main:SetPoint("LEFT", pieces.before, "RIGHT", -beforePad, 0)
@@ -1464,18 +1645,18 @@ function StyleText(record, data, region)
   elseif symbol == "p" then
     local formatter, formatKey = TimeFormatter(data, "displayText_format_p_")
     local steps = TimerSteps(data, "color")
-    local curve, curveKey
+    local points, curveKey
     if #steps > 0 and C_CurveUtil and CreateColor then
-      curve, curveKey = TimerCurve(steps, record.timerBase or type(data.color) == "table" and data.color or { 1, 1, 1, 1 },
-        true)
+      points, curveKey = TimerPoints(steps,
+        record.timerBase or type(data.color) == "table" and data.color or { 1, 1, 1, 1 }, true)
     end
     key = before .. "{}" .. after .. "|" .. tostring(formatKey) .. "|" .. tostring(curveKey)
     local property = Enum.DurationTextBindingProperty and Enum.DurationTextBindingProperty.RemainingDuration
     if record.textKey ~= key and property and formatter then
       local options = { textFormat = { formatString = before .. "{}" .. after,
         components = { { property = property, formatter = formatter } } } }
-      if curve then
-        options.textColor = { curve = curve, property = property }
+      if points then
+        options.textColor = { curve = TimerCurve(points), property = property }
       end
       button:SetDurationText(pieces.main, options)
     end
@@ -1643,10 +1824,16 @@ local function TakeOver(record, region, takeover)
     widget:SetAlpha(0)
     return
   end
-  textOwners[text] = { record = record.member or record, key = takeover.key }
+  textOwners[text] = { record = record.member or record, key = takeover.key, sub = sub }
   if not hookedTexts[text] then
     hookedTexts[text] = true
     hooksecurefunc(text, "SetTextColor", OnTextColor)
+  end
+  -- SetVisible is made again on every modify (SubText.lua), while Show and Hide stay.
+  if not hookedSubs[sub] then
+    hookedSubs[sub] = true
+    hooksecurefunc(sub, "Show", function(self) OnTextVisible(self, true) end)
+    hooksecurefunc(sub, "Hide", function(self) OnTextVisible(self, false) end)
   end
   local font, size, flags = text:GetFont()
   if font then
@@ -1670,7 +1857,7 @@ local function TakeOver(record, region, takeover)
     widget:ClearAllPoints()
     widget:SetPoint(point, relativeTo, relativePoint, x, y)
   end
-  widget:SetAlpha(1)
+  widget:SetAlpha(sub:IsShown() and 1 or 0)
   text:SetShown(not (record.member or record).drawn)
 end
 
@@ -1712,12 +1899,15 @@ local function StyleBar(record, region)
   icon:SetVertexColor(region.icon:GetVertexColor())
 end
 
-function Style(record, data, region)
+function Style(record, data, region, skipLooks)
   local button, icon, kind = record.button, record.icon, record.kind
   local level = record.member and record.member.group.container:GetFrameLevel() + 1 or region:GetFrameLevel()
   button:SetFrameLevel(level)
+  if record.member then
+    button:SetSize(tonumber(data.width) or 32, tonumber(data.height) or 32)
+  end
   if record.overlay then
-    record.overlay:SetFrameLevel(level + (FirstTextIndex(region) or 2))
+    record.overlay:SetFrameLevel(level + (FirstTextOffset(region) or 2))
   end
   if kind == "texture" then
     StyleTexture(record, data, region)
@@ -1732,14 +1922,16 @@ function Style(record, data, region)
     TakeOver(record, region, takeover)
   end
   StyleTimer(record, data, region)
-  StyleLooks(record, data, region, level)
+  if not skipLooks then
+    StyleLooks(record, data, region, level)
+  end
 
   button:EnableMouse(false)
   if data.useTooltip then
     button:EnableMouseMotion(true)
     button:SetMouseClickEnabled(false)
   end
-  record.styled = true
+  record.styled = not skipLooks
 end
 
 function StyleIcon(record, data, region, icon, level)
@@ -1933,13 +2125,18 @@ local function ShowOwnParts(record, region, shown)
   DimLooks(record, not shown)
 end
 
+-- With no unit the trigger shows nothing, so neither does the missing look under Blizzard's icon.
+local function UnderShown(record)
+  return record.drawn and record.always and (record.unit == "player" or UnitExists(record.unit)) or false
+end
+
 local function SetActive(record, data, active)
   record.active = active
   local drawn = active and Drawable(record) or false
   record.drawn = drawn
   record.container:SetShown(drawn)
   if record.under then
-    record.under:SetShown(drawn and record.always or false)
+    record.under:SetShown(UnderShown(record))
   end
   local region = record.region
   if region then
@@ -1967,11 +2164,35 @@ local function SetActive(record, data, active)
   UpdateSounds(record, data)
 end
 
+-- Conditions resize the aura from a timer that skips RunConditions (Conditions.lua recheck), so the frame's resize rebuilds a glow.
+local function OnResize(region)
+  local record = region.eaNativeRecord
+  if not record or record.resizing or not (record.button and record.styled and record.lookSize) or Animated(region) then
+    return
+  end
+  local glowing = false
+  for _, kit in pairs(record.kits or {}) do
+    glowing = glowing or #kit.groups > 0
+  end
+  if not glowing then
+    return
+  end
+  record.resizing = true
+  C_Timer.After(0, function()
+    record.resizing = nil
+    if region.eaNativeRecord == record and record.styled and not Secret() and not EverythingAuras.IsPaused()
+      and not Animated(region) and record.lookSize ~= SizeKey(region) then
+      Style(record, record.data, region)
+    end
+  end)
+end
+
 local function Mirror(region)
   if region.eaNativeMirror then
     return
   end
   region.eaNativeMirror = true
+  region:HookScript("OnSizeChanged", OnResize)
   local source = region.regionType == "texture" and region.texture and region.texture.texture
   for _, method in ipairs(source and TEXTURE_COPIES or {}) do
     hooksecurefunc(source, method, function(_, ...)
@@ -2070,19 +2291,19 @@ local function TakeRecord(variant)
   return NewRecord(variant)
 end
 
-local function Release(uid)
+local function Release(uid, data)
   local record = records[uid]
   if not record then
     return
   end
-  local data = { useTooltip = false, actions = {} }
-  SetActive(record, data, false)
+  SetActive(record, data or record.data or { useTooltip = false, actions = {} }, false)
   if record.region and record.region.eaNativeRecord == record then
     record.region.eaNativeRecord = nil
   end
   records[uid] = nil
   record.region, record.unit, record.filter, record.idsKey, record.ids, record.styled = nil, nil, nil, nil, nil, nil
   record.data, record.filtersKey, record.always, record.timerBase, record.anyMode = nil, nil, nil, nil, nil
+  record.timerVisible = nil
   wipe(record.hidden)
   wipe(record.dimmed)
   if record.button then
@@ -2109,13 +2330,13 @@ local function Configure(data, region)
   end
   -- A new region type gets a new region, and Add can still see the old one, so the new region's modify sets it up.
   if region and region.regionType and region.regionType ~= data.regionType then
-    Release(uid)
+    Release(uid, data)
     return
   end
   pending[uid] = nil
   local groupData = GroupParent(data)
   if groupData then
-    Release(uid)
+    Release(uid, data)
     SafeConfigureGroup(groupData)
     return
   end
@@ -2145,7 +2366,7 @@ local function Configure(data, region)
   end
   local variant = Variant(data)
   if record and record.variant ~= variant then
-    Release(uid)
+    Release(uid, data)
     record = nil
   end
   if not record then
@@ -2163,7 +2384,6 @@ local function Configure(data, region)
   end
   region.eaNativeRecord = record
   record.data = data
-  record.timerBase = nil
   record.always = IsAlways(data)
   if record.always and not record.under then
     local under = CreateFrame("Frame", nil, UIParent)
@@ -2183,12 +2403,12 @@ local function Configure(data, region)
     record.sorted = true
     record.button = container:AddAuraSlot(SLOT, filter, {
       candidateFilters = filters,
-      sortMethod = SORT_EXPIRATION,
+      sortMethod = SORT_TIME_LEFT,
       initializeFrame = function(button) BuildButton(record, button) end,
     })
   else
     if not record.sorted then
-      container:SetAuraSlotSortMethod(SLOT, SORT_EXPIRATION)
+      container:SetAuraSlotSortMethod(SLOT, SORT_TIME_LEFT)
       record.sorted = true
     end
     if record.unit ~= unit then
@@ -2205,6 +2425,7 @@ local function Configure(data, region)
 
   container:ClearAllPoints()
   container:SetAllPoints(region)
+  container:SetScale(region:GetEffectiveScale() / UIParent:GetEffectiveScale())
   container:SetFrameStrata(region:GetFrameStrata())
   -- One level under the region, so the button lands on the region's own level, under its texts and borders.
   container:SetFrameLevel(math.max(0, region:GetFrameLevel() - 1))
@@ -2220,7 +2441,9 @@ local function Configure(data, region)
   if record.variant == "icon" then
     KeepCooldownHidden(region)
   end
+  local paused = EverythingAuras.IsPaused()
   if Secret() then
+    -- Blizzard's button is locked while auras are secret, so it is styled once they can be read again.
     record.styled = false
     for _, takeover in ipairs(TAKEOVERS) do
       local sub = record.texts and record.texts[takeover.key] and SubText(region, takeover.format)
@@ -2229,7 +2452,11 @@ local function Configure(data, region)
       end
     end
   else
-    Style(record, data, region)
+    -- The open options rebuild the aura at every edit, so its glows and borders wait for them to close.
+    Style(record, data, region, paused)
+  end
+  if Secret() or paused then
+    DimMatching(record, record.kits, data, region)
   end
   SetActive(record, data, Private.loaded[data.id] == true and not EverythingAuras.IsPaused())
 end
@@ -2297,6 +2524,8 @@ local function HideClone(region, drawn, variant, data)
   ShowOwnKind(kind, region, not drawn)
   if kind == "icon" and drawn and region.cooldown then
     region.cooldown:Hide()
+  elseif kind == "icon" and not drawn and region.state and region.UpdateProgress then
+    region:UpdateProgress()
   end
   local allowed = MEMBER_TEXTS[data and data.regionType or kind == "icon" and "icon" or "aurabar"] or {}
   local list = {}
@@ -2394,7 +2623,9 @@ local function SetGroupActive(group, active)
     member.active = loaded
     member.drawn = loaded and drawable
     anyDrawn = anyDrawn or member.drawn
-    group.container:SetAuraGroupEnabled(member.key, member.drawn)
+    if group.container:HasAuraGroup(member.key) then
+      group.container:SetAuraGroupEnabled(member.key, member.drawn)
+    end
     local region = member.region
     if region then
       local wasDrawn = region.eaNativeOn
@@ -2509,10 +2740,10 @@ local function ConfigureGroup(groupData)
     group.members[child.uid] = member
     local variant = Variant(child)
     local key = child.uid .. ":" .. variant
-    if member.key and member.key ~= key then
+    if member.key and member.key ~= key and container:HasAuraGroup(member.key) then
       container:SetAuraGroupEnabled(member.key, false)
     end
-    member.key, member.variant, member.data, member.timerBase = key, variant, child, nil
+    member.key, member.variant, member.data = key, variant, child
     group.partsByKey[key] = group.partsByKey[key] or {}
     member.parts = group.partsByKey[key]
     for _, part in ipairs(member.parts) do
@@ -2535,22 +2766,27 @@ local function ConfigureGroup(groupData)
     local ids = SpellIds(child)
     local filter, filters = Filter(trigger), CandidateFilters(trigger, ids)
     local filtersKey = FiltersKey(filters)
-    local count = trigger.showClones and math.huge or 1
+    local count = trigger.showClones and (tonumber(groupData.useLimit and groupData.limit) or math.huge) or 1
     local layout = { layoutIndex = index, elementSpacing = spacing, lineSpacing = lineSpacing, elementWidth = width,
       elementHeight = height }
     if not container:HasAuraGroup(key) then
-      group.keys[key] = true
-      container:AddAuraGroup(key, filter, {
-        candidateFilters = filters,
-        sortMethod = SORT_EXPIRATION,
-        maxFrameCount = count,
-        layout = layout,
-        initializeFrame = function(button)
-          local part = { member = member, variant = variant, hidden = member.hidden, data = member.data }
-          table.insert(member.parts, part)
-          BuildButton(part, button)
-        end,
-      })
+      -- Blizzard builds and styles the list's buttons as it is added, so a child with no region yet waits for one.
+      if region then
+        group.keys[key] = true
+        local childUid = child.uid
+        container:AddAuraGroup(key, filter, {
+          candidateFilters = filters,
+          sortMethod = SORT_TIME_LEFT,
+          maxFrameCount = count,
+          layout = layout,
+          initializeFrame = function(button)
+            local current = members[childUid] or member
+            local part = { member = current, variant = variant, hidden = current.hidden, data = current.data }
+            table.insert(current.parts, part)
+            BuildButton(part, button)
+          end,
+        })
+      end
     else
       if member.filter ~= filter then
         container:SetAuraGroupFilterString(key, filter)
@@ -2564,6 +2800,7 @@ local function ConfigureGroup(groupData)
     member.unit, member.filter, member.ids, member.idsKey, member.filtersKey = unit, filter, ids, Key(ids), filtersKey
     member.anyMode, member.excludes = AnyAura(trigger), filters.excludeSpellIDs ~= nil
     if region then
+      local paused = EverythingAuras.IsPaused()
       if Secret() then
         for _, part in ipairs(member.parts) do
           part.styled = false
@@ -2577,9 +2814,12 @@ local function ConfigureGroup(groupData)
       else
         for _, part in ipairs(member.parts) do
           if part.button then
-            Style(part, child, region)
+            Style(part, child, region, paused)
           end
         end
+      end
+      if Secret() or paused then
+        DimMatching(member, member.parts[1] and member.parts[1].kits, child, region)
       end
     end
   end
@@ -2673,6 +2913,8 @@ local function WrapModify(regionData)
     -- Modify returns sub-regions to a shared pool, so a text Blizzard replaced must be visible again first.
     local record = region.eaNativeRecord
     if record then
+      -- Conditions set these again after a modify, and nothing else does, so they are dropped only here.
+      record.timerBase, record.timerVisible = nil, nil
       for key, text in pairs(record.hidden) do
         text:Show()
         record.hidden[key] = nil
@@ -2725,7 +2967,7 @@ function Private.RunConditions(region, uid, hideRegion)
     if spellId and not issecretvalue(spellId) and type(spellId) == "number" then
       local data = EverythingAuras.GetData(region.id)
       local trigger = data and data.triggers[1].trigger
-      if trigger and not HasId(data.eaNativeIds, spellId) and not HasId(trigger.auraspellids, spellId)
+      if trigger and not AnyAura(trigger) and not HasId(data.eaNativeIds, spellId) and not HasId(trigger.auraspellids, spellId)
         and not HasId(trigger.auraRankSpellIDs, spellId) then
         data.eaNativeIds = data.eaNativeIds or {}
         table.insert(data.eaNativeIds, spellId)
@@ -2778,7 +3020,7 @@ Private.callbacks:RegisterCallback("Add", function(_, uid, id, data)
     return
   end
   if not REGION_KINDS[data.regionType] then
-    Release(uid)
+    Release(uid, data)
   else
     SafeConfigure(data, EverythingAuras.GetRegion(id))
   end
@@ -2826,6 +3068,9 @@ local function Follow(match)
   for _, record in pairs(records) do
     if record.active and match(record.unit) then
       record.container:UpdateAllAuras()
+      if record.under then
+        record.under:SetShown(UnderShown(record))
+      end
     end
   end
   for _, group in pairs(groups) do

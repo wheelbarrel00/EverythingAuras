@@ -63,6 +63,8 @@ T.expect(next(plain) == nil, "no warnings at all")
 T.section("Settings that are not here yet")
 local group = Check({ regionType = "group", blizzardFlow = true })
 T.expect(Has(group.EANotHereYet, "Modern Aura Group layout"), "a Modern Aura Group says its layout is lost")
+T.expect(Check({ regionType = "dynamicgroup", blizzardFlow = true, eaFlowDynamic = true }).EANotHereYet == nil,
+  "a Modern Aura Group already converted to a dynamic group works here too, so it is not named")
 local flagged = Check({ load = { use_loadFlag = true, loadFlag = "x" } })
 T.expect(flagged.EANotHereYet == nil, "Load Flag works on Retail too since 0.6.1, so it is not named")
 local stance = Check({ triggers = { { trigger = { type = "unit", event = "Stance/Form/Aura", use_formID = false,

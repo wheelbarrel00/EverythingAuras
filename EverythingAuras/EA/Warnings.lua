@@ -286,7 +286,8 @@ function Private.EAUpdateWarnings(data)
   local notHere, notHereSeen = {}, {}
   local secretHealth, secretHealthSeen = {}, {}
   local flowFrames = data.blizzardFlowFrames == "UNITFRAME" or data.blizzardFlowFrames == "NAMEPLATE"
-  if data.blizzardFlow == true and (not FOREVER or flowFrames or not (data.eaFlowLaidOut or data.eaFlowDynamic)) then
+  local flowDynamic = data.eaFlowDynamic and data.regionType == "dynamicgroup"
+  if data.blizzardFlow == true and not flowDynamic and (not FOREVER or flowFrames or not data.eaFlowLaidOut) then
     Add(notHere, notHereSeen, flowFrames and L["Modern Aura Group on unit frames or nameplates"]
       or L["Modern Aura Group layout"])
   end
