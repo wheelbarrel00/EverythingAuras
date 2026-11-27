@@ -301,6 +301,7 @@ local button = container.button
 T.expect(button.iconWidget and button.cooldownWidget, "icon and cooldown handed to Blizzard")
 T.expect(button.mouse == false, "the button never eats clicks (probe N0)")
 T.expect(container.level == 9 and button.level == 10, "the button lands on the region's own level")
+T.expect(button.cooldownWidget.level == 11, "the swipe sits a level above the button, over the icon")
 T.expect(container.shown and region.eaNativeOn and not region.icon.visible, "loaded: Blizzard draws, Everything Auras' icon steps aside")
 T.expect(region.modified == "Seal", "the region is modified as usual first")
 region:UpdateTime()

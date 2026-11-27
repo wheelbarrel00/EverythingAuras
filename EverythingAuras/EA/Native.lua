@@ -1956,7 +1956,8 @@ function StyleIcon(record, data, region, icon, level)
     icon:SetDesaturation(region.icon:GetDesaturation())
   end
   if record.kind == "icon" then
-    record.cooldown:SetFrameLevel(level)
+    -- The icon is the button's own texture, so a swipe on the button's level draws under it.
+    record.cooldown:SetFrameLevel(level + 1)
     if not record.always then
       -- A texture's alpha is its vertex color's alpha, so the color comes from the aura's setting, not its icon.
       local r, g, b, a = region:GetColor()

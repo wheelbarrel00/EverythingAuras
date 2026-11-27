@@ -5,41 +5,22 @@ local Private = select(2, ...)
 local L = EverythingAuras.L
 local ui = Private.EAUI
 
-local WHATS_NEW_VERSION = "0.6.1-beta"
+local WHATS_NEW_VERSION = "0.7.0-beta"
 
 local ENTRIES = {
   {
-    title = L["New triggers"],
-    desc = L["Bag Space, Equipment Durability, Range Check, Spell in Range, Spell in Range (Action Bar) and Tracking are new triggers, and Money can check gold, silver and copper. Your reagent bag counts as a general bag, the same as on your backpack button."],
+    title = L["Blizzard draws more of your auras"],
+    desc = L["Many Texture, Text and Progress Texture auras are drawn by Blizzard, in combat too. A texture shows while the aura is there, a text shows one %p, %s or %n with fixed words, and a progress texture fills straight or round. Icon and bar timers use the aura's own time format and keep their Remaining Time colors in combat, and glows that are always on and Square Full White borders are drawn by Blizzard."],
   },
   {
-    title = L["Range in combat"],
-    desc = L["Range Check and Spell in Range keep working in combat. They were tested at a training dummy, not yet in dungeons or raids. WeakAuras strings that use Range Check now work too."],
+    title = L["Dynamic groups in combat"],
+    desc = L["A dynamic group set to Sort None is laid out by Blizzard when it can draw every aura in it, so an aura that drops mid-fight leaves no gap. An Auto-Clone aura there lists every match, the one ending soonest first. On WoW Forever, ForeverAuras' Modern Aura Groups now import as dynamic groups."],
   },
   {
-    title = L["Load Flags"],
-    desc = L["The new Load Flag load option loads an aura while custom code in another aura has set that flag with SetLoadFlag. Flags last until you reload."],
+    title = L["Reminders and filters"],
+    desc = L["An icon set to Show On Always shows its missing look, and Blizzard draws the aura over it while it is there, when that look is the icon itself, desaturated, dimmed or recolored. Filters such as a Total Time of at most a number, a Debuff Type and cast by you keep an aura drawn by Blizzard, and Blizzard draws an aura that names no spell, debuffs on you included."],
   },
 }
-
--- 0.6.0 changed only WoW Forever and 0.6.1 only Retail, so each client shows its own latest notes.
-if EverythingAuras.IsForever() then
-  WHATS_NEW_VERSION = "0.6.0-beta"
-  ENTRIES = {
-    {
-      title = L["New triggers"],
-      desc = L["Bag Space, Equipment Durability, Ammo, Range Check, Spell in Range, Spell in Range (Action Bar) and Tracking are new triggers, and Money can check gold, silver and copper. Range Check and Spell in Range keep working in combat."],
-    },
-    {
-      title = L["Talent spec, form and weapon oil"],
-      desc = L["The new Specialization load option loads an aura for the talent tree with the most points, once a tree has 21 or more. Until then, an aura set to load for a spec stays unloaded. Loading at 21 points is new and not yet tested in game. Click a tree once to load for it, twice to never load for it. Stance/Form/Aura can check a form by its ID, and Weapon Enchant has an Enchant Type, so an aura can watch for your weapon oil."],
-    },
-    {
-      title = L["ForeverAuras imports"],
-      desc = L["Load Flags, Cooldown Manager triggers and Modern Aura Groups now come over, and custom code that calls AuraOverlay, WatchSwingTimer or GetSwingTimerInfo works. After you import a ForeverAuras string, a summary lists what was converted and which auras still have a warning. /fa opens Everything Auras when no other addon uses it at login."],
-    },
-  }
-end
 
 local WIDTH, HEIGHT = 600, 560
 local PAD_TOP, PAD_SIDE, PAD_BOTTOM = 20, 24, 24

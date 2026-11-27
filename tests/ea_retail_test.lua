@@ -43,7 +43,7 @@ for key, value in pairs(L) do
   T.expect(not value:find("Forever", 1, true) or key == value, "no Forever in the retail text: " .. key:sub(1, 40))
   T.expect(select(2, key:gsub("%%s", "")) == select(2, value:gsub("%%s", "")), "same format slots: " .. key:sub(1, 40))
 end
-T.expect(keys == 20, "every Forever-only string has retail text, got " .. keys)
+T.expect(keys == 21, "every Forever-only string has retail text, got " .. keys)
 
 -- Every string naming Forever in these files is covered, so none reaches a retail player by accident.
 for key in sources:gmatch('L%["([^"]*WoW Forever[^"]*)"%]') do
@@ -61,9 +61,9 @@ T.expect(retail:find("EA\\Names.lua%s+EA\\Retail.lua") ~= nil, "the retail TOC l
 T.expect(retail:find("for WoW Forever", 1, true) == nil, "the retail TOC notes do not name Forever")
 T.expect(retail:match("## Interface: (12%d+)") ~= nil and not retail:find("16001", 1, true), "the retail TOC has only retail numbers")
 
-T.expect(sources:find('local WHATS_NEW_VERSION = "0.6.1-beta"', 1, true) ~= nil and sources:find("local ENTRIES = {", 1, true) ~= nil
-  and sources:find('if EverythingAuras.IsForever() then\n  WHATS_NEW_VERSION = "0.6.0-beta"', 1, true) ~= nil,
-  "Retail shows the 0.6.1 What's New and Forever keeps 0.6.0")
+T.expect(sources:find('local WHATS_NEW_VERSION = "0.7.0-beta"', 1, true) ~= nil and sources:find("local ENTRIES = {", 1, true) ~= nil
+  and sources:find("if EverythingAuras.IsForever() then\n  WHATS_NEW_VERSION", 1, true) == nil,
+  "both games show the same 0.7.0 What's New")
 T.expect(L["General bags hold any item. Specialty bags, such as quivers, ammo pouches, soul bags and herb bags, hold only certain items. The keyring and the bank never count."]:find("reagent bag", 1, true) ~= nil,
   "Bag Space tells Retail players where the reagent bag counts")
 T.expect(L["Range Check and Spell in Range, including whether your target is in range of a spell."]:find("not yet in dungeons or raids", 1, true) ~= nil,

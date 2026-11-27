@@ -49,6 +49,8 @@ for key, value in pairs({
     = "General bags hold any item, and your reagent bag counts with them, the same as on your backpack button. Specialty bags, such as a profession's bag, hold only certain items. The bank never counts.",
   ["Range Check and Spell in Range, including whether your target is in range of a spell."]
     = "Range Check and Spell in Range, including whether your target is in range of a spell. Tested at a training dummy, not yet in dungeons or raids.",
+  ["A dynamic group set to Sort None is laid out by Blizzard when it can draw every aura in it, so an aura that drops mid-fight leaves no gap. An Auto-Clone aura there lists every match, the one ending soonest first. On WoW Forever, ForeverAuras' Modern Aura Groups now import as dynamic groups."]
+    = "A dynamic group set to Sort None is laid out by Blizzard when it can draw every aura in it, so an aura that drops mid-fight leaves no gap. An Auto-Clone aura there lists every match, the one ending soonest first.",
 }) do
   L[key] = value
 end
