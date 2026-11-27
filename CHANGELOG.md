@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.7.0-beta] - 2026-11-26
+
+Everything in this version is for both Retail and WoW Forever, unless a line says otherwise.
+
+### New Features
+
+- Blizzard draws Texture, Text and Progress Texture auras, in combat too. It draws a texture while the aura is there, a text with one %p, %s or %n and fixed words around it, and a progress texture filled straight or round. Blizzard Draws This Texture, This Text and This Progress Texture are on by default wherever they work, for new auras and the ones you already have (an aura you already had starts once Everything Auras knows its spell IDs)
+- Dynamic groups set to Sort None are laid out by Blizzard when it can draw every aura in them, growing left, right, up, down, centered or in a grid from a corner, so an aura that drops mid-fight leaves no gap
+- An Auto-Clone aura in such a group becomes a list of every match, the one ending soonest first, up to the group's Limit when it is the group's only aura
+- An icon set to Show On Always shows its missing look, and Blizzard draws the aura over it while it is there, in combat too. This works when the missing look is the icon itself, desaturated, dimmed or recolored, and not inside a dynamic group
+- Blizzard draws an aura that names no spell, with Name(s) and Exact Spell ID(s) unticked, narrowed by its filters, debuffs on you included (debuffs on your pet or group not yet tested in game)
+- Icon and bar timers drawn by Blizzard use the aura's own time format, and Remaining Time conditions that color or hide the timer keep working in combat
+- Glows that are always on, all four types, and Square Full White borders, plain or colored by Debuff Type, are drawn by Blizzard
+- On WoW Forever, ForeverAuras' Modern Aura Groups import as dynamic groups. One that holds another group keeps the fixed row (not yet tested in game)
+
+### Improvements
+
+- Filters for a Total Time of at most a number, a Debuff Type of Magic, Curse, Disease, Poison or Bleed, cast by you, and not stealable or not a boss aura, keep an aura drawn by Blizzard (stealable or boss set to yes not yet tested in game)
+- Color conditions other than Remaining Time reach Blizzard's timer out of combat and hold in combat
+- Blizzard's glow follows an icon that a condition resizes
+- A group member that loads in combat, such as one set to Load: In Combat, joins Blizzard's layout mid-fight with its timer
+
+### Bug Fixes
+
+- Icons drawn by Blizzard show their swipe, which was hidden under the icon picture
+- A text switched off in an aura's settings no longer shows on Blizzard's copy
+- Blizzard-drawn auras in a scaled group draw their texts, glows and borders at the group's scale
+- Blizzard now shows the aura with the least time left, and an aura that never ends last, instead of your own aura first. An aura whose Preferred Match is not Least remaining time is drawn by Everything Auras, because Blizzard could show a different aura than the trigger
+- Moving a Blizzard-drawn aura into a group that Blizzard cannot lay out keeps its Tooltip on Mouseover (not yet tested in game)
+- An aura set to Show If Unit Does Not Exist is drawn by Everything Auras again, so it still shows with no unit (not yet tested in game)
+
 ## [0.6.1-beta] - 2026-11-16
 
 Everything in this version is for Retail. Nothing changes on WoW Forever.
